@@ -1,0 +1,27 @@
+{
+  "login": {
+    "title": "HealthCenterSoft",
+    "subtitle": "Integrated Medical Management",
+    "welcome": "Welcome",
+    "selectCountry": "Select your country",
+    "username": "Username",
+    "password": "Password",
+    "loginButton": "Sign In",
+    "forgotPassword": "Forgot password?",
+    "rememberMe": "Remember me",
+    "errors": {
+      "invalidCredentials": "Invalid username or password",
+      "requiredField": "This field is required",
+      "sessionExpired": "Session expired, please login again"
+    },
+    "recommendation": "For optimal experience, use Google Chrome",
+    "loading": "Signing in..."
+  },
+  "countries": {
+    "fr": "France",
+    "be": "Belgium",
+    "ch": "Switzerland",
+    "ca": "Canada",
+    "lu": "Luxembourg"
+  }
+}

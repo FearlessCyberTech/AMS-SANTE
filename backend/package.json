@@ -1,0 +1,39 @@
+{
+  "name": "healthcentersoft-backend",
+  "version": "1.0.0",
+  "description": "Backend API for HealthCenterSoft",
+  "main": "server.js",
+  "scripts": {
+    "start": "node start-server.js",
+    "start:force": "node kill-port.js && node app.js",
+    "dev": "nodemon start-server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^2.2.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "express-rate-limit": "^6.8.1",
+    "express-validator": "^7.0.1",
+    "helmet": "^7.2.0",
+    "jsonwebtoken": "^9.0.0",
+    "jwt-decode": "^4.0.0",
+    "morgan": "^1.10.1",
+    "mssql": "^12.2.0",
+    "mysql2": "^3.6.0",
+    "react-qr-barcode-scanner": "^2.1.19",
+    "recharts": "^3.5.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  },
+  "keywords": [
+    "healthcare",
+    "medical",
+    "api",
+    "express"
+  ],
+  "author": "HealthCenterSoft Team",
+  "license": "MIT"
+}

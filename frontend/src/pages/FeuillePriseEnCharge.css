@@ -1,0 +1,520 @@
+/* FeuillePriseEnCharge.css */
+
+.feuille-prise-en-charge {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  background: white;
+  color: #000;
+  line-height: 1.4;
+  position: relative;
+}
+
+/* Pages */
+.page {
+  min-height: 287mm;
+  padding: 10mm;
+  page-break-after: always;
+  position: relative;
+}
+
+.page:last-child {
+  page-break-after: auto;
+}
+
+/* En-tête */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15mm;
+  border-bottom: 2px solid #2c5282;
+  padding-bottom: 5mm;
+}
+
+.header-left {
+  flex: 2;
+}
+
+.header-right {
+  flex: 1;
+  text-align: right;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.logo-placeholder {
+  width: 80px;
+  height: 80px;
+  border: 2px solid #2c5282;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: #2c5282;
+  font-size: 14px;
+}
+
+.center-info h1 {
+  font-size: 20px;
+  font-weight: bold;
+  color: #2c5282;
+  margin: 0 0 5px 0;
+  text-transform: uppercase;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #4a5568;
+  margin: 0 0 3px 0;
+}
+
+.address {
+  font-size: 12px;
+  color: #718096;
+  margin: 0;
+}
+
+.document-info {
+  border: 1px solid #2c5282;
+  padding: 10px;
+  background: #f7fafc;
+}
+
+.doc-title {
+  font-weight: bold;
+  font-size: 14px;
+  color: #2c5282;
+  margin: 0 0 8px 0;
+  text-align: center;
+}
+
+.doc-number {
+  font-size: 13px;
+  margin: 5px 0;
+  font-weight: 600;
+}
+
+.doc-date {
+  font-size: 12px;
+  margin: 5px 0;
+  color: #4a5568;
+}
+
+/* Titres de sections */
+.section-title {
+  margin: 8mm 0 4mm 0;
+  padding-bottom: 3mm;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.section-title h2,
+.section-title h3 {
+  font-size: 16px;
+  font-weight: bold;
+  color: #2c5282;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.section-title h3 {
+  font-size: 14px;
+}
+
+/* Grilles d'informations */
+.info-grid,
+.patient-info-grid,
+.consultation-info-grid {
+  margin-bottom: 8mm;
+}
+
+.info-row {
+  display: flex;
+  margin-bottom: 6px;
+  min-height: 25px;
+}
+
+.info-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.info-item.full-width {
+  flex: 0 0 100%;
+}
+
+.info-label {
+  font-weight: bold;
+  min-width: 180px;
+  font-size: 13px;
+  color: #4a5568;
+}
+
+.info-value {
+  flex: 1;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  min-height: 20px;
+}
+
+.info-value.highlight {
+  background: #ebf8ff;
+  font-weight: 600;
+}
+
+/* Signes vitaux - Grille améliorée */
+.signes-vitaux-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 6mm 0;
+}
+
+.vital-box {
+  border: 2px solid #cbd5e0;
+  border-radius: 6px;
+  padding: 12px;
+  text-align: center;
+  background: #f7fafc;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.vital-box:hover {
+  border-color: #4299e1;
+  background: #ebf8ff;
+}
+
+.vital-box.double-width {
+  grid-column: span 2;
+}
+
+.vital-label {
+  font-weight: bold;
+  font-size: 12px;
+  color: #2c5282;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.vital-value {
+  font-size: 18px;
+  font-weight: bold;
+  color: #2d3748;
+  font-family: 'Courier New', monospace;
+  min-height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Sections texte */
+.text-section {
+  margin-bottom: 8mm;
+  min-height: 40mm;
+}
+
+.text-content {
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 10px;
+  min-height: 30mm;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  background: #fafafa;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.signature-line {
+  margin-top: 10px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.signature-space {
+  flex: 1;
+  border-bottom: 1px solid #000;
+  min-width: 150px;
+  padding-bottom: 3px;
+}
+
+.note {
+  font-size: 12px;
+  color: #718096;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* Section rendez-vous */
+.rdv-section {
+  text-align: center;
+  padding: 10px;
+  margin: 6mm 0;
+  border: 2px dashed #cbd5e0;
+  border-radius: 6px;
+  background: #f0fff4;
+}
+
+.rdv-date {
+  font-weight: bold;
+  font-size: 16px;
+  color: #2f855a;
+  padding: 0 10px;
+}
+
+.rdv-note {
+  font-size: 12px;
+  color: #718096;
+  margin-top: 5px;
+}
+
+/* Tableaux */
+.financial-table-container,
+.admin-table-container {
+  margin: 8mm 0;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.financial-table,
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.financial-table th,
+.admin-table th {
+  background: #2c5282;
+  color: white;
+  font-weight: bold;
+  text-align: left;
+  padding: 10px;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.financial-table td,
+.admin-table td {
+  padding: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+}
+
+.financial-table tr:last-child td,
+.admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.financial-table tr:nth-child(even) {
+  background: #f7fafc;
+}
+
+.financial-table tr:hover {
+  background: #ebf8ff;
+}
+
+/* Styles spécifiques pour table financière */
+.amount {
+  font-weight: bold;
+  color: #2d3748;
+  text-align: right;
+  font-family: 'Courier New', monospace;
+}
+
+.discount {
+  font-weight: bold;
+  color: #38a169;
+  text-align: right;
+  font-family: 'Courier New', monospace;
+}
+
+.total-row {
+  background: #f0fff4 !important;
+  border-top: 2px solid #c6f6d5;
+}
+
+.total-amount {
+  font-size: 16px;
+  color: #2d3748;
+  text-align: right;
+  font-family: 'Courier New', monospace;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.gratuit {
+  background: #c6f6d5;
+  color: #22543d;
+}
+
+.status-badge.tiers {
+  background: #bee3f8;
+  color: #2a4365;
+}
+
+.status-badge.apayer {
+  background: #fed7d7;
+  color: #742a2a;
+}
+
+/* Signatures */
+.signatures-section {
+  display: flex;
+  justify-content: space-between;
+  margin: 12mm 0 8mm 0;
+  padding-top: 8mm;
+  border-top: 1px solid #e2e8f0;
+}
+
+.signature-box {
+  width: 45%;
+  text-align: center;
+}
+
+.signature-field {
+  padding: 15px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  background: #f7fafc;
+}
+
+.signature-label {
+  font-weight: bold;
+  font-size: 13px;
+  color: #4a5568;
+  margin-bottom: 15px;
+  display: block;
+}
+
+.center-stamp {
+  font-weight: bold;
+  font-size: 14px;
+  color: #2c5282;
+  margin-bottom: 5px;
+}
+
+.doctor-signature {
+  font-size: 16px;
+  color: #4a5568;
+  margin-bottom: 8px;
+  font-family: 'Brush Script MT', cursive;
+}
+
+.doctor-name {
+  font-weight: bold;
+  font-size: 14px;
+  color: #2d3748;
+  margin-bottom: 3px;
+}
+
+.doctor-specialty {
+  font-size: 12px;
+  color: #718096;
+  font-style: italic;
+}
+
+/* Pied de page et notes */
+.footer-note {
+  text-align: center;
+  margin-top: 8mm;
+  padding: 10px;
+  background: #f7fafc;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #718096;
+}
+
+.page-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px;
+  text-align: center;
+  font-size: 11px;
+  color: #a0aec0;
+  border-top: 1px solid #e2e8f0;
+  background: white;
+}
+
+/* Styles d'impression */
+@media print {
+  .feuille-prise-en-charge {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .page {
+    min-height: 297mm;
+    padding: 10mm;
+    margin: 0;
+    page-break-inside: avoid;
+  }
+  
+  .page-footer {
+    position: fixed;
+    bottom: 0;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Responsive pour prévisualisation */
+@media screen and (max-width: 1200px) {
+  .feuille-prise-en-charge {
+    width: 100%;
+    transform: scale(0.9);
+    transform-origin: top center;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .feuille-prise-en-charge {
+    transform: scale(0.8);
+  }
+  
+  .signes-vitaux-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .vital-box.double-width {
+    grid-column: span 1;
+  }
+  
+  .signatures-section {
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .signature-box {
+    width: 100%;
+  }
+}
