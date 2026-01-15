@@ -1,0 +1,492 @@
+/* src/components/Prescriptions.css */
+
+/* ====================================
+   VARIABLES ET THEME MODERNE
+   ==================================== */
+:root {
+  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --success-gradient: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+  --warning-gradient: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+  --error-gradient: linear-gradient(135deg, #F44336 0%, #D32F2F 100%);
+  --info-gradient: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+  
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.08);
+  --shadow-medium: 0 8px 32px rgba(31, 38, 135, 0.15);
+  --shadow-hard: 0 20px 60px rgba(0, 0, 0, 0.3);
+  
+  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* ====================================
+   ANIMATIONS PERSONNALISÉES
+   ==================================== */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.4); }
+  50% { box-shadow: 0 0 20px 10px rgba(102, 126, 234, 0.1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(30px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fade-in-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes ripple {
+  to { transform: scale(4); opacity: 0; }
+}
+
+/* ====================================
+   STYLES GLOBAUX AMÉLIORÉS
+   ==================================== */
+.prescriptions-container {
+  animation: fade-in-up 0.6s ease-out;
+}
+
+/* Header avec effet de verre (glassmorphism) */
+.glass-header {
+  background: linear-gradient(135deg, 
+    rgba(102, 126, 234, 0.95) 0%, 
+    rgba(118, 75, 162, 0.95) 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: var(--shadow-medium);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.4), 
+    transparent);
+}
+
+/* Cartes avec effet de profondeur */
+.prescription-card {
+  transition: var(--transition-smooth);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+  background: white;
+}
+
+.prescription-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: var(--primary-gradient);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s ease;
+}
+
+.prescription-card:hover::before {
+  transform: scaleX(1);
+}
+
+.prescription-card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-hard);
+  animation: pulse-glow 2s infinite;
+}
+
+/* Boutons avec effets modernes */
+.gradient-button {
+  background: var(--primary-gradient);
+  background-size: 200% 200%;
+  border: none;
+  position: relative;
+  overflow: hidden;
+  transition: var(--transition-smooth);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.gradient-button:hover {
+  background-position: right center;
+  transform: translateY(-3px);
+  box-shadow: 0 12px 40px rgba(102, 126, 234, 0.4);
+}
+
+.gradient-button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.5);
+  opacity: 0;
+  border-radius: 100%;
+  transform: scale(1, 1) translate(-50%);
+  transform-origin: 50% 50%;
+}
+
+.gradient-button:focus:not(:active)::after {
+  animation: ripple 1s ease-out;
+}
+
+.success-button {
+  background: var(--success-gradient);
+  background-size: 200% 200%;
+}
+
+.success-button:hover {
+  box-shadow: 0 12px 40px rgba(76, 175, 80, 0.4);
+}
+
+/* Tableaux avec lignes animées */
+.animated-table-row {
+  transition: var(--transition-smooth);
+  border-left: 4px solid transparent;
+}
+
+.animated-table-row:hover {
+  border-left-color: #667eea;
+  background: linear-gradient(90deg, 
+    rgba(102, 126, 234, 0.05) 0%, 
+    rgba(102, 126, 234, 0.02) 100%);
+  transform: translateX(5px);
+}
+
+/* Chips avec animation */
+.status-chip {
+  transition: var(--transition-bounce);
+  position: relative;
+  overflow: hidden;
+}
+
+.status-chip::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    to bottom right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: rotate(30deg);
+}
+
+.status-chip:hover::after {
+  animation: shimmer 2s infinite;
+}
+
+/* Inputs avec focus amélioré */
+.animated-input .MuiOutlinedInput-root {
+  transition: var(--transition-smooth);
+}
+
+.animated-input .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+  border-color: #667eea;
+  border-width: 2px;
+}
+
+.animated-input .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Loader personnalisé */
+.pulse-loader {
+  display: inline-block;
+  width: 80px;
+  height: 80px;
+  position: relative;
+}
+
+.pulse-loader div {
+  position: absolute;
+  border: 4px solid #667eea;
+  opacity: 1;
+  border-radius: 50%;
+  animation: pulse-loader 1s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+.pulse-loader div:nth-child(2) {
+  animation-delay: -0.5s;
+}
+
+@keyframes pulse-loader {
+  0% {
+    top: 36px;
+    left: 36px;
+    width: 0;
+    height: 0;
+    opacity: 1;
+  }
+  100% {
+    top: 0;
+    left: 0;
+    width: 72px;
+    height: 72px;
+    opacity: 0;
+  }
+}
+
+/* Badge de notification */
+.notification-badge {
+  position: relative;
+}
+
+.notification-badge::after {
+  content: '';
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 12px;
+  height: 12px;
+  background: #f44336;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.8; }
+}
+
+/* ====================================
+   COMPOSANTS SPÉCIFIQUES
+   ==================================== */
+/* Avatar avec effet de halo */
+.halo-avatar {
+  position: relative;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  transition: var(--transition-smooth);
+}
+
+.halo-avatar:hover {
+  box-shadow: 0 0 0 8px rgba(102, 126, 234, 0.2);
+  transform: scale(1.1);
+}
+
+/* Séparateur animé */
+.animated-divider {
+  height: 2px;
+  background: linear-gradient(90deg, 
+    transparent, 
+    #667eea, 
+    transparent);
+  position: relative;
+  overflow: hidden;
+}
+
+.animated-divider::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.8), 
+    transparent);
+  animation: shimmer 3s infinite;
+}
+
+/* Card d'information avec icône flottante */
+.info-card {
+  position: relative;
+  padding-left: 70px !important;
+  min-height: 100px;
+}
+
+.info-card-icon {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Effet de typewriter pour les titres */
+.typewriter-title {
+  overflow: hidden;
+  border-right: 3px solid #667eea;
+  white-space: nowrap;
+  animation: 
+    typing 3.5s steps(40, end),
+    blink-caret 0.75s step-end infinite;
+}
+
+@keyframes typing {
+  from { width: 0 }
+  to { width: 100% }
+}
+
+@keyframes blink-caret {
+  from, to { border-color: transparent }
+  50% { border-color: #667eea; }
+}
+
+/* ====================================
+   RESPONSIVE DESIGN
+   ==================================== */
+@media (max-width: 768px) {
+  .mobile-slide-in {
+    animation: slide-in-right 0.3s ease-out;
+  }
+  
+  .prescription-card:hover {
+    transform: translateY(-4px);
+  }
+  
+  .gradient-button {
+    padding: 12px 24px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ====================================
+   UTILITAIRES
+   ==================================== */
+.glow-on-hover {
+  filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.3));
+  transition: filter 0.3s ease;
+}
+
+.glow-on-hover:hover {
+  filter: drop-shadow(0 0 16px rgba(102, 126, 234, 0.6));
+}
+
+.text-gradient {
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hover-lift {
+  transition: var(--transition-smooth);
+}
+
+.hover-lift:hover {
+  transform: translateY(-5px);
+}
+
+/* ====================================
+   ANIMATIONS DE CHARGEMENT
+   ==================================== */
+.skeleton-loader {
+  background: linear-gradient(90deg, 
+    #f0f0f0 25%, 
+    #e0e0e0 50%, 
+    #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+.wave-loader {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.wave-loader div {
+  width: 8px;
+  height: 40px;
+  background: var(--primary-gradient);
+  animation: wave 1.2s ease-in-out infinite;
+}
+
+.wave-loader div:nth-child(2) { animation-delay: -0.4s; }
+.wave-loader div:nth-child(3) { animation-delay: -0.2s; }
+
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
+/* Styles pour le scanner */
+.scanner-overlay {
+  position: relative;
+  width: 100%;
+  height: 400px;
+  background-color: #000;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.scanner-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 250px;
+  height: 150px;
+  border: 3px solid #667eea;
+  border-radius: 12px;
+  box-shadow: 
+    0 0 0 1000px rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(102, 126, 234, 0.5);
+  animation: scanner-pulse 2s infinite;
+}
+
+@keyframes scanner-pulse {
+  0% { border-color: #667eea; }
+  50% { border-color: #764ba2; }
+  100% { border-color: #667eea; }
+}
+
+.scanner-guide {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #667eea 50%,
+    transparent 100%
+  );
+  animation: scanner-guide 2s ease-in-out infinite;
+}
+
+@keyframes scanner-guide {
+  0% { top: 0; }
+  100% { top: 100%; }
+}
