@@ -118,7 +118,7 @@ const SplashScreen = ({ onFinish }) => {
     generateMedicalSymbols();
   }, []);
 
-  // Étapes d'initialisation adaptées à AMS Santé
+  // Étapes d'initialisation adaptées à HealthCenter Soft
   useEffect(() => {
     const steps = [
       { 
@@ -270,7 +270,7 @@ const SplashScreen = ({ onFinish }) => {
 
       {/* Contenu principal */}
       <div className="splash-content">
-        {/* Logo AMS Santé avec animation */}
+        {/* Logo HealthCenter Soft avec animation */}
         <motion.div
           className="logo-container"
           initial={{ scale: 0, rotate: -180 }}
@@ -339,7 +339,7 @@ const SplashScreen = ({ onFinish }) => {
               }
             }}
           >
-            AMS Santé
+            HealthCenter Soft
           </motion.h1>
           <motion.p
             className="app-subtitle"

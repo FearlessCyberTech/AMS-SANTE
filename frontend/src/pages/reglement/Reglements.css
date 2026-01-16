@@ -1,0 +1,457 @@
+/* Reglements.css - Styles modernes et animations */
+
+/* Animations globales */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+/* Conteneur principal */
+.reglement-container {
+  animation: fadeIn 0.6s ease-out;
+}
+
+/* En-tête du tableau de bord */
+.dashboard-header {
+  background: linear-gradient(135deg, rgba(63, 81, 181, 0.1) 0%, rgba(156, 39, 176, 0.1) 100%);
+  padding: 2rem;
+  border-radius: 20px;
+  margin-bottom: 2rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #3f51b5, #9c27b0);
+  animation: slideIn 1s ease-out;
+}
+
+/* Cartes de métriques */
+.metric-card {
+  border-radius: 16px !important;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  overflow: hidden;
+  position: relative;
+}
+
+.metric-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.metric-card:hover::before {
+  opacity: 1;
+}
+
+.metric-card:hover .MuiAvatar-root {
+  animation: pulse 2s infinite;
+}
+
+/* Cartes d'action rapide */
+.quick-action-card {
+  border-radius: 16px !important;
+  transition: all 0.3s ease !important;
+  border: 2px solid transparent !important;
+}
+
+.quick-action-card:hover {
+  border-color: rgba(63, 81, 181, 0.3) !important;
+  transform: translateY(-5px) !important;
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15) !important;
+}
+
+.quick-action-card:hover .MuiSvgIcon-root:last-child {
+  transform: translateX(5px);
+}
+
+/* Cartes de statistiques */
+.stat-card {
+  border-radius: 20px !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  transition: all 0.3s ease !important;
+}
+
+.stat-card:hover {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Onglets personnalisés */
+.custom-tabs .MuiTab-root {
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease !important;
+}
+
+.custom-tabs .MuiTab-root.Mui-selected {
+  color: #3f51b5 !important;
+  transform: translateY(-2px);
+}
+
+.tabs-paper {
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Contenu des onglets */
+.tab-content-container {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Listes */
+.list-item-hover {
+  border-radius: 12px !important;
+  transition: all 0.2s ease !important;
+  margin-bottom: 4px !important;
+}
+
+.list-item-hover:hover {
+  background-color: rgba(63, 81, 181, 0.08) !important;
+  transform: translateX(4px);
+}
+
+/* Tableaux */
+.table-container {
+  border-radius: 12px !important;
+  overflow: hidden !important;
+}
+
+.data-table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.table-head {
+  background: linear-gradient(135deg, #f5f7ff 0%, #f0f2ff 100%) !important;
+}
+
+.table-header {
+  font-weight: 700 !important;
+  color: #333 !important;
+  border-bottom: 2px solid #e0e0e0 !important;
+}
+
+.table-cell {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+  padding: 16px !important;
+}
+
+.table-row-animated {
+  transition: all 0.3s ease !important;
+}
+
+.table-row-animated:hover {
+  background-color: rgba(63, 81, 181, 0.05) !important;
+  transform: scale(1.002);
+}
+
+/* Badges de statut */
+.status-badge {
+  border-radius: 12px !important;
+  font-weight: 600 !important;
+  transition: all 0.3s ease !important;
+}
+
+.status-badge:hover {
+  transform: scale(1.05);
+}
+
+/* Boutons d'action */
+.action-button {
+  border-radius: 12px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.action-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.action-button:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+.action-button.primary {
+  background: linear-gradient(135deg, #3f51b5, #2196f3) !important;
+  color: white !important;
+}
+
+.action-button.outline {
+  border: 2px solid #3f51b5 !important;
+  color: #3f51b5 !important;
+}
+
+.action-button.error {
+  border: 2px solid #f44336 !important;
+  color: #f44336 !important;
+}
+
+/* Champs de formulaire */
+.form-field .MuiOutlinedInput-root {
+  border-radius: 12px !important;
+  transition: all 0.3s ease !important;
+}
+
+.form-field .MuiOutlinedInput-root:hover {
+  border-color: #3f51b5 !important;
+}
+
+.form-field .MuiOutlinedInput-root.Mui-focused {
+  box-shadow: 0 0 0 3px rgba(63, 81, 181, 0.1);
+}
+
+/* Groupes de filtres */
+.filter-group .MuiSelect-select {
+  border-radius: 12px !important;
+}
+
+.filter-label {
+  font-weight: 600 !important;
+}
+
+/* Conteneur de pagination */
+.pagination-container {
+  background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%) !important;
+  border-radius: 0 0 12px 12px !important;
+}
+
+.pagination-info {
+  font-weight: 500;
+  color: #666;
+}
+
+/* Notifications */
+.notification-snackbar {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.notification-alert {
+  border-radius: 12px !important;
+  backdrop-filter: blur(10px);
+  animation: slideIn 0.5s ease-out;
+}
+
+/* Dialogues */
+.dialog-paper {
+  border-radius: 20px !important;
+  padding: 8px !important;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25) !important;
+}
+
+.dialog-header {
+  background: linear-gradient(135deg, #3f51b5, #2196f3);
+  color: white !important;
+  border-radius: 16px 16px 0 0 !important;
+  padding: 24px !important;
+}
+
+.dialog-content {
+  padding: 24px !important;
+}
+
+.dialog-actions {
+  padding: 16px 24px !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Informations bénéficiaires */
+.beneficiary-info {
+  transition: all 0.3s ease;
+}
+
+.beneficiary-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.beneficiary-details {
+  opacity: 0.8;
+  transition: opacity 0.3s ease;
+}
+
+.beneficiary-info:hover .beneficiary-details {
+  opacity: 1;
+}
+
+/* Conteneur d'actions */
+.actions-container .MuiIconButton-root {
+  transition: all 0.3s ease !important;
+  border-radius: 10px !important;
+}
+
+.actions-container .MuiIconButton-root:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Cartes de transaction et facture */
+.transaction-card, .facture-card {
+  border-radius: 16px !important;
+  transition: all 0.3s ease !important;
+  overflow: hidden;
+  position: relative;
+}
+
+.transaction-card:hover, .facture-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15) !important;
+}
+
+.transaction-card::before, .facture-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #3f51b5, #2196f3);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.transaction-card:hover::before, .facture-card:hover::before {
+  opacity: 1;
+}
+
+/* Cartes de statistiques petites */
+.stat-card-small {
+  border-radius: 12px !important;
+  transition: all 0.3s ease !important;
+  cursor: pointer;
+}
+
+.stat-card-small:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Effets de chargement */
+.MuiSkeleton-root {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%) !important;
+  background-size: 200% 100% !important;
+  animation: shimmer 1.5s infinite !important;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .dashboard-header {
+    padding: 1rem !important;
+  }
+  
+  .metric-card, .quick-action-card, .stat-card {
+    margin-bottom: 1rem !important;
+  }
+  
+  .table-cell {
+    padding: 12px 8px !important;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .dashboard-header {
+    background: linear-gradient(135deg, rgba(63, 81, 181, 0.2) 0%, rgba(156, 39, 176, 0.2) 100%);
+  }
+  
+  .table-head {
+    background: linear-gradient(135deg, #1e1e2d 0%, #2d2d44 100%) !important;
+  }
+  
+  .stat-card {
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  }
+}
+
+/* Animations pour éléments spécifiques */
+@keyframes slideInUp {
+  from {
+    transform: translateY(100px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-on-scroll {
+  animation: slideInUp 0.6s ease-out;
+}
+
+/* Effet de flottement pour éléments importants */
+.float-animation {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Effet de brillance pour cartes premium */
+.shimmer-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-card::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 100%
+  );
+  transform: rotate(30deg);
+  animation: shimmer 3s infinite;
+}

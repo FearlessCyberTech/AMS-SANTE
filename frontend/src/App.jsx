@@ -4,7 +4,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import './services/i18n';
-import './App.css';
+import './index.css';
+
 
 // Composants avec chargement paresseux
 const Layout = React.lazy(() => import('./components/Layout'));

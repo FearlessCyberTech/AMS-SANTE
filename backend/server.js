@@ -1,74 +1,87 @@
-const app = require('./app');
+const { app } = require('./app'); // Notez les accolades { } pour extraire l'app
 const db = require('./config/database');
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5030;
 
-// Tester la connexion à la base de données au démarrage
 const startServer = async () => {
   try {
-    console.log('🔍 Tentative de connexion à SQL Server...');
-    console.log(`📊 Serveur: ${process.env.DB_SERVER || 'DESKTOP-G2TN8LC'}`);
-    console.log(`📁 Base de données: ${process.env.DB_NAME || 'hcs_backoffice'}`);
+    console.log('🚀 Démarrage du serveur HealthCenterSoft...');
+    console.log('📊 Configuration:');
+    console.log(`   Port: ${PORT}`);
+    console.log(`   Environnement: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`   Base de données: ${process.env.DB_NAME || 'hcs_backoffice'}`);
     
-    const isConnected = await db.testConnection();
+    // Tester la connexion à la base de données (sans bloquer le démarrage)
+    console.log('\n🔍 Test de connexion à la base de données...');
     
-    if (!isConnected) {
-      console.log('⚠️  Mode démonstration activé - SQL Server non connectée');
-      console.log('💡 Vérifiez que:');
-      console.log('   1. SQL Server est en cours d\'exécution');
-      console.log('   2. L\'authentification SQL Server est activée');
-      console.log('   3. Le port 1433 est accessible');
-      console.log('   4. Les identifiants sont corrects');
-    } else {
-      console.log('✅ SQL Server connecté avec succès');
-    }
-
-    app.listen(PORT, () => {
-      console.log(`🚀 HealthCenterSoft backend running on port ${PORT}`);
-      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔗 API URL: http://localhost:${PORT}/api`);
+    // Démarrer le serveur même si la base de données n'est pas accessible
+    app.listen(PORT, async () => {
+      console.log(`✅ Serveur démarré sur http://localhost:${PORT}`);
+      console.log(`🔗 API: http://localhost:${PORT}/api`);
       console.log(`❤️  Health check: http://localhost:${PORT}/api/health`);
-      console.log(`🗄️  Database: SQL Server (${process.env.DB_NAME})`);
+      
+      // Tenter la connexion à la base de données en arrière-plan
+      setTimeout(async () => {
+        try {
+          const isConnected = await db.testConnection();
+          if (!isConnected) {
+            console.log('\n⚠️  MODE DÉMONSTRATION ACTIVÉ');
+            console.log('   Le serveur fonctionne sans base de données SQL Server');
+            console.log('   Les données seront stockées en mémoire uniquement');
+            console.log('   Pour activer la base de données:');
+            console.log('   1. Démarrez SQL Server');
+            console.log('   2. Vérifiez les paramètres dans le fichier .env');
+            console.log('   3. Redémarrez le serveur');
+          }
+        } catch (error) {
+          console.log('⚠️  Impossible de se connecter à la base de données');
+          console.log('   Le serveur fonctionne en mode démonstration');
+        }
+      }, 1000);
     });
-  } catch (error) {
-    console.error('❌ Erreur lors du démarrage du serveur:', error);
     
-    // Tentative de démarrage en mode démo si la base de données n'est pas disponible
-    if (error.code === 'ELOGIN' || error.code === 'ETIMEOUT') {
-      console.log('⚠️  Démarrage en mode sans base de données...');
+  } catch (error) {
+    console.error('❌ ERREUR CRITIQUE lors du démarrage du serveur:', error);
+    
+    // Tentative de redémarrage en mode démo
+    console.log('\n🔄 Tentative de démarrage en mode démonstration...');
+    try {
       app.listen(PORT, () => {
-        console.log(`🚀 Serveur démarré en mode démonstration (sans DB) sur le port ${PORT}`);
+        console.log(`✅ Serveur démarré en mode démonstration sur http://localhost:${PORT}`);
+        console.log('⚠️  Aucune connexion à la base de données disponible');
+        console.log('📝 Les données seront perdues au redémarrage');
       });
-    } else {
+    } catch (fallbackError) {
+      console.error('💥 Impossible de démarrer le serveur:', fallbackError.message);
       process.exit(1);
     }
   }
 };
 
-// Gestion propre de l'arrêt avec fermeture du pool de connexions
-const shutdown = async () => {
-  console.log('\n🛑 Arrêt du serveur...');
+// Gestionnaire d'arrêt propre
+const shutdown = async (signal) => {
+  console.log(`\n${signal} reçu, arrêt du serveur...`);
   try {
     await db.close();
-    console.log('✅ Pool de connexions SQL Server fermé');
+    console.log('✅ Connexions fermées');
   } catch (error) {
-    console.error('❌ Erreur lors de la fermeture des connexions:', error);
+    console.error('Erreur lors de la fermeture:', error);
   }
   process.exit(0);
 };
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+// Gestion des signaux d'arrêt
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-// Gestion des erreurs non catchées
+// Gestion des erreurs non capturées
 process.on('uncaughtException', (error) => {
-  console.error('💥 Erreur non gérée:', error);
-  shutdown();
+  console.error('💥 Erreur non capturée:', error);
+  shutdown('uncaughtException');
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('💥 Promise rejetée non gérée:', reason);
-  shutdown();
 });
 
 // Démarrer le serveur

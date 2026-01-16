@@ -1,0 +1,86 @@
+/* FactureFicheSoins.css */
+.facture-container {
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.facture-paper {
+  min-height: 29.7cm;
+  background: white;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.facture-header {
+  font-family: 'Times New Roman', Times, serif;
+}
+
+/* Styles d'impression */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  .facture-container,
+  .facture-container * {
+    visibility: visible;
+  }
+  
+  .facture-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0;
+  }
+  
+  .facture-paper {
+    box-shadow: none;
+    margin: 0;
+    width: 100%;
+  }
+  
+  /* Masquer les éléments inutiles à l'impression */
+  .MuiDialogActions-root,
+  .MuiDialogTitle-root,
+  .MuiIconButton-root {
+    display: none !important;
+  }
+  
+  /* Ajuster les marges */
+  @page {
+    margin: 1cm;
+  }
+  
+  .facture-header {
+    page-break-after: avoid;
+  }
+  
+  .patient-info,
+  .consultation-info,
+  .medical-info,
+  .vitals-info,
+  .financial-info {
+    page-break-inside: avoid;
+  }
+  
+  .signatures {
+    page-break-before: avoid;
+  }
+}
+
+/* Styles pour le tableau */
+@media print {
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  
+  th, td {
+    border: 1px solid #000;
+    padding: 4px;
+    text-align: center;
+  }
+  
+  th {
+    background-color: #f0f0f0;
+  }
+}

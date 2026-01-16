@@ -61,3 +61,25 @@ export const formatStatus = (status) => {
 export const formatFullName = (nom, prenom) => {
   return `${prenom} ${nom}`.trim();
 };
+
+// Formater les numéros de téléphone
+export const formatPhone = (phoneNumber) => {
+  if (!phoneNumber) return '';
+  
+  // Supprime tous les caractères non numériques
+  const cleaned = phoneNumber.toString().replace(/\D/g, '');
+  
+  // Format français : 01 23 45 67 89
+  if (cleaned.length === 10) {
+    return cleaned.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5');
+  }
+  
+  // Format international : +33 1 23 45 67 89
+  if (cleaned.length > 10) {
+    return `+${cleaned.slice(0, 2)} ${cleaned.slice(2, 3)} ${cleaned.slice(3, 5)} ${cleaned.slice(5, 7)} ${cleaned.slice(7, 9)} ${cleaned.slice(9)}`;
+  }
+  
+  // Retourne le numéro original s'il ne correspond à aucun format
+  return phoneNumber;
+};
+

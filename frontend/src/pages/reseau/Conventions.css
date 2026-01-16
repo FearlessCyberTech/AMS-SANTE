@@ -1,0 +1,63 @@
+/* src/styles/gestion-assurance.css */
+.gestion-assurance-container {
+  background-color: #f5f7fa;
+  min-height: 100vh;
+}
+
+.stat-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  cursor: pointer;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.action-button {
+  transition: all 0.2s ease;
+}
+
+.action-button:hover {
+  transform: scale(1.1);
+}
+
+.table-row-hover:hover {
+  background-color: rgba(25, 118, 210, 0.04);
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.status-active {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.status-inactive {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.status-pending {
+  background-color: #fff3e0;
+  color: #ef6c00;
+}
+
+.filter-chip {
+  margin: 2px;
+}
+
+.export-button {
+  background: linear-gradient(45deg, #2196F3 30%, #21CBF3 90%);
+  color: white;
+  box-shadow: 0 3px 5px 2px rgba(33, 203, 243, .3);
+}
+
+.export-button:hover {
+  background: linear-gradient(45deg, #1976D2 30%, #1E88E5 90%);
+}

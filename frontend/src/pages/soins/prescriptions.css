@@ -490,3 +490,205 @@
   0% { top: 0; }
   100% { top: 100%; }
 }
+
+/* Styles pour le scanner */
+#reader {
+  position: relative;
+}
+
+#reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+}
+
+#reader img {
+  display: none;
+}
+
+/* Cadre de scan */
+.scan-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  height: 100px;
+  border: 3px solid #4CAF50;
+  border-radius: 8px;
+  pointer-events: none;
+  box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.5);
+}
+
+.scan-line {
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background: #4CAF50;
+  animation: scan 2s linear infinite;
+}
+
+@keyframes scan {
+  0% { top: 0; }
+  50% { top: 100%; }
+  100% { top: 0; }
+}
+
+@keyframes scanLine {
+  0% {
+    top: 10%;
+  }
+  50% {
+    top: 90%;
+  }
+  100% {
+    top: 10%;
+  }
+}
+
+/* Optimisations pour l'impression de prescription */
+@media print {
+  .prescription-document {
+    font-size: 11px !important;
+  }
+  
+  .barcode-container {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  
+  .prescription-header {
+    break-after: avoid !important;
+  }
+  
+  table {
+    break-inside: avoid !important;
+  }
+  
+  tr {
+    break-inside: avoid !important;
+    break-after: auto !important;
+  }
+  
+  /* Amélioration du contraste pour ZXing */
+  .zxing-barcode {
+    filter: contrast(1.3) !important;
+    -webkit-filter: contrast(1.3) !important;
+  }
+}
+
+/* Styles pour le code-barre ZXing optimisé */
+.zxing-optimized-barcode {
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  margin: 0 auto;
+  display: block;
+  image-rendering: crisp-edges;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: pixelated;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Amélioration de la lisibilité sur écran */
+.prescription-document {
+  font-family: 'Segoe UI', 'Arial', sans-serif;
+  color: #333;
+  line-height: 1.5;
+}
+
+.prescription-header {
+  background: linear-gradient(to right, #f8fafc, #ffffff);
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+/* Responsive pour mobile */
+@media (max-width: 768px) {
+  .prescription-header {
+    flex-direction: column;
+  }
+  
+  .establishment-info,
+  .title-section,
+  .barcode-section {
+    width: 100%;
+    max-width: 100%;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  
+  .barcode-container {
+    margin: 0 auto;
+  }
+}
+
+.type-badge {
+  display: inline-block;
+  padding: 5px 15px;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 14px;
+  margin: 10px 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  text-align: center;
+}
+
+.pharmacy-badge { background-color: #4CAF50; color: white; }
+.lab-badge { background-color: #2196F3; color: white; }
+.radiology-badge { background-color: #9C27B0; color: white; }
+.consultation-badge { background-color: #FF9800; color: white; }
+.hospital-badge { background-color: #F44336; color: white; }
+
+.contact-info {
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.contact-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.contact-icon {
+  display: inline-block;
+  background-color: #2c5aa0;
+  color: white;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  text-align: center;
+  line-height: 18px;
+  margin-right: 6px;
+  font-size: 9px;
+}
+
+.center-title {
+  font-weight: bold;
+  color: #2c5aa0;
+  font-size: 18px;
+  text-align: center;
+  margin-bottom: 5px;
+}
+
+.center-subtitle {
+  font-size: 12px;
+  color: #333;
+  text-align: center;
+  font-style: italic;
+  margin-bottom: 10px;
+}

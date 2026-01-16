@@ -28,4 +28,12 @@
     </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
+
+  <script>
+  // Configuration de l'URL de l'API
+  window.REACT_APP_API_URL = 'http://localhost:5000'; // ou votre URL d'API
+  // Alternative avec variables d'environnement
+  window._env_ = window._env_ || {};
+  window._env_.REACT_APP_API_URL = window._env_.REACT_APP_API_URL || 'http://localhost:5000';
+</script>
 </html>

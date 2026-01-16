@@ -1,6 +1,6 @@
 // src/contexts/AuthContext.jsx
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import i18n from '../services/i18n'; // Importez i18n directement
+import i18n from '../services/i18n';
 
 // Créer le contexte
 const AuthContext = createContext();
@@ -35,13 +35,13 @@ const decodeToken = (token) => {
 // Fonction pour mapper le code pays à la langue
 const getLanguageForCountry = (countryCode) => {
   const countryLanguageMap = {
-    'CMF': 'fr-FR', // Cameroun Francophone
-    'CMA': 'en-GB', // Cameroun Anglophone
-    'RCA': 'fr-FR', // République Centrafricaine
-    'TCD': 'fr-FR', // Tchad
-    'GNQ': 'es-ES', // Guinée Équatoriale
-    'BDI': 'en-GB', // Burundi
-    'COG': 'fr-FR'  // République du Congo
+    'CMF': 'fr-FR',
+    'CMA': 'en-GB',
+    'RCA': 'fr-FR',
+    'TCD': 'fr-FR',
+    'GNQ': 'es-ES',
+    'BDI': 'en-GB',
+    'COG': 'fr-FR'
   };
   return countryLanguageMap[countryCode] || 'fr-FR';
 };
@@ -76,7 +76,6 @@ export const AuthProvider = ({ children }) => {
           if (decoded && decoded.exp > Date.now() / 1000) {
             setUser(decoded);
             
-            // Récupérer le pays
             let country = storedCountry || decoded.cod_pay || decoded.country;
             if (country) {
               setUserCountry(country);
@@ -86,7 +85,6 @@ export const AuthProvider = ({ children }) => {
               changeApplicationLanguage(storedLanguage);
             }
           } else {
-            // Token expiré
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             localStorage.removeItem('language');
@@ -123,7 +121,7 @@ export const AuthProvider = ({ children }) => {
     loadUser();
   }, []);
 
-  // Connexion SIMPLIFIÉE - n'envoyez PAS de country dans le body
+  // Connexion
   const login = async (username, password, selectedCountry = 'CMF') => {
     try {
       setLoading(true);
@@ -131,8 +129,8 @@ export const AuthProvider = ({ children }) => {
       
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       
-      // CORRECTION IMPORTANTE : N'envoyez PAS le country dans le body
-      // L'API attend probablement seulement username et password
+      console.log('Tentative de connexion à:', `${apiUrl}/api/auth/login`);
+      
       const response = await fetch(`${apiUrl}/api/auth/login`, {
         method: 'POST',
         headers: {
@@ -141,17 +139,31 @@ export const AuthProvider = ({ children }) => {
         body: JSON.stringify({ 
           username, 
           password
-          // NE PAS ENVOYER country ici
         }),
       });
 
+      console.log('Réponse status:', response.status);
+      
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Erreur API:', errorText);
-        throw new Error(`Erreur HTTP: ${response.status} - ${errorText}`);
+        // Essayer de lire le message d'erreur de la réponse
+        let errorMessage = `Erreur HTTP: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (parseError) {
+          // Si la réponse n'est pas du JSON, lire le texte
+          try {
+            const errorText = await response.text();
+            errorMessage = errorText || errorMessage;
+          } catch (textError) {
+            console.error('Erreur lecture texte erreur:', textError);
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
+      console.log('Données reçues:', data);
 
       if (!data.success) {
         throw new Error(data.message || 'Échec de la connexion');
@@ -166,7 +178,6 @@ export const AuthProvider = ({ children }) => {
       
       // Stocker les données utilisateur
       if (data.user) {
-        // Ajouter le pays sélectionné à l'utilisateur
         const userWithCountry = {
           ...data.user,
           cod_pay: data.user.cod_pay || selectedCountry
@@ -181,7 +192,6 @@ export const AuthProvider = ({ children }) => {
         const language = getLanguageForCountry(userWithCountry.cod_pay);
         changeApplicationLanguage(language);
       } else {
-        // Si pas de données utilisateur, décoder depuis le token
         const decoded = decodeToken(data.token);
         const userWithCountry = {
           ...decoded,
@@ -199,7 +209,7 @@ export const AuthProvider = ({ children }) => {
       return { success: true, data };
       
     } catch (err) {
-      console.error('Erreur connexion:', err);
+      console.error('Erreur connexion complète:', err);
       setError(err.message || 'Erreur de connexion');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
