@@ -1,94 +1,101 @@
-// src/pages/UrgencesPage.jsx - VERSION CORRIGÉE ET OPTIMISÉE
+// src/pages/UrgencesPage.jsx - VERSION ANT DESIGN
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Box,
-  Container,
-  Grid,
-  Paper,
-  Typography,
-  Button,
   Card,
-  CardContent,
-  Chip,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  MenuItem,
-  FormControl,
-  InputLabel,
+  Row,
+  Col,
+  Statistic,
+  Button,
+  Modal,
+  Form,
+  Input,
   Select,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TablePagination,
-  Alert,
-  Snackbar,
-  CircularProgress,
-  Tooltip,
+  Tag,
+  Space,
+  DatePicker,
+  TimePicker,
   Avatar,
   Divider,
-  useTheme,
-  useMediaQuery,
   List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
-  ListItemButton
-} from '@mui/material';
+  Descriptions,
+  Alert,
+  Progress,
+  Tooltip,
+  Popconfirm,
+  Spin,
+  Tabs,
+  Badge,
+  Typography,
+  Upload,
+  message,
+  Drawer,
+  Collapse
+} from 'antd';
 import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Visibility as ViewIcon,
-  Refresh as RefreshIcon,
-  LocalHospital as HospitalIcon,
-  AccessTime as TimeIcon,
-  PriorityHigh as PriorityIcon,
-  Search as SearchIcon,
-  Close as CloseIcon,
-  CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-  Info as InfoIcon,
-  MedicalServices as MedicalIcon,
-  Person as PersonIcon,
-  Assignment as AssignmentIcon
-} from '@mui/icons-material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { TimePicker } from '@mui/x-date-pickers/TimePicker';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { fr } from 'date-fns/locale';
-import { format, parseISO, isToday, isValid, differenceInMinutes } from 'date-fns';
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  EyeOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+  CloseOutlined,
+  CheckCircleOutlined,
+  WarningOutlined,
+  ClockCircleOutlined,
+  ExclamationCircleOutlined,
+  UserOutlined,
+  MedicineBoxOutlined,
+  TeamOutlined,
+  InfoCircleOutlined,
+  FileTextOutlined,
+  CalendarOutlined,
+  FilterOutlined,
+  DownloadOutlined,
+  UploadOutlined,
+  BarChartOutlined,
+  LineChartOutlined,
+  PieChartOutlined,
+  HeartOutlined,
+  AlertOutlined,
+  ScheduleOutlined,
+  EnvironmentOutlined,
+  PhoneOutlined,
+  MailOutlined,
+  IdcardOutlined,
 
-// Import API - Version corrigée
+} from '@ant-design/icons';
+import moment from 'moment';
+import 'moment/locale/fr';
+
+// Import API
 import api from '../../services/api';
 const { consultations, prestataires } = api;
+
+const { TextArea } = Input;
+const { Option } = Select;
+const { Text } = Typography;
+const { TabPane } = Tabs;
+const { Panel } = Collapse;
 
 // ==============================================
 // CONSTANTES ET FONCTIONS UTILITAIRES
 // ==============================================
 
 const STATUS_OPTIONS = [
-  { value: 'en_attente', label: 'En attente', color: 'warning', icon: TimeIcon },
-  { value: 'en_cours', label: 'En cours', color: 'primary', icon: MedicalIcon },
-  { value: 'traite', label: 'Traité', color: 'success', icon: CheckCircleIcon },
-  { value: 'transfere', label: 'Transféré', color: 'info', icon: InfoIcon },
-  { value: 'decede', label: 'Décédé', color: 'error', icon: ErrorIcon },
-  { value: 'abandon', label: 'Abandon', color: 'default', icon: CloseIcon }
+  { value: 'en_attente', label: 'En attente', color: 'warning', icon: <ClockCircleOutlined /> },
+  { value: 'en_cours', label: 'En cours', color: 'processing', icon: <MedicineBoxOutlined /> },
+  { value: 'traite', label: 'Traité', color: 'success', icon: <CheckCircleOutlined /> },
+  { value: 'transfere', label: 'Transféré', color: 'blue', icon: <TeamOutlined /> },
+  { value: 'decede', label: 'Décédé', color: 'error', icon: <CloseOutlined /> },
+  { value: 'abandon', label: 'Abandon', color: 'default', icon: <CloseOutlined /> }
 ];
 
 const PRIORITY_OPTIONS = [
-  { value: 1, label: 'URGENT ABSOLU', color: 'error', icon: PriorityIcon },
-  { value: 2, label: 'Urgent', color: 'warning', icon: WarningIcon },
-  { value: 3, label: 'Semi-urgent', color: 'info', icon: InfoIcon },
-  { value: 4, label: 'Non urgent', color: 'success', icon: CheckCircleIcon }
+  { value: 1, label: 'URGENT ABSOLU', color: 'error', icon: <ExclamationCircleOutlined /> },
+  { value: 2, label: 'Urgent', color: 'warning', icon: <WarningOutlined /> },
+  { value: 3, label: 'Semi-urgent', color: 'info', icon: <InfoCircleOutlined /> },
+  { value: 4, label: 'Non urgent', color: 'success', icon: <CheckCircleOutlined /> }
 ];
 
 const SERVICES = [
@@ -103,21 +110,19 @@ const SERVICES = [
 ];
 
 // Fonctions utilitaires
-const getSafeDate = (dateString, defaultValue = new Date()) => {
+const getSafeDate = (dateString, defaultValue = moment()) => {
   if (!dateString) return defaultValue;
   try {
-    const parsed = typeof dateString === 'string' ? parseISO(dateString) : new Date(dateString);
-    return isValid(parsed) ? parsed : defaultValue;
+    return moment(dateString).isValid() ? moment(dateString) : defaultValue;
   } catch {
     return defaultValue;
   }
 };
 
-const formatSafeDate = (date, formatStr = 'dd/MM/yyyy') => {
+const formatSafeDate = (date, formatStr = 'DD/MM/YYYY') => {
   if (!date) return 'N/A';
   try {
-    const dateObj = getSafeDate(date);
-    return format(dateObj, formatStr);
+    return moment(date).format(formatStr);
   } catch {
     return 'N/A';
   }
@@ -132,9 +137,9 @@ const calculateWaitingTime = (arrivalTime) => {
   if (!arrivalTime) return null;
   
   try {
-    const arrival = getSafeDate(arrivalTime);
-    const now = new Date();
-    const diffMinutes = differenceInMinutes(now, arrival);
+    const arrival = moment(arrivalTime);
+    const now = moment();
+    const diffMinutes = now.diff(arrival, 'minutes');
     
     if (isNaN(diffMinutes) || diffMinutes < 0) return null;
     
@@ -148,42 +153,30 @@ const calculateWaitingTime = (arrivalTime) => {
 // COMPOSANTS RÉUTILISABLES
 // ==============================================
 
-const UrgenceStatusChip = ({ status }) => {
+const UrgenceStatusTag = ({ status }) => {
   const config = STATUS_OPTIONS.find(opt => opt.value === status) || STATUS_OPTIONS[0];
-  const IconComponent = config.icon;
-  
   return (
-    <Chip
-      icon={<IconComponent />}
-      label={config.label}
-      color={config.color}
-      size="small"
-      variant="outlined"
-    />
+    <Tag color={config.color} icon={config.icon}>
+      {config.label}
+    </Tag>
   );
 };
 
-const PriorityChip = ({ priority }) => {
+const PriorityTag = ({ priority }) => {
   const safePriority = getSafeValue(priority, 3);
   const config = PRIORITY_OPTIONS.find(opt => opt.value === safePriority) || PRIORITY_OPTIONS[2];
-  const IconComponent = config.icon;
-  
   return (
-    <Chip
-      icon={<IconComponent />}
-      label={config.label}
-      color={config.color}
-      size="small"
-      sx={{ fontWeight: 'bold' }}
-    />
+    <Tag color={config.color} icon={config.icon}>
+      {config.label}
+    </Tag>
   );
 };
 
-const WaitingTimeChip = ({ arrivalTime }) => {
+const WaitingTimeTag = ({ arrivalTime }) => {
   const diffMinutes = calculateWaitingTime(arrivalTime);
   
   if (diffMinutes === null) {
-    return <Chip label="N/A" size="small" color="default" />;
+    return <Tag>N/A</Tag>;
   }
   
   let color = 'success';
@@ -194,810 +187,662 @@ const WaitingTimeChip = ({ arrivalTime }) => {
   } else if (diffMinutes > 60) {
     color = 'warning';
   } else if (diffMinutes > 30) {
-    color = 'info';
+    color = 'blue';
   }
   
-  return <Chip label={label} color={color} size="small" />;
-};
-
-const StatusSelector = ({ value, onChange, disabled = false, size = 'small' }) => {
-  return (
-    <FormControl size={size} sx={{ minWidth: 120 }}>
-      <Select
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        sx={{
-          '& .MuiSelect-select': {
-            display: 'flex',
-            alignItems: 'center'
-          }
-        }}
-      >
-        {STATUS_OPTIONS.map((option) => {
-          const Icon = option.icon;
-          return (
-            <MenuItem key={option.value} value={option.value}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Icon fontSize="small" color={option.color} />
-                <Typography>{option.label}</Typography>
-              </Box>
-            </MenuItem>
-          );
-        })}
-      </Select>
-    </FormControl>
-  );
-};
-
-const PrioritySelector = ({ value, onChange, disabled = false, size = 'small' }) => {
-  return (
-    <FormControl size={size} sx={{ minWidth: 140 }}>
-      <Select
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-      >
-        {PRIORITY_OPTIONS.map((option) => {
-          const Icon = option.icon;
-          return (
-            <MenuItem key={option.value} value={option.value}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Icon fontSize="small" color={option.color} />
-                <Typography>{option.label}</Typography>
-              </Box>
-            </MenuItem>
-          );
-        })}
-      </Select>
-    </FormControl>
-  );
+  return <Tag color={color}>{label}</Tag>;
 };
 
 // ==============================================
 // DIALOG DE DÉTAILS D'URGENCE
 // ==============================================
 
-const UrgenceDetailDialog = ({ 
+const UrgenceDetailDrawer = ({ 
   open, 
   onClose, 
   urgence, 
   onStatusChange,
   onPriorityChange 
 }) => {
-  const theme = useTheme();
-  const fullScreen = useMediaQuery(theme.breakpoints.down('md'));
+  const [loading, setLoading] = useState(false);
 
   if (!urgence) return null;
 
   const formatFullDate = (date, heure) => {
     try {
-      const dateStr = format(getSafeDate(date), "yyyy-MM-dd");
-      const timeStr = heure || '00:00:00';
-      return format(getSafeDate(`${dateStr}T${timeStr}`), "dd/MM/yyyy HH:mm");
+      return moment(date).format('DD/MM/YYYY HH:mm');
     } catch {
       return 'N/A';
     }
   };
 
-  const handleLocalStatusChange = (event) => {
-    const newStatus = event.target.value;
-    if (onStatusChange && urgence?.id) {
-      onStatusChange(urgence.id, newStatus);
+  const handleStatusChange = async (newStatus) => {
+    setLoading(true);
+    try {
+      await onStatusChange(urgence.id, newStatus);
+      message.success('Statut mis à jour');
+    } catch (error) {
+      message.error('Erreur lors de la mise à jour du statut');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleLocalPriorityChange = (event) => {
-    const newPriority = parseInt(event.target.value);
-    if (onPriorityChange && urgence?.id) {
-      onPriorityChange(urgence.id, newPriority);
+  const handlePriorityChange = async (newPriority) => {
+    setLoading(true);
+    try {
+      await onPriorityChange(urgence.id, newPriority);
+      message.success('Priorité mise à jour');
+    } catch (error) {
+      message.error('Erreur lors de la mise à jour de la priorité');
+    } finally {
+      setLoading(false);
     }
   };
+
+  const patientInfo = (
+    <Card 
+      title="Informations Patient"
+      size="small"
+      extra={
+        <Button 
+          type="link" 
+          icon={<EditOutlined />}
+          onClick={() => message.info('Modification patient à implémenter')}
+        >
+          Modifier
+        </Button>
+      }
+    >
+      <Descriptions column={2} size="small">
+        <Descriptions.Item label="Nom complet">
+          <Space>
+            <Avatar 
+              size="small"
+              style={{ backgroundColor: '#1890ff' }}
+              icon={<UserOutlined />}
+            />
+            <span>
+              {getSafeValue(urgence.patient_prenom)} {getSafeValue(urgence.patient_nom)}
+            </span>
+          </Space>
+        </Descriptions.Item>
+        <Descriptions.Item label="ID Patient">
+          {getSafeValue(urgence.patient_id, 'N/A')}
+        </Descriptions.Item>
+        <Descriptions.Item label="Âge">
+          35 ans {/* À remplacer par le calcul d'âge réel */}
+        </Descriptions.Item>
+        <Descriptions.Item label="Sexe">
+          Masculin {/* À remplacer par les données réelles */}
+        </Descriptions.Item>
+        <Descriptions.Item label="Téléphone">
+          <PhoneOutlined /> 06 12 34 56 78
+        </Descriptions.Item>
+        <Descriptions.Item label="Email">
+          <MailOutlined /> patient@example.com
+        </Descriptions.Item>
+      </Descriptions>
+    </Card>
+  );
+
+  const admissionInfo = (
+    <Card title="Admission" size="small">
+      <List size="small">
+        <List.Item>
+          <List.Item.Meta
+            avatar={<CalendarOutlined />}
+            title="Date et heure d'arrivée"
+            description={formatFullDate(urgence.date_arrivee, urgence.heure_arrivee)}
+          />
+        </List.Item>
+        <List.Item>
+          <List.Item.Meta
+            avatar={<ClockCircleOutlined />}
+            title="Temps d'attente"
+            description={<WaitingTimeTag arrivalTime={urgence.date_arrivee} />}
+          />
+        </List.Item>
+        <List.Item>
+          <List.Item.Meta
+            avatar={<EnvironmentOutlined />}
+            title="Service"
+            description={getSafeValue(urgence.service, 'Non spécifié')}
+          />
+        </List.Item>
+      </List>
+    </Card>
+  );
+
+  const medicalInfo = (
+    <Card title="Évaluation Médicale" size="small">
+      <Descriptions column={1} size="small">
+        <Descriptions.Item label="Motif">
+          {getSafeValue(urgence.motif, 'Non spécifié')}
+        </Descriptions.Item>
+        <Descriptions.Item label="Symptômes">
+          {getSafeValue(urgence.symptomes, 'Non spécifié')}
+        </Descriptions.Item>
+        <Descriptions.Item label="Gravité">
+          {getSafeValue(urgence.gravite, 'Non évaluée')}
+        </Descriptions.Item>
+        <Descriptions.Item label="Allergies">
+          Aucune connue
+        </Descriptions.Item>
+        <Descriptions.Item label="Antécédents">
+          Hypertension artérielle
+        </Descriptions.Item>
+      </Descriptions>
+    </Card>
+  );
+
+  const medicalTeam = (
+    <Card title="Équipe Médicale" size="small">
+      <List size="small">
+        <List.Item>
+          <List.Item.Meta
+            avatar={
+              <Avatar 
+                size="small"
+                style={{ backgroundColor: '#52c41a' }}
+              />
+            }
+            title="Médecin traitant"
+            description={getSafeValue(urgence.medecin_nom, 'Non affecté')}
+          />
+          <Button type="link" size="small">Contacter</Button>
+        </List.Item>
+        <List.Item>
+          <List.Item.Meta
+            avatar={
+              <Avatar 
+                size="small"
+                style={{ backgroundColor: '#722ed1' }}
+                icon={<UserOutlined />}
+              />
+            }
+            title="Infirmier(ère)"
+            description="Marie Dupont"
+          />
+          <Button type="link" size="small">Contacter</Button>
+        </List.Item>
+      </List>
+    </Card>
+  );
+
+  const quickActions = (
+    <Card 
+      title="Actions Rapides" 
+      size="small"
+      style={{ marginBottom: 16 }}
+    >
+      <Row gutter={[8, 8]}>
+        <Col span={12}>
+          <Select
+            value={urgence.statut || 'en_attente'}
+            onChange={handleStatusChange}
+            style={{ width: '100%' }}
+            size="small"
+            loading={loading}
+          >
+            {STATUS_OPTIONS.map(option => (
+              <Option key={option.value} value={option.value}>
+                <Tag color={option.color}>
+                  {option.icon} {option.label}
+                </Tag>
+              </Option>
+            ))}
+          </Select>
+        </Col>
+        <Col span={12}>
+          <Select
+            value={urgence.priorite || 3}
+            onChange={handlePriorityChange}
+            style={{ width: '100%' }}
+            size="small"
+            loading={loading}
+          >
+            {PRIORITY_OPTIONS.map(option => (
+              <Option key={option.value} value={option.value}>
+                <Tag color={option.color}>
+                  {option.icon} {option.label}
+                </Tag>
+              </Option>
+            ))}
+          </Select>
+        </Col>
+        <Col span={8}>
+          <Button block size="small" icon={<FileTextOutlined />}>
+            Prescrire
+          </Button>
+        </Col>
+        <Col span={8}>
+          <Button block size="small" icon={<MedicineBoxOutlined />}>
+            Médicaments
+          </Button>
+        </Col>
+        <Col span={8}>
+          <Button block size="small" icon={<TeamOutlined />}>
+            Transférer
+          </Button>
+        </Col>
+      </Row>
+    </Card>
+  );
 
   return (
-    <Dialog
-      open={open}
+    <Drawer
+      title="Détails de l'Urgence"
+      placement="right"
+      width={720}
       onClose={onClose}
-      fullScreen={fullScreen}
-      maxWidth="md"
-      fullWidth
+      open={open}
+      extra={
+        <Space>
+          <Button onClick={onClose}>Fermer</Button>
+          <Button type="primary" icon={<EditOutlined />}>
+            Modifier
+          </Button>
+        </Space>
+      }
     >
-      <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center', gap: 1 }}>
-        <AssignmentIcon />
-        Détails de l'Urgence
-      </DialogTitle>
-      <DialogContent dividers>
-        <Grid container spacing={3} sx={{ mt: 1 }}>
-          {/* Actions rapides */}
-          <Grid item xs={12}>
-            <Box sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-              <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
-                Actions rapides
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Changer le statut</InputLabel>
-                    <StatusSelector
-                      value={urgence.statut || 'en_attente'}
-                      onChange={handleLocalStatusChange}
-                      size="small"
-                    />
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Changer la priorité</InputLabel>
-                    <PrioritySelector
-                      value={urgence.priorite || 3}
-                      onChange={handleLocalPriorityChange}
-                      size="small"
-                    />
-                  </FormControl>
-                </Grid>
-              </Grid>
-            </Box>
-          </Grid>
+      {quickActions}
+      
+      <Row gutter={[16, 16]}>
+        <Col span={24}>
+          {patientInfo}
+        </Col>
+        <Col span={12}>
+          {admissionInfo}
+        </Col>
+        <Col span={12}>
+          {medicalInfo}
+        </Col>
+        <Col span={24}>
+          {medicalTeam}
+        </Col>
+      </Row>
 
-          {/* En-tête avec infos patient */}
-          <Grid item xs={12}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-              <Avatar sx={{ width: 60, height: 60, bgcolor: 'primary.main' }}>
-                {getSafeValue(urgence.patient_prenom).charAt(0)}{getSafeValue(urgence.patient_nom).charAt(0)}
-              </Avatar>
-              <Box>
-                <Typography variant="h6">
-                  {getSafeValue(urgence.patient_prenom)} {getSafeValue(urgence.patient_nom)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  ID: {getSafeValue(urgence.patient_id, 'N/A')}
-                </Typography>
-              </Box>
-              <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
-                <UrgenceStatusChip status={urgence.statut} />
-                <PriorityChip priority={urgence.priorite} />
-              </Box>
-            </Box>
-          </Grid>
+      <Divider />
 
-          {/* Informations d'Admission */}
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-              <TimeIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-              Informations d'Admission
-            </Typography>
-            <List dense>
-              <ListItem>
-                <ListItemText 
-                  primary="Date et heure d'arrivée" 
-                  secondary={formatFullDate(urgence.date_arrivee, urgence.heure_arrivee)}
+      <Collapse ghost>
+        <Panel header="Notes et Observations" key="1">
+          <TextArea
+            defaultValue={getSafeValue(urgence.notes, 'Aucune note')}
+            rows={4}
+            placeholder="Ajouter des notes..."
+          />
+          <div style={{ marginTop: 16, textAlign: 'right' }}>
+            <Button type="primary" size="small">
+              Enregistrer
+            </Button>
+          </div>
+        </Panel>
+        <Panel header="Historique des modifications" key="2">
+          <List
+            size="small"
+            dataSource={[
+              { action: 'Statut changé', from: 'En attente', to: 'En cours', date: '10 min ago', user: 'Dr. Smith' },
+              { action: 'Priorité mise à jour', from: 'Urgent', to: 'URGENT ABSOLU', date: '15 min ago', user: 'Inf. Dupont' },
+              { action: 'Note ajoutée', description: 'Patient stable', date: '20 min ago', user: 'Dr. Johnson' },
+            ]}
+            renderItem={item => (
+              <List.Item>
+                <List.Item.Meta
+                  title={`${item.action} - ${item.user}`}
+                  description={
+                    <Space direction="vertical" size={0}>
+                      {item.from && (
+                        <Text type="secondary">
+                          De: <Tag color="default">{item.from}</Tag> → À: <Tag color="blue">{item.to}</Tag>
+                        </Text>
+                      )}
+                      {item.description && (
+                        <Text type="secondary">{item.description}</Text>
+                      )}
+                      <Text type="secondary" style={{ fontSize: '12px' }}>
+                        {item.date}
+                      </Text>
+                    </Space>
+                  }
                 />
-              </ListItem>
-              <ListItem>
-                <ListItemText 
-                  primary="Temps d'attente" 
-                  secondary={<WaitingTimeChip arrivalTime={urgence.date_arrivee} />}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemText 
-                  primary="Service" 
-                  secondary={getSafeValue(urgence.service, 'Non spécifié')}
-                />
-              </ListItem>
-            </List>
-          </Grid>
-
-          {/* Évaluation Médicale */}
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-              <MedicalIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-              Évaluation Médicale
-            </Typography>
-            <List dense>
-              <ListItem>
-                <ListItemText 
-                  primary="Motif de consultation" 
-                  secondary={getSafeValue(urgence.motif, 'Non spécifié')}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemText 
-                  primary="Symptômes" 
-                  secondary={getSafeValue(urgence.symptomes, 'Non spécifié')}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemText 
-                  primary="Gravité" 
-                  secondary={getSafeValue(urgence.gravite, 'Non évaluée')}
-                />
-              </ListItem>
-            </List>
-          </Grid>
-
-          {/* Personnel Médical */}
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-              <PersonIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-              Personnel Médical
-            </Typography>
-            <List dense>
-              <ListItem>
-                <ListItemText 
-                  primary="Médecin traitant" 
-                  secondary={getSafeValue(urgence.medecin_nom, 'Non affecté')}
-                />
-              </ListItem>
-            </List>
-          </Grid>
-
-          {/* Informations Complémentaires */}
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-              <InfoIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-              Informations Complémentaires
-            </Typography>
-            <List dense>
-              <ListItem>
-                <ListItemText 
-                  primary="Notes" 
-                  secondary={getSafeValue(urgence.notes, 'Aucune note')}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemText 
-                  primary="Dernière mise à jour" 
-                  secondary={formatSafeDate(urgence.updated_at, 'dd/MM/yyyy HH:mm')}
-                />
-              </ListItem>
-            </List>
-          </Grid>
-        </Grid>
-      </DialogContent>
-      <DialogActions sx={{ p: 2 }}>
-        <Button onClick={onClose} color="inherit">
-          Fermer
-        </Button>
-      </DialogActions>
-    </Dialog>
+              </List.Item>
+            )}
+          />
+        </Panel>
+      </Collapse>
+    </Drawer>
   );
 };
 
 // ==============================================
-// DIALOG DE CRÉATION/MODIFICATION D'URGENCE
+// MODAL DE CRÉATION/MODIFICATION D'URGENCE
 // ==============================================
 
-const UrgenceDialog = ({ open, onClose, onSave, initialData }) => {
-  const theme = useTheme();
-  const fullScreen = useMediaQuery(theme.breakpoints.down('md'));
-  const isEdit = Boolean(initialData?.id);
-  
-  const [formData, setFormData] = useState({
-    id: '',
-    patient_id: '',
-    patient_nom: '',
-    patient_prenom: '',
-    date_arrivee: new Date(),
-    heure_arrivee: new Date(),
-    motif: '',
-    symptomes: '',
-    gravite: 3,
-    priorite: 3,
-    medecin_id: '',
-    medecin_nom: '',
-    service: 'Général',
-    notes: '',
-    statut: 'en_attente'
-  });
-  
+const UrgenceModal = ({ open, onClose, onSave, initialData }) => {
+  const [form] = Form.useForm();
+  const [loading, setLoading] = useState(false);
   const [patientsList, setPatientsList] = useState([]);
   const [medecinsList, setMedecinsList] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [loadingPatients, setLoadingPatients] = useState(false);
   const [loadingMedecins, setLoadingMedecins] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchMedecin, setSearchMedecin] = useState('');
+  
+  const isEdit = Boolean(initialData?.id);
 
-  // Initialisation des données
   useEffect(() => {
     if (initialData) {
-      const dateArrivee = getSafeDate(initialData.date_arrivee);
-      let heureArrivee = new Date();
-      
-      try {
-        if (initialData.heure_arrivee) {
-          const [hours, minutes] = initialData.heure_arrivee.split(':');
-          heureArrivee.setHours(parseInt(hours) || 0, parseInt(minutes) || 0);
-        }
-      } catch (error) {
-        console.error('Erreur parsing heure:', error);
-      }
-
-      setFormData({
-        id: getSafeValue(initialData.id),
-        patient_id: getSafeValue(initialData.patient_id),
-        patient_nom: getSafeValue(initialData.patient_nom),
-        patient_prenom: getSafeValue(initialData.patient_prenom),
-        date_arrivee: dateArrivee,
-        heure_arrivee: heureArrivee,
-        motif: getSafeValue(initialData.motif),
-        symptomes: getSafeValue(initialData.symptomes),
-        gravite: getSafeValue(initialData.gravite, 3),
-        priorite: getSafeValue(initialData.priorite, 3),
-        medecin_id: getSafeValue(initialData.medecin_id),
-        medecin_nom: getSafeValue(initialData.medecin_nom),
-        service: getSafeValue(initialData.service, 'Général'),
-        notes: getSafeValue(initialData.notes),
-        statut: getSafeValue(initialData.statut, 'en_attente')
+      form.setFieldsValue({
+        ...initialData,
+        date_arrivee: initialData.date_arrivee ? moment(initialData.date_arrivee) : moment(),
+        heure_arrivee: initialData.heure_arrivee ? moment(initialData.heure_arrivee, 'HH:mm:ss') : moment()
       });
     } else {
-      // Réinitialiser pour une nouvelle urgence
-      setFormData({
-        id: '',
-        patient_id: '',
-        patient_nom: '',
-        patient_prenom: '',
-        date_arrivee: new Date(),
-        heure_arrivee: new Date(),
-        motif: '',
-        symptomes: '',
-        gravite: 3,
+      form.resetFields();
+      form.setFieldsValue({
+        date_arrivee: moment(),
+        heure_arrivee: moment(),
         priorite: 3,
-        medecin_id: '',
-        medecin_nom: '',
+        gravite: 3,
         service: 'Général',
-        notes: '',
         statut: 'en_attente'
       });
+    }
+  }, [initialData, form]);
+
+  const handleSearchPatient = async (value) => {
+    if (value.length < 2) {
       setPatientsList([]);
+      return;
+    }
+    
+    setLoadingPatients(true);
+    try {
+      const response = await consultations.searchPatientsAdvanced(value, {}, 10, 1);
+      if (response.success) {
+        const patients = response.beneficiaires || response.patients || [];
+        setPatientsList(patients);
+      }
+    } catch (error) {
+      console.error('Erreur recherche patients:', error);
+    } finally {
+      setLoadingPatients(false);
+    }
+  };
+
+  const handleSearchMedecin = async (value) => {
+    if (value.length < 2) {
       setMedecinsList([]);
-      setSearchTerm('');
-      setSearchMedecin('');
+      return;
     }
-  }, [initialData]);
-
-  // Recherche des patients
-  useEffect(() => {
-    const searchPatients = async () => {
-      if (searchTerm.length < 2) {
-        setPatientsList([]);
-        return;
-      }
-      
-      setLoadingPatients(true);
-      try {
-        const response = await consultations.searchPatientsAdvanced(searchTerm, {}, 10, 1);
-        if (response.success) {
-          const patients = response.beneficiaires || response.patients || [];
-          setPatientsList(patients.map(p => ({
-            id: p.id || p.ID_BEN,
-            nom: p.nom || p.NOM_BEN,
-            prenom: p.prenom || p.PRE_BEN,
-            identifiant: p.identifiant || p.IDENTIFIANT_NATIONAL,
-            date_naissance: p.date_naissance || p.NAI_BEN
-          })));
-        }
-      } catch (error) {
-        console.error('Erreur recherche patients:', error);
-      } finally {
-        setLoadingPatients(false);
-      }
-    };
     
-    const timer = setTimeout(searchPatients, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
-
-  // Recherche des médecins
-  useEffect(() => {
-    const searchMedecins = async () => {
-      if (searchMedecin.length < 2) {
-        setMedecinsList([]);
-        return;
+    setLoadingMedecins(true);
+    try {
+      const response = await prestataires.searchQuick(value, 10);
+      if (response.success) {
+        const medecins = response.prestataires || [];
+        setMedecinsList(medecins);
       }
-      
-      setLoadingMedecins(true);
-      try {
-        const response = await prestataires.searchQuick(searchMedecin, 10);
-        if (response.success) {
-          const medecins = response.prestataires || [];
-          setMedecinsList(medecins.map(m => ({
-            id: m.id || m.COD_PRE,
-            nom: m.nom || m.NOM_PRESTATAIRE,
-            prenom: m.prenom || m.PRENOM_PRESTATAIRE,
-            nom_complet: m.nom_complet || `${m.prenom || m.PRENOM_PRESTATAIRE} ${m.nom || m.NOM_PRESTATAIRE}`,
-            specialite: m.specialite || m.SPECIALITE
-          })));
-        }
-      } catch (error) {
-        console.error('Erreur recherche médecins:', error);
-      } finally {
-        setLoadingMedecins(false);
-      }
-    };
-    
-    const timer = setTimeout(searchMedecins, 500);
-    return () => clearTimeout(timer);
-  }, [searchMedecin]);
-
-  const handleChange = (field) => (event) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: event.target.value
-    }));
-  };
-
-  const handleDateChange = (field) => (newValue) => {
-    if (newValue && isValid(newValue)) {
-      setFormData(prev => ({
-        ...prev,
-        [field]: newValue
-      }));
+    } catch (error) {
+      console.error('Erreur recherche médecins:', error);
+    } finally {
+      setLoadingMedecins(false);
     }
   };
 
-  const handlePatientSelect = (patient) => {
-    setFormData(prev => ({
-      ...prev,
-      patient_id: patient.id,
-      patient_nom: getSafeValue(patient.nom),
-      patient_prenom: getSafeValue(patient.prenom)
-    }));
-    setPatientsList([]);
-    setSearchTerm('');
-  };
-
-  const handleMedecinSelect = (medecin) => {
-    setFormData(prev => ({
-      ...prev,
-      medecin_id: medecin.id,
-      medecin_nom: medecin.nom_complet
-    }));
-    setMedecinsList([]);
-    setSearchMedecin('');
-  };
-
-  const handleClearPatient = () => {
-    setFormData(prev => ({
-      ...prev,
-      patient_id: '',
-      patient_nom: '',
-      patient_prenom: ''
-    }));
-    setSearchTerm('');
-  };
-
-  const handleClearMedecin = () => {
-    setFormData(prev => ({
-      ...prev,
-      medecin_id: '',
-      medecin_nom: ''
-    }));
-    setSearchMedecin('');
-  };
-
-  const handleSubmit = async () => {
+  const handleSubmit = async (values) => {
     setLoading(true);
     try {
       const urgenceData = {
-        ...formData,
-        date_arrivee: format(formData.date_arrivee, 'yyyy-MM-dd'),
-        heure_arrivee: format(formData.heure_arrivee, 'HH:mm:ss'),
+        ...values,
+        date_arrivee: values.date_arrivee.format('YYYY-MM-DD'),
+        heure_arrivee: values.heure_arrivee.format('HH:mm:ss'),
         type_consultation: 'urgence',
         is_urgence: true
       };
       
       await onSave(urgenceData, isEdit);
       onClose();
+      message.success(isEdit ? 'Urgence modifiée avec succès' : 'Urgence créée avec succès');
     } catch (error) {
       console.error('Erreur sauvegarde urgence:', error);
+      message.error('Erreur lors de la sauvegarde');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Dialog
+    <Modal
+      title={isEdit ? 'Modifier une Urgence' : 'Nouvelle Admission aux Urgences'}
       open={open}
-      onClose={onClose}
-      fullScreen={fullScreen}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{
-        sx: { maxHeight: '90vh' }
-      }}
-    >
-      <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
-        {isEdit ? 'Modifier une Urgence' : 'Nouvelle Admission aux Urgences'}
-      </DialogTitle>
-      <DialogContent dividers>
-        <Grid container spacing={2} sx={{ mt: 1 }}>
-          {/* Section Patient */}
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
-              Informations du Patient
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-              {/* Patient sélectionné */}
-              {formData.patient_id ? (
-                <Paper sx={{ p: 2, flex: 1, minWidth: 200, bgcolor: 'action.hover' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Avatar sx={{ bgcolor: 'primary.main' }}>
-                        {getSafeValue(formData.patient_prenom).charAt(0)}{getSafeValue(formData.patient_nom).charAt(0)}
-                      </Avatar>
-                      <Box>
-                        <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                          {getSafeValue(formData.patient_prenom)} {getSafeValue(formData.patient_nom)}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          ID: {getSafeValue(formData.patient_id, 'N/A')}
-                        </Typography>
-                      </Box>
-                    </Box>
-                    <IconButton size="small" onClick={handleClearPatient} color="error">
-                      <CloseIcon />
-                    </IconButton>
-                  </Box>
-                </Paper>
-              ) : (
-                <Box sx={{ flex: 1, minWidth: 200 }}>
-                  <TextField
-                    label="Rechercher un patient"
-                    fullWidth
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Nom, prénom ou identifiant"
-                    size="small"
-                    InputProps={{
-                      startAdornment: <SearchIcon sx={{ mr: 1, color: 'action.active' }} />,
-                      endAdornment: loadingPatients && <CircularProgress size={20} />
-                    }}
-                  />
-                  {patientsList.length > 0 && (
-                    <Paper sx={{ mt: 1, maxHeight: 200, overflow: 'auto', border: 1, borderColor: 'divider' }}>
-                      <List dense>
-                        {patientsList.map(patient => (
-                          <ListItem key={patient.id} disablePadding>
-                            <ListItemButton
-                              onClick={() => handlePatientSelect(patient)}
-                              sx={{ borderBottom: 1, borderColor: 'divider', '&:last-child': { borderBottom: 0 } }}
-                            >
-                              <ListItemAvatar>
-                                <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
-                                  {getSafeValue(patient.prenom).charAt(0)}{getSafeValue(patient.nom).charAt(0)}
-                                </Avatar>
-                              </ListItemAvatar>
-                              <ListItemText
-                                primary={`${getSafeValue(patient.prenom)} ${getSafeValue(patient.nom)}`}
-                                secondary={`ID: ${getSafeValue(patient.identifiant)}`}
-                              />
-                            </ListItemButton>
-                          </ListItem>
-                        ))}
-                      </List>
-                    </Paper>
-                  )}
-                </Box>
-              )}
-            </Box>
-          </Grid>
-
-          <Grid item xs={12}>
-            <Divider />
-          </Grid>
-
-          {/* Section Admission */}
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
-              Admission
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-                  <DatePicker
-                    label="Date d'arrivée"
-                    value={formData.date_arrivee}
-                    onChange={handleDateChange('date_arrivee')}
-                    renderInput={(params) => <TextField {...params} fullWidth size="small" />}
-                  />
-                </LocalizationProvider>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-                  <TimePicker
-                    label="Heure d'arrivée"
-                    value={formData.heure_arrivee}
-                    onChange={handleDateChange('heure_arrivee')}
-                    renderInput={(params) => <TextField {...params} fullWidth size="small" />}
-                  />
-                </LocalizationProvider>
-              </Grid>
-            </Grid>
-          </Grid>
-
-          {/* Section Évaluation */}
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
-              Évaluation Médicale
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  select
-                  label="Gravité"
-                  fullWidth
-                  value={formData.gravite}
-                  onChange={handleChange('gravite')}
-                  size="small"
-                >
-                  <MenuItem value={1}>Critique</MenuItem>
-                  <MenuItem value={2}>Sévère</MenuItem>
-                  <MenuItem value={3}>Modérée</MenuItem>
-                  <MenuItem value={4}>Légère</MenuItem>
-                  <MenuItem value={5}>Minime</MenuItem>
-                </TextField>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  select
-                  label="Priorité"
-                  fullWidth
-                  value={formData.priorite}
-                  onChange={handleChange('priorite')}
-                  size="small"
-                >
-                  {PRIORITY_OPTIONS.map(option => (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Motif de consultation"
-                  fullWidth
-                  multiline
-                  rows={2}
-                  value={formData.motif}
-                  onChange={handleChange('motif')}
-                  size="small"
-                  placeholder="Description du motif principal"
-                  required
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Symptômes"
-                  fullWidth
-                  multiline
-                  rows={3}
-                  value={formData.symptomes}
-                  onChange={handleChange('symptomes')}
-                  size="small"
-                  placeholder="Symptômes présentés par le patient"
-                />
-              </Grid>
-            </Grid>
-          </Grid>
-
-          {/* Section Affectation */}
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
-              Affectation
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Box>
-                  {/* Médecin sélectionné */}
-                  {formData.medecin_id ? (
-                    <Paper sx={{ p: 2, bgcolor: 'action.hover' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Avatar sx={{ bgcolor: 'secondary.main' }}>
-                            {getSafeValue(formData.medecin_nom).split(' ').map(n => n.charAt(0)).join('')}
-                          </Avatar>
-                          <Box>
-                            <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                              {formData.medecin_nom}
-                            </Typography>
-                          </Box>
-                        </Box>
-                        <IconButton size="small" onClick={handleClearMedecin} color="error">
-                          <CloseIcon />
-                        </IconButton>
-                      </Box>
-                    </Paper>
-                  ) : (
-                    <>
-                      <TextField
-                        label="Rechercher un médecin"
-                        fullWidth
-                        value={searchMedecin}
-                        onChange={(e) => setSearchMedecin(e.target.value)}
-                        placeholder="Nom du médecin"
-                        size="small"
-                        InputProps={{
-                          startAdornment: <SearchIcon sx={{ mr: 1, color: 'action.active' }} />,
-                          endAdornment: loadingMedecins && <CircularProgress size={20} />
-                        }}
-                      />
-                      {medecinsList.length > 0 && (
-                        <Paper sx={{ mt: 1, maxHeight: 200, overflow: 'auto', border: 1, borderColor: 'divider' }}>
-                          <List dense>
-                            {medecinsList.map(medecin => (
-                              <ListItem key={medecin.id} disablePadding>
-                                <ListItemButton
-                                  onClick={() => handleMedecinSelect(medecin)}
-                                  sx={{ borderBottom: 1, borderColor: 'divider', '&:last-child': { borderBottom: 0 } }}
-                                >
-                                  <ListItemAvatar>
-                                    <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
-                                      {getSafeValue(medecin.prenom).charAt(0)}{getSafeValue(medecin.nom).charAt(0)}
-                                    </Avatar>
-                                  </ListItemAvatar>
-                                  <ListItemText
-                                    primary={medecin.nom_complet}
-                                    secondary={getSafeValue(medecin.specialite, 'Spécialité non définie')}
-                                  />
-                                </ListItemButton>
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Paper>
-                      )}
-                    </>
-                  )}
-                </Box>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  select
-                  label="Service"
-                  fullWidth
-                  value={formData.service}
-                  onChange={handleChange('service')}
-                  size="small"
-                >
-                  {SERVICES.map(service => (
-                    <MenuItem key={service} value={service}>
-                      {service}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Notes supplémentaires"
-                  fullWidth
-                  multiline
-                  rows={2}
-                  value={formData.notes}
-                  onChange={handleChange('notes')}
-                  size="small"
-                  placeholder="Informations complémentaires"
-                />
-              </Grid>
-            </Grid>
-          </Grid>
-        </Grid>
-      </DialogContent>
-      <DialogActions sx={{ p: 2 }}>
-        <Button onClick={onClose} color="inherit">
+      onCancel={onClose}
+      width={800}
+      footer={[
+        <Button key="cancel" onClick={onClose}>
           Annuler
-        </Button>
+        </Button>,
         <Button
-          onClick={handleSubmit}
-          variant="contained"
-          startIcon={isEdit ? <EditIcon /> : <AddIcon />}
-          disabled={loading || !formData.patient_nom || !formData.motif}
+          key="submit"
+          type="primary"
+          loading={loading}
+          onClick={() => form.submit()}
+          icon={isEdit ? <EditOutlined /> : <PlusOutlined />}
         >
-          {loading ? 'Enregistrement...' : (isEdit ? 'Modifier' : 'Enregistrer')}
+          {isEdit ? 'Modifier' : 'Enregistrer'}
         </Button>
-      </DialogActions>
-    </Dialog>
+      ]}
+      destroyOnClose
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={handleSubmit}
+        initialValues={{
+          priorite: 3,
+          gravite: 3,
+          service: 'Général',
+          statut: 'en_attente'
+        }}
+      >
+        <Tabs defaultActiveKey="patient">
+          <TabPane tab="Patient" key="patient">
+            <Form.Item
+              name="patient_id"
+              label="Patient"
+              rules={[{ required: true, message: 'Veuillez sélectionner un patient' }]}
+            >
+              <Select
+                showSearch
+                placeholder="Rechercher un patient..."
+                onSearch={handleSearchPatient}
+                loading={loadingPatients}
+                filterOption={false}
+                optionLabelProp="label"
+              >
+                {patientsList.map(patient => (
+                  <Option 
+                    key={patient.id || patient.ID_BEN} 
+                    value={patient.id || patient.ID_BEN}
+                    label={`${patient.prenom || patient.PRE_BEN} ${patient.nom || patient.NOM_BEN}`}
+                  >
+                    <Space>
+                      <Avatar size="small" icon={<UserOutlined />} />
+                      <div>
+                        <div>{patient.prenom || patient.PRE_BEN} {patient.nom || patient.NOM_BEN}</div>
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                          ID: {patient.identifiant || patient.IDENTIFIANT_NATIONAL}
+                        </Text>
+                      </div>
+                    </Space>
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="patient_nom"
+                  label="Nom"
+                  rules={[{ required: true, message: 'Veuillez saisir le nom' }]}
+                >
+                  <Input placeholder="Nom du patient" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="patient_prenom"
+                  label="Prénom"
+                  rules={[{ required: true, message: 'Veuillez saisir le prénom' }]}
+                >
+                  <Input placeholder="Prénom du patient" />
+                </Form.Item>
+              </Col>
+            </Row>
+          </TabPane>
+
+          <TabPane tab="Admission" key="admission">
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="date_arrivee"
+                  label="Date d'arrivée"
+                  rules={[{ required: true, message: 'Veuillez sélectionner la date' }]}
+                >
+                  <DatePicker style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="heure_arrivee"
+                  label="Heure d'arrivée"
+                  rules={[{ required: true, message: 'Veuillez sélectionner l\'heure' }]}
+                >
+                  <TimePicker style={{ width: '100%' }} format="HH:mm" />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item
+              name="service"
+              label="Service"
+              rules={[{ required: true, message: 'Veuillez sélectionner le service' }]}
+            >
+              <Select>
+                {SERVICES.map(service => (
+                  <Option key={service} value={service}>{service}</Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </TabPane>
+
+          <TabPane tab="Évaluation" key="evaluation">
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="gravite"
+                  label="Gravité"
+                  rules={[{ required: true, message: 'Veuillez sélectionner la gravité' }]}
+                >
+                  <Select>
+                    <Option value={1}>Critique</Option>
+                    <Option value={2}>Sévère</Option>
+                    <Option value={3}>Modérée</Option>
+                    <Option value={4}>Légère</Option>
+                    <Option value={5}>Minime</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="priorite"
+                  label="Priorité"
+                  rules={[{ required: true, message: 'Veuillez sélectionner la priorité' }]}
+                >
+                  <Select>
+                    {PRIORITY_OPTIONS.map(option => (
+                      <Option key={option.value} value={option.value}>
+                        <Tag color={option.color}>{option.label}</Tag>
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item
+              name="motif"
+              label="Motif de consultation"
+              rules={[{ required: true, message: 'Veuillez saisir le motif' }]}
+            >
+              <TextArea rows={2} placeholder="Description du motif principal" />
+            </Form.Item>
+
+            <Form.Item
+              name="symptomes"
+              label="Symptômes"
+            >
+              <TextArea rows={3} placeholder="Symptômes présentés par le patient" />
+            </Form.Item>
+          </TabPane>
+
+          <TabPane tab="Affectation" key="affectation">
+            <Form.Item
+              name="medecin_id"
+              label="Médecin"
+            >
+              <Select
+                showSearch
+                placeholder="Rechercher un médecin..."
+                onSearch={handleSearchMedecin}
+                loading={loadingMedecins}
+                filterOption={false}
+                optionLabelProp="label"
+              >
+                {medecinsList.map(medecin => (
+                  <Option 
+                    key={medecin.id || medecin.COD_PRE} 
+                    value={medecin.id || medecin.COD_PRE}
+                    label={`${medecin.prenom || medecin.PRENOM_PRESTATAIRE} ${medecin.nom || medecin.NOM_PRESTATAIRE}`}
+                  >
+                    <Space>
+                      <Avatar size="small" />
+                      <div>
+                        <div>{medecin.prenom || medecin.PRENOM_PRESTATAIRE} {medecin.nom || medecin.NOM_PRESTATAIRE}</div>
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                          {medecin.specialite || medecin.SPECIALITE || 'Spécialité non définie'}
+                        </Text>
+                      </div>
+                    </Space>
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              name="statut"
+              label="Statut"
+              rules={[{ required: true, message: 'Veuillez sélectionner le statut' }]}
+            >
+              <Select>
+                {STATUS_OPTIONS.map(option => (
+                  <Option key={option.value} value={option.value}>
+                    <Tag color={option.color}>{option.label}</Tag>
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              name="notes"
+              label="Notes supplémentaires"
+            >
+              <TextArea rows={3} placeholder="Informations complémentaires" />
+            </Form.Item>
+          </TabPane>
+        </Tabs>
+      </Form>
+    </Modal>
   );
 };
 
@@ -1006,39 +851,30 @@ const UrgenceDialog = ({ open, onClose, onSave, initialData }) => {
 // ==============================================
 
 const UrgencesPage = () => {
-  const theme = useTheme();
-  
   // États principaux
   const [urgences, setUrgences] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // États pour les dialogues
-  const [dialogOpen, setDialogOpen] = useState(false);
+  // États pour les modales
+  const [modalOpen, setModalOpen] = useState(false);
   const [selectedUrgence, setSelectedUrgence] = useState(null);
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
   
   // États pour la pagination et le tri
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [sortField, setSortField] = useState('date_arrivee');
-  const [sortDirection, setSortDirection] = useState('desc');
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0
+  });
   
   // États pour les filtres
   const [filters, setFilters] = useState({
     statut: 'tous',
     priorite: 'tous',
     service: 'tous',
-    dateDebut: null,
-    dateFin: null,
+    dateRange: [moment().subtract(7, 'days'), moment()],
     search: ''
-  });
-  
-  // États pour les notifications
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: '',
-    severity: 'success'
   });
 
   const [updatingStatus, setUpdatingStatus] = useState({});
@@ -1052,12 +888,12 @@ const UrgencesPage = () => {
     try {
       const queryParams = {};
       
-      if (filters.dateDebut) {
-        queryParams.date_debut = format(filters.dateDebut, 'yyyy-MM-dd');
+      if (filters.dateRange?.[0]) {
+        queryParams.date_debut = filters.dateRange[0].format('YYYY-MM-DD');
       }
       
-      if (filters.dateFin) {
-        queryParams.date_fin = format(filters.dateFin, 'yyyy-MM-dd');
+      if (filters.dateRange?.[1]) {
+        queryParams.date_fin = filters.dateRange[1].format('YYYY-MM-DD');
       }
       
       queryParams.is_urgence = true;
@@ -1067,22 +903,15 @@ const UrgencesPage = () => {
       
       if (response.success) {
         const urgencesList = (response.consultations || []).map(cons => {
-          const dateArrivee = getSafeDate(
-            cons.DATE_CONSULTATION || cons.date_arrivee || cons.date_consultation,
-            new Date()
-          );
-          
-          const heureArrivee = cons.HEURE_CONSULTATION || 
-                               cons.heure_arrivee || 
-                               cons.heure_consultation || 
-                               format(dateArrivee, 'HH:mm:ss');
+          const dateArrivee = cons.DATE_CONSULTATION || cons.date_arrivee || cons.date_consultation;
+          const heureArrivee = cons.HEURE_CONSULTATION || cons.heure_arrivee || cons.heure_consultation;
           
           return {
             id: getSafeValue(cons.COD_CONS || cons.id || cons.ID_CONSULTATION, Date.now()),
             patient_id: getSafeValue(cons.ID_BEN || cons.patient_id || cons.COD_BEN),
             patient_nom: getSafeValue(cons.NOM_BEN || cons.patient_nom || cons.nom_patient, 'Inconnu'),
             patient_prenom: getSafeValue(cons.PRE_BEN || cons.patient_prenom || cons.prenom_patient, ''),
-            date_arrivee: dateArrivee.toISOString(),
+            date_arrivee: dateArrivee,
             heure_arrivee: heureArrivee,
             motif: getSafeValue(cons.MOTIF_CONSULTATION || cons.motif, 'Non spécifié'),
             symptomes: getSafeValue(cons.SYMPTOMES || cons.symptomes, ''),
@@ -1093,22 +922,24 @@ const UrgencesPage = () => {
             service: getSafeValue(cons.SERVICE || cons.service, 'Général'),
             notes: getSafeValue(cons.OBSERVATIONS || cons.notes, ''),
             statut: getSafeValue(cons.STATUT_CONSULTATION || cons.statut || cons.statut_consultation, 'en_attente'),
-            created_at: getSafeValue(cons.DAT_CREUTIL || cons.created_at, new Date().toISOString()),
-            updated_at: getSafeValue(cons.DAT_MODUTIL || cons.updated_at, new Date().toISOString())
+            created_at: getSafeValue(cons.DAT_CREUTIL || cons.created_at, moment().toISOString()),
+            updated_at: getSafeValue(cons.DAT_MODUTIL || cons.updated_at, moment().toISOString())
           };
         });
         
         setUrgences(urgencesList);
+        setPagination(prev => ({ ...prev, total: urgencesList.length }));
       } else {
         throw new Error(response.message || 'Erreur lors du chargement des urgences');
       }
     } catch (error) {
       console.error('Erreur chargement urgences:', error);
       setError(error.message);
+      message.error('Erreur lors du chargement des urgences');
     } finally {
       setLoading(false);
     }
-  }, [filters.dateDebut, filters.dateFin]);
+  }, [filters.dateRange]);
 
   // Calcul des statistiques
   const stats = useMemo(() => {
@@ -1165,19 +996,18 @@ const UrgencesPage = () => {
     }
     
     // Filtre par date
-    if (filters.dateDebut) {
-      const dateDebut = getSafeDate(filters.dateDebut);
+    if (filters.dateRange?.[0]) {
+      const dateDebut = filters.dateRange[0];
       filtered = filtered.filter(u => {
-        const dateUrgence = getSafeDate(u.date_arrivee);
+        const dateUrgence = moment(u.date_arrivee);
         return dateUrgence >= dateDebut;
       });
     }
     
-    if (filters.dateFin) {
-      const dateFin = getSafeDate(filters.dateFin);
-      dateFin.setHours(23, 59, 59, 999);
+    if (filters.dateRange?.[1]) {
+      const dateFin = filters.dateRange[1].endOf('day');
       filtered = filtered.filter(u => {
-        const dateUrgence = getSafeDate(u.date_arrivee);
+        const dateUrgence = moment(u.date_arrivee);
         return dateUrgence <= dateFin;
       });
     }
@@ -1200,55 +1030,42 @@ const UrgencesPage = () => {
       });
     }
     
-    // Trier
-    filtered.sort((a, b) => {
-      const aValue = getSafeValue(a[sortField]);
-      const bValue = getSafeValue(b[sortField]);
-      
-      if (sortDirection === 'asc') {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
-      }
-    });
-    
     return filtered;
-  }, [urgences, filters, sortField, sortDirection]);
-
-  // Pagination
-  const paginatedUrgences = useMemo(() => {
-    return filteredUrgences.slice(
-      page * rowsPerPage,
-      page * rowsPerPage + rowsPerPage
-    );
-  }, [filteredUrgences, page, rowsPerPage]);
+  }, [urgences, filters]);
 
   // Gestion des urgences
   const handleCreateUrgence = () => {
     setSelectedUrgence(null);
-    setDialogOpen(true);
+    setModalOpen(true);
   };
 
   const handleEditUrgence = (urgence) => {
     setSelectedUrgence(urgence);
-    setDialogOpen(true);
+    setModalOpen(true);
   };
 
   const handleViewUrgence = (urgence) => {
     setSelectedUrgence(urgence);
-    setDetailDialogOpen(true);
+    setDetailDrawerOpen(true);
   };
 
   const handleDeleteUrgence = async (id) => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer cette urgence ?')) {
-      try {
-        setUrgences(prev => prev.filter(u => u.id !== id));
-        showSnackbar('Urgence supprimée avec succès', 'success');
-      } catch (error) {
-        console.error('Erreur suppression urgence:', error);
-        showSnackbar('Erreur lors de la suppression', 'error');
+    Modal.confirm({
+      title: 'Supprimer l\'urgence',
+      content: 'Êtes-vous sûr de vouloir supprimer cette urgence ?',
+      okText: 'Supprimer',
+      okType: 'danger',
+      cancelText: 'Annuler',
+      onOk: async () => {
+        try {
+          setUrgences(prev => prev.filter(u => u.id !== id));
+          message.success('Urgence supprimée avec succès');
+        } catch (error) {
+          console.error('Erreur suppression urgence:', error);
+          message.error('Erreur lors de la suppression');
+        }
       }
-    }
+    });
   };
 
   const handleSaveUrgence = async (urgenceData, isEdit) => {
@@ -1258,23 +1075,20 @@ const UrgencesPage = () => {
           u.id === urgenceData.id ? { 
             ...u, 
             ...urgenceData,
-            updated_at: new Date().toISOString()
+            updated_at: moment().toISOString()
           } : u
         ));
-        showSnackbar('Urgence modifiée avec succès', 'success');
       } else {
         const newUrgence = {
           ...urgenceData,
           id: Date.now(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: moment().toISOString(),
+          updated_at: moment().toISOString()
         };
         setUrgences(prev => [newUrgence, ...prev]);
-        showSnackbar('Urgence créée avec succès', 'success');
       }
     } catch (error) {
       console.error('Erreur sauvegarde urgence:', error);
-      showSnackbar('Erreur lors de la sauvegarde', 'error');
       throw error;
     }
   };
@@ -1288,23 +1102,23 @@ const UrgencesPage = () => {
 
       oldStatus = urgenceToUpdate.statut;
       
+      setUpdatingStatus(prev => ({ ...prev, [urgenceId]: true }));
+
       // Mettre à jour l'état local
       const updatedUrgence = {
         ...urgenceToUpdate,
         statut: newStatus,
-        updated_at: new Date().toISOString()
+        updated_at: moment().toISOString()
       };
       
       setUrgences(prev => prev.map(u => 
         u.id === urgenceId ? updatedUrgence : u
       ));
 
-      setUpdatingStatus(prev => ({ ...prev, [urgenceId]: true }));
-
       // Préparer les données pour le backend
       const updateData = {
         STATUT_CONSULTATION: newStatus,
-        OBSERVATIONS: `${urgenceToUpdate.notes || ''} | Statut changé de ${oldStatus} à ${newStatus} - ${new Date().toLocaleString()}`,
+        OBSERVATIONS: `${urgenceToUpdate.notes || ''} | Statut changé de ${oldStatus} à ${newStatus} - ${moment().format('DD/MM/YYYY HH:mm')}`,
         id: urgenceId,
         COD_CONS: urgenceId,
         PRIORITE: urgenceToUpdate.priorite || 3
@@ -1316,7 +1130,7 @@ const UrgencesPage = () => {
         throw new Error(response.message || 'Erreur lors de la mise à jour');
       }
 
-      showSnackbar('Statut mis à jour avec succès', 'success');
+      message.success('Statut mis à jour avec succès');
 
     } catch (error) {
       console.error('Erreur mise à jour statut:', error);
@@ -1326,7 +1140,7 @@ const UrgencesPage = () => {
           u.id === urgenceId ? { ...u, statut: oldStatus } : u
         ));
       }
-      showSnackbar(`Erreur: ${error.message}`, 'error');
+      message.error(`Erreur: ${error.message}`);
     } finally {
       setUpdatingStatus(prev => ({ ...prev, [urgenceId]: false }));
     }
@@ -1341,23 +1155,23 @@ const UrgencesPage = () => {
 
       oldPriority = urgenceToUpdate.priorite;
       
+      setUpdatingPriority(prev => ({ ...prev, [urgenceId]: true }));
+
       // Mettre à jour l'état local
       const updatedUrgence = {
         ...urgenceToUpdate,
         priorite: parseInt(newPriority),
-        updated_at: new Date().toISOString()
+        updated_at: moment().toISOString()
       };
       
       setUrgences(prev => prev.map(u => 
         u.id === urgenceId ? updatedUrgence : u
       ));
 
-      setUpdatingPriority(prev => ({ ...prev, [urgenceId]: true }));
-
       // Préparer les données pour le backend
       const updateData = {
         PRIORITE: parseInt(newPriority),
-        OBSERVATIONS: `${urgenceToUpdate.notes || ''} | Priorité changée de ${oldPriority} à ${newPriority} - ${new Date().toLocaleString()}`,
+        OBSERVATIONS: `${urgenceToUpdate.notes || ''} | Priorité changée de ${oldPriority} à ${newPriority} - ${moment().format('DD/MM/YYYY HH:mm')}`,
         STATUT_CONSULTATION: urgenceToUpdate.statut || 'en_attente',
         MOTIF_CONSULTATION: urgenceToUpdate.motif || '',
         id: urgenceId,
@@ -1367,7 +1181,7 @@ const UrgencesPage = () => {
       const response = await consultations.update(urgenceId, updateData);
 
       if (response.success) {
-        showSnackbar('Priorité mise à jour avec succès', 'success');
+        message.success('Priorité mise à jour avec succès');
       } else {
         throw new Error(response.message || 'Erreur lors de la mise à jour');
       }
@@ -1380,30 +1194,15 @@ const UrgencesPage = () => {
           u.id === urgenceId ? { ...u, priorite: oldPriority } : u
         ));
       }
-      showSnackbar(`Erreur: ${error.message}`, 'error');
+      message.error(`Erreur: ${error.message}`);
     } finally {
       setUpdatingPriority(prev => ({ ...prev, [urgenceId]: false }));
     }
   };
 
   // Gestion de la pagination
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
-  // Gestion du tri
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
+  const handleTableChange = (pagination) => {
+    setPagination(pagination);
   };
 
   // Gestion des filtres
@@ -1412,24 +1211,10 @@ const UrgencesPage = () => {
       ...prev,
       [field]: value
     }));
-    setPage(0); // Réinitialiser la pagination lors du changement de filtre
   };
 
   const handleRefresh = () => {
     loadUrgences();
-  };
-
-  // Gestion des notifications
-  const showSnackbar = (message, severity = 'success') => {
-    setSnackbar({
-      open: true,
-      message,
-      severity
-    });
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar(prev => ({ ...prev, open: false }));
   };
 
   // Effets
@@ -1437,473 +1222,489 @@ const UrgencesPage = () => {
     loadUrgences();
   }, [loadUrgences]);
 
+  // Configuration des colonnes du tableau
+  const columns = [
+    {
+      title: 'Patient',
+      dataIndex: 'patient_nom',
+      key: 'patient',
+      width: 200,
+      render: (text, record) => (
+        <Space>
+          <Avatar 
+            size="small"
+            style={{ backgroundColor: '#1890ff' }}
+            icon={<UserOutlined />}
+          >
+            {record.patient_prenom?.charAt(0)}{record.patient_nom?.charAt(0)}
+          </Avatar>
+          <div>
+            <div style={{ fontWeight: '500' }}>
+              {record.patient_prenom} {record.patient_nom}
+            </div>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              ID: {record.patient_id || 'N/A'}
+            </Text>
+          </div>
+        </Space>
+      ),
+    },
+    {
+      title: 'Arrivée',
+      dataIndex: 'date_arrivee',
+      key: 'arrivee',
+      width: 150,
+      render: (date, record) => (
+        <div>
+          <div>{formatSafeDate(date, 'DD/MM/YYYY')}</div>
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            {record.heure_arrivee ? record.heure_arrivee.substring(0, 5) : 'N/A'}
+          </Text>
+          <div style={{ marginTop: 4 }}>
+            <WaitingTimeTag arrivalTime={date} />
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Motif',
+      dataIndex: 'motif',
+      key: 'motif',
+      width: 200,
+      render: (text, record) => (
+        <Tooltip title={text}>
+          <div style={{ maxWidth: 200 }}>
+            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {text}
+            </div>
+            {record.symptomes && (
+              <Text type="secondary" style={{ fontSize: '12px' }}>
+                {record.symptomes.length > 30 ? record.symptomes.substring(0, 30) + '...' : record.symptomes}
+              </Text>
+            )}
+          </div>
+        </Tooltip>
+      ),
+    },
+    {
+      title: 'Priorité',
+      dataIndex: 'priorite',
+      key: 'priorite',
+      width: 150,
+      render: (value, record) => (
+        <Space>
+          <Select
+            value={value}
+            onChange={(newValue) => handlePriorityChange(record.id, newValue)}
+            size="small"
+            style={{ width: 140 }}
+            loading={updatingPriority[record.id]}
+          >
+            {PRIORITY_OPTIONS.map(option => (
+              <Option key={option.value} value={option.value}>
+                <Tag color={option.color}>{option.label}</Tag>
+              </Option>
+            ))}
+          </Select>
+          {updatingPriority[record.id] && <Spin size="small" />}
+        </Space>
+      ),
+    },
+    {
+      title: 'Service',
+      dataIndex: 'service',
+      key: 'service',
+      width: 120,
+      render: (service) => (
+        <Tag color="blue">{service}</Tag>
+      ),
+    },
+    {
+      title: 'Statut',
+      dataIndex: 'statut',
+      key: 'statut',
+      width: 150,
+      render: (value, record) => (
+        <Space>
+          <Select
+            value={value}
+            onChange={(newValue) => handleStatusChange(record.id, newValue)}
+            size="small"
+            style={{ width: 130 }}
+            loading={updatingStatus[record.id]}
+          >
+            {STATUS_OPTIONS.map(option => (
+              <Option key={option.value} value={option.value}>
+                <Tag color={option.color}>{option.label}</Tag>
+              </Option>
+            ))}
+          </Select>
+          {updatingStatus[record.id] && <Spin size="small" />}
+        </Space>
+      ),
+    },
+    {
+      title: 'Médecin',
+      dataIndex: 'medecin_nom',
+      key: 'medecin',
+      width: 150,
+      render: (text) => (
+        text !== 'Non affecté' ? (
+          <Space>
+            <Avatar 
+              size="small"
+              style={{ backgroundColor: '#52c41a' }}
+            >
+              {text?.split(' ').map(n => n.charAt(0)).join('')}
+            </Avatar>
+            <span>{text}</span>
+          </Space>
+        ) : (
+          <Tag color="default">Non affecté</Tag>
+        )
+      ),
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 120,
+      fixed: 'right',
+      render: (_, record) => (
+        <Space size="small">
+          <Tooltip title="Voir détails">
+            <Button
+              icon={<EyeOutlined />}
+              size="small"
+              onClick={() => handleViewUrgence(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Modifier">
+            <Button
+              icon={<EditOutlined />}
+              size="small"
+              onClick={() => handleEditUrgence(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Supprimer">
+            <Popconfirm
+              title="Supprimer cette urgence ?"
+              onConfirm={() => handleDeleteUrgence(record.id)}
+              okText="Oui"
+              cancelText="Non"
+            >
+              <Button
+                icon={<DeleteOutlined />}
+                size="small"
+                danger
+              />
+            </Popconfirm>
+          </Tooltip>
+        </Space>
+      ),
+    },
+  ];
+
   // Composant des statistiques
   const renderStatsCards = () => {
     const statCards = [
       {
         title: 'Total Urgences',
         value: stats.total,
-        color: 'primary.main',
-        icon: <HospitalIcon />
+        color: '#1890ff',
+        icon: <AlertOutlined />,
+        prefix: null,
+        suffix: null
       },
       {
         title: 'En Attente',
         value: stats.en_attente,
-        color: 'warning.main',
-        icon: <TimeIcon />
+        color: '#faad14',
+        icon: <ClockCircleOutlined />,
+        prefix: null,
+        suffix: null
       },
       {
         title: 'En Cours',
         value: stats.en_cours,
-        color: 'info.main',
-        icon: <MedicalIcon />
+        color: '#13c2c2',
+        icon: <MedicineBoxOutlined />,
+        prefix: null,
+        suffix: null
       },
       {
         title: 'Traitées',
         value: stats.traite,
-        color: 'success.main',
-        icon: <CheckCircleIcon />
+        color: '#52c41a',
+        icon: <CheckCircleOutlined />,
+        prefix: null,
+        suffix: null
       },
       {
         title: 'Urgent Absolu',
         value: stats.urgent_absolu,
-        color: 'error.main',
-        icon: <PriorityIcon />
+        color: '#f5222d',
+        icon: <ExclamationCircleOutlined />,
+        prefix: null,
+        suffix: null
       }
     ];
 
     return (
-      <Grid container spacing={2}>
+      <Row gutter={[16, 16]}>
         {statCards.map((card, index) => (
-          <Grid item xs={12} sm={6} md={2.4} key={index}>
-            <Card sx={{ height: '100%', transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-4px)' } }}>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
-                  <Avatar sx={{ bgcolor: card.color, color: 'white', width: 40, height: 40 }}>
-                    {card.icon}
-                  </Avatar>
-                </Box>
-                <Typography variant="h4" component="div" sx={{ fontWeight: 'bold' }}>
-                  {card.value}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {card.title}
-                </Typography>
-              </CardContent>
+          <Col xs={24} sm={12} md={8} lg={4.8} key={index}>
+            <Card size="small" hoverable>
+              <Statistic
+                title={
+                  <Space>
+                    <div style={{ color: card.color }}>{card.icon}</div>
+                    <span>{card.title}</span>
+                  </Space>
+                }
+                value={card.value}
+                valueStyle={{ color: card.color, fontWeight: 'bold' }}
+                prefix={card.prefix}
+                suffix={card.suffix}
+              />
             </Card>
-          </Grid>
+          </Col>
         ))}
-      </Grid>
-    );
-  };
-
-  // Composant du tableau des urgences
-  const renderUrgencesTable = () => {
-    if (loading) {
-      return (
-        <Box sx={{ py: 4, textAlign: 'center' }}>
-          <CircularProgress />
-          <Typography sx={{ mt: 2 }}>
-            Chargement des urgences...
-          </Typography>
-        </Box>
-      );
-    }
-
-    if (error) {
-      return (
-        <Alert severity="error" sx={{ mt: 2 }}>
-          {error}
-        </Alert>
-      );
-    }
-
-    if (filteredUrgences.length === 0) {
-      return (
-        <Alert severity="info" sx={{ mt: 2 }}>
-          Aucune urgence trouvée avec les critères actuels.
-        </Alert>
-      );
-    }
-
-    return (
-      <Box sx={{ width: '100%', overflow: 'hidden' }}>
-        <TableContainer sx={{ maxHeight: 600 }}>
-          <Table stickyHeader size="medium">
-            <TableHead>
-              <TableRow>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-                    onClick={() => handleSort('patient_nom')}>
-                    Patient
-                  </Box>
-                </TableCell>
-                <TableCell>Arrivée</TableCell>
-                <TableCell>Motif</TableCell>
-                <TableCell>Priorité</TableCell>
-                <TableCell>Service</TableCell>
-                <TableCell>Statut</TableCell>
-                <TableCell>Médecin</TableCell>
-                <TableCell align="center">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {paginatedUrgences.map((urgence) => {
-                const patientNom = getSafeValue(urgence.patient_nom, 'Inconnu');
-                const patientPrenom = getSafeValue(urgence.patient_prenom, '');
-                const dateArrivee = getSafeDate(urgence.date_arrivee);
-                const heureArrivee = getSafeValue(urgence.heure_arrivee, '');
-                const motif = getSafeValue(urgence.motif, 'Non spécifié');
-                const symptomes = getSafeValue(urgence.symptomes, '');
-                const priorite = getSafeValue(urgence.priorite, 3);
-                const service = getSafeValue(urgence.service, 'Général');
-                const statut = getSafeValue(urgence.statut, 'en_attente');
-                const medecinNom = getSafeValue(urgence.medecin_nom, 'Non affecté');
-                
-                const arrivalTime = dateArrivee && heureArrivee 
-                  ? `${format(dateArrivee, 'yyyy-MM-dd')}T${heureArrivee}`
-                  : null;
-                
-                const isRecent = isToday(dateArrivee);
-                
-                return (
-                  <TableRow 
-                    key={urgence.id}
-                    hover
-                    sx={{ 
-                      bgcolor: isRecent ? 'action.hover' : 'inherit',
-                      '&:hover': { bgcolor: 'action.selected' }
-                    }}
-                  >
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
-                          {patientPrenom.charAt(0)}{patientNom.charAt(0)}
-                        </Avatar>
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                            {patientPrenom} {patientNom}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            ID: {urgence.patient_id || 'N/A'}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Box>
-                        <Typography variant="body2">
-                          {formatSafeDate(dateArrivee, 'dd/MM/yyyy')}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {heureArrivee ? heureArrivee.substring(0, 5) : 'N/A'}
-                        </Typography>
-                        <Box sx={{ mt: 0.5 }}>
-                          <WaitingTimeChip arrivalTime={arrivalTime} />
-                        </Box>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ maxWidth: 200 }}>
-                      <Tooltip title={motif}>
-                        <Typography variant="body2" noWrap>
-                          {motif}
-                        </Typography>
-                      </Tooltip>
-                      {symptomes && (
-                        <Typography variant="caption" color="text.secondary" display="block" noWrap>
-                          {symptomes}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <PrioritySelector
-                          value={priorite}
-                          onChange={(e) => handlePriorityChange(urgence.id, e.target.value)}
-                          disabled={updatingPriority[urgence.id]}
-                          size="small"
-                        />
-                        {updatingPriority[urgence.id] && (
-                          <CircularProgress size={16} />
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={service} 
-                        size="small" 
-                        variant="outlined" 
-                        color="primary"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <StatusSelector
-                          value={statut}
-                          onChange={(e) => handleStatusChange(urgence.id, e.target.value)}
-                          disabled={updatingStatus[urgence.id]}
-                          size="small"
-                        />
-                        {updatingStatus[urgence.id] && (
-                          <CircularProgress size={16} />
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      {medecinNom !== 'Non affecté' ? (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Avatar sx={{ width: 24, height: 24, bgcolor: 'secondary.main', fontSize: 12 }}>
-                            {medecinNom.split(' ').map(n => n.charAt(0)).join('')}
-                          </Avatar>
-                          <Typography variant="body2">
-                            {medecinNom}
-                          </Typography>
-                        </Box>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">
-                          Non affecté
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                        <Tooltip title="Voir les détails">
-                          <IconButton
-                            size="small"
-                            color="info"
-                            onClick={() => handleViewUrgence(urgence)}
-                          >
-                            <ViewIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Modifier">
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => handleEditUrgence(urgence)}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Supprimer">
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => handleDeleteUrgence(urgence.id)}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25, 50]}
-          component="div"
-          count={filteredUrgences.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-          labelRowsPerPage="Lignes par page :"
-          labelDisplayedRows={({ from, to, count }) => 
-            `${from}-${to} sur ${count}`
-          }
-        />
-      </Box>
+      </Row>
     );
   };
 
   // Composant des filtres
   const renderFilters = () => {
     return (
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={3}>
-            <TextField
-              fullWidth
-              label="Rechercher patient, motif, service..."
-              size="small"
+      <Card 
+        title={
+          <Space>
+            <FilterOutlined />
+            <span>Filtres</span>
+          </Space>
+        }
+        size="small"
+        style={{ marginBottom: 16 }}
+      >
+        <Row gutter={[16, 16]}>
+          <Col xs={24} md={6}>
+            <Input
+              placeholder="Rechercher patient, motif, service..."
+              prefix={<SearchOutlined />}
               value={filters.search}
               onChange={(e) => handleFilterChange('search', e.target.value)}
-              InputProps={{
-                startAdornment: <SearchIcon sx={{ mr: 1, color: 'action.active' }} />
-              }}
+              allowClear
             />
-          </Grid>
+          </Col>
           
-          <Grid item xs={6} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Statut</InputLabel>
-              <Select
-                value={filters.statut}
-                label="Statut"
-                onChange={(e) => handleFilterChange('statut', e.target.value)}
-              >
-                <MenuItem value="tous">Tous</MenuItem>
-                {STATUS_OPTIONS.map(option => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
+          <Col xs={12} md={4}>
+            <Select
+              value={filters.statut}
+              onChange={(value) => handleFilterChange('statut', value)}
+              placeholder="Statut"
+              style={{ width: '100%' }}
+              allowClear
+            >
+              <Option value="tous">Tous les statuts</Option>
+              {STATUS_OPTIONS.map(option => (
+                <Option key={option.value} value={option.value}>
+                  <Tag color={option.color}>{option.label}</Tag>
+                </Option>
+              ))}
+            </Select>
+          </Col>
           
-          <Grid item xs={6} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Priorité</InputLabel>
-              <Select
-                value={filters.priorite}
-                label="Priorité"
-                onChange={(e) => handleFilterChange('priorite', e.target.value)}
-              >
-                <MenuItem value="tous">Toutes</MenuItem>
-                {PRIORITY_OPTIONS.map(option => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
+          <Col xs={12} md={4}>
+            <Select
+              value={filters.priorite}
+              onChange={(value) => handleFilterChange('priorite', value)}
+              placeholder="Priorité"
+              style={{ width: '100%' }}
+              allowClear
+            >
+              <Option value="tous">Toutes</Option>
+              {PRIORITY_OPTIONS.map(option => (
+                <Option key={option.value} value={option.value}>
+                  <Tag color={option.color}>{option.label}</Tag>
+                </Option>
+              ))}
+            </Select>
+          </Col>
           
-          <Grid item xs={6} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Service</InputLabel>
-              <Select
-                value={filters.service}
-                label="Service"
-                onChange={(e) => handleFilterChange('service', e.target.value)}
-              >
-                <MenuItem value="tous">Tous</MenuItem>
-                {SERVICES.map(service => (
-                  <MenuItem key={service} value={service}>
-                    {service}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
+          <Col xs={12} md={4}>
+            <Select
+              value={filters.service}
+              onChange={(value) => handleFilterChange('service', value)}
+              placeholder="Service"
+              style={{ width: '100%' }}
+              allowClear
+            >
+              <Option value="tous">Tous</Option>
+              {SERVICES.map(service => (
+                <Option key={service} value={service}>{service}</Option>
+              ))}
+            </Select>
+          </Col>
           
-          <Grid item xs={6} md={1.5}>
-            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-              <DatePicker
-                label="Du"
-                value={filters.dateDebut}
-                onChange={(newValue) => handleFilterChange('dateDebut', newValue)}
-                renderInput={(params) => <TextField {...params} fullWidth size="small" />}
-              />
-            </LocalizationProvider>
-          </Grid>
-          
-          <Grid item xs={6} md={1.5}>
-            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-              <DatePicker
-                label="Au"
-                value={filters.dateFin}
-                onChange={(newValue) => handleFilterChange('dateFin', newValue)}
-                renderInput={(params) => <TextField {...params} fullWidth size="small" />}
-              />
-            </LocalizationProvider>
-          </Grid>
-        </Grid>
-      </Paper>
+          <Col xs={12} md={6}>
+            <DatePicker.RangePicker
+              value={filters.dateRange}
+              onChange={(dates) => handleFilterChange('dateRange', dates)}
+              style={{ width: '100%' }}
+              format="DD/MM/YYYY"
+            />
+          </Col>
+        </Row>
+        
+        <Divider style={{ margin: '16px 0' }} />
+        
+        <div style={{ textAlign: 'right' }}>
+          <Space>
+            <Button onClick={() => {
+              setFilters({
+                statut: 'tous',
+                priorite: 'tous',
+                service: 'tous',
+                dateRange: [moment().subtract(7, 'days'), moment()],
+                search: ''
+              });
+            }}>
+              Réinitialiser
+            </Button>
+            <Button 
+              type="primary" 
+              icon={<SearchOutlined />}
+              onClick={handleRefresh}
+            >
+              Appliquer
+            </Button>
+          </Space>
+        </div>
+      </Card>
     );
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Box>
-            <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-              <HospitalIcon sx={{ fontSize: 40, color: 'primary.main' }} />
-              Gestion des Urgences
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Surveillance et gestion des admissions aux urgences en temps réel
-            </Typography>
-          </Box>
-          
-          <Box sx={{ display: 'flex', gap: 2 }}>
+    <div style={{ padding: 24 }}>
+      <Card
+        title={
+          <Space>
+            <AlertOutlined style={{ fontSize: 24, color: '#1890ff' }} />
+            <span style={{ fontSize: 20, fontWeight: 'bold' }}>Gestion des Urgences</span>
+          </Space>
+        }
+        extra={
+          <Space>
             <Button
-              variant="outlined"
-              startIcon={<RefreshIcon />}
+              icon={<ReloadOutlined />}
               onClick={handleRefresh}
-              disabled={loading}
+              loading={loading}
             >
               Actualiser
             </Button>
             <Button
-              variant="contained"
-              startIcon={<AddIcon />}
+              type="primary"
+              icon={<PlusOutlined />}
               onClick={handleCreateUrgence}
             >
               Nouvelle Admission
             </Button>
-          </Box>
-        </Box>
+          </Space>
+        }
+        style={{ marginBottom: 16 }}
+      >
+        <div style={{ marginBottom: 24 }}>
+          <Text type="secondary">
+            Surveillance et gestion des admissions aux urgences en temps réel
+          </Text>
+        </div>
         
         {renderStatsCards()}
-      </Box>
+      </Card>
 
       {renderFilters()}
 
-      <Paper sx={{ width: '100%', mb: 2 }}>
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Typography variant="h6" component="h2">
-            Liste des Urgences
-            <Chip 
-              label={filteredUrgences.length} 
-              size="small" 
-              color="primary" 
-              sx={{ ml: 1 }} 
+      <Card
+        title={
+          <Space>
+            <span>Liste des Urgences</span>
+            <Badge 
+              count={filteredUrgences.length} 
+              showZero 
+              style={{ backgroundColor: '#1890ff' }} 
             />
-          </Typography>
-        </Box>
-        
-        {renderUrgencesTable()}
-      </Paper>
+          </Space>
+        }
+        extra={
+          <Space>
+            <Button icon={<DownloadOutlined />}>
+              Exporter
+            </Button>
+            <Button icon={<UploadOutlined />}>
+              Importer
+            </Button>
+          </Space>
+        }
+      >
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin size="large" />
+            <div style={{ marginTop: 16 }}>
+              Chargement des urgences...
+            </div>
+          </div>
+        ) : error ? (
+          <Alert
+            message="Erreur"
+            description={error}
+            type="error"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        ) : filteredUrgences.length === 0 ? (
+          <Alert
+            message="Aucune urgence trouvée"
+            description="Aucune urgence ne correspond aux critères de recherche."
+            type="info"
+            showIcon
+          />
+        ) : (
+          <Table
+            columns={columns}
+            dataSource={filteredUrgences}
+            rowKey="id"
+            pagination={{
+              ...pagination,
+              showSizeChanger: true,
+              showTotal: (total, range) => 
+                `${range[0]}-${range[1]} sur ${total} urgences`,
+              pageSizeOptions: ['5', '10', '20', '50'],
+              showQuickJumper: true
+            }}
+            onChange={handleTableChange}
+            scroll={{ x: 1200 }}
+            size="middle"
+          />
+        )}
+      </Card>
 
-      {/* Dialogues */}
-      <UrgenceDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+      {/* Modal de création/modification */}
+      <UrgenceModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
         onSave={handleSaveUrgence}
         initialData={selectedUrgence}
       />
 
-      <UrgenceDetailDialog
-        open={detailDialogOpen}
-        onClose={() => setDetailDialogOpen(false)}
+      {/* Drawer de détails */}
+      <UrgenceDetailDrawer
+        open={detailDrawerOpen}
+        onClose={() => setDetailDrawerOpen(false)}
         urgence={selectedUrgence}
         onStatusChange={handleStatusChange}
         onPriorityChange={handlePriorityChange}
       />
-
-      {/* Snackbar pour les notifications */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert
-          onClose={handleCloseSnackbar}
-          severity={snackbar.severity}
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Container>
+    </div>
   );
 };
 

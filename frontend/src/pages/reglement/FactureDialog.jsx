@@ -690,37 +690,32 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
       const { totals } = calculateTotals();
       
       try {
-        const facturesToSubmit = formData.factures.map((facture, index) => {
-          const factureTotals = totals[index];
-          
-          // Utiliser les nouveaux noms de champs pour l'API
-          return {
-            beneficiaire_id: Number(formData.beneficiaire_id),
-            payeur_id: Number(formData.payeur_id),
-            date_facture: formData.date_facture,
-            date_echeance: formData.date_echeance,
-            observations: formData.observations || '',
-            montant_total: factureTotals.total,
-            montant_couvert: factureTotals.priseEnCharge,
-            montant_restant: factureTotals.reste,
-            statut: 'brouillon',
-            type_facture: facture.type,
-            libelle_facture: facture.libelle,
-            prestations: (facture.prestations || []).map(prestation => ({
-              type_prestation: prestation.type_prestation || 'consultation',
-              libelle: prestation.libelle || '',
-              quantite: Number(prestation.quantite) || 1,
-              prix_unitaire: Number(prestation.prix_unitaire) || 0,
-              montant: Number(prestation.montant) || 0,
-              date_execution: prestation.date_execution || new Date()
-            }))
-          };
-        });
+        // Prendre seulement la première facture
+        const facture = formData.factures[0];
+        const factureTotals = totals[0];
         
-        // Debug: Afficher les données qui seront envoyées
-        console.log('Données à envoyer à l\'API:', facturesToSubmit);
+        // Préparer l'objet à envoyer (OBJET SIMPLE, pas de tableau)
+        const dataToSend = {
+          cod_ben: Number(formData.beneficiaire_id),
+          cod_payeur: Number(formData.payeur_id),
+          date_facture: formData.date_facture,
+          date_echeance: formData.date_echeance,
+          observations: formData.observations || '',
+          prestations: (facture.prestations || []).map(prestation => ({
+            type_prestation: prestation.type_prestation || 'consultation',
+            libelle: prestation.libelle || '',
+            quantite: Number(prestation.quantite) || 1,
+            prix_unitaire: Number(prestation.prix_unitaire) || 0,
+            montant: Number(prestation.montant) || 0,
+            date_execution: prestation.date_execution || new Date()
+          }))
+        };
         
-        onSubmit(facturesToSubmit);
+        // Debug
+        console.log('✅ Données à envoyer (objet simple):', dataToSend);
+        
+        // Envoyer l'objet directement
+        onSubmit(dataToSend);
         
       } catch (error) {
         console.error('Erreur lors de la préparation des factures:', error);

@@ -1,5 +1,4 @@
-// ReglementPage.jsx - VERSION CORRIGÉE AVEC DONNÉES RÉELLES
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   Typography,
@@ -27,6 +26,7 @@ import {
   DialogContent,
   DialogActions,
   Alert,
+  LinearProgress,
   Tooltip,
   FormControl,
   InputLabel,
@@ -42,19 +42,22 @@ import {
   Snackbar,
   Avatar,
   CardActionArea,
-  ToggleButton,
-  ToggleButtonGroup,
-  Skeleton,
-  AlertTitle,
-  SpeedDial,
-  SpeedDialAction,
-  Drawer
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  ListItemSecondaryAction,
+  Fade,
+  Slide,
+  Grow,
+  Fab
 } from '@mui/material';
 import {
   AttachMoney as MoneyIcon,
   Receipt as ReceiptIcon,
   Payment as PaymentIcon,
   TrendingUp as TrendingIcon,
+  TrendingDown as TrendingDownIcon,
   Warning as WarningIcon,
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
@@ -68,67 +71,31 @@ import {
   CreditCard as CardIcon,
   AccountBalance as BankIcon,
   Smartphone as MobileIcon,
+  ArrowUpward as ArrowUpIcon,
+  ArrowDownward as ArrowDownIcon,
   CalendarToday as CalendarIcon,
+  BarChart as BarChartIcon,
   Assessment as AssessmentIcon,
   Dashboard as DashboardIcon,
   MonetizationOn as MonetizationIcon,
   Paid as PaidIcon,
+  ReceiptLong as ReceiptLongIcon,
   Speed as SpeedIcon,
-  FilterAlt as FilterAltIcon,
-  Sort as SortIcon,
-  SwapVert as SwapVertIcon,
   DateRange as DateRangeIcon,
-  GetApp as GetAppIcon,
   Print as PrintIcon,
-  Email as EmailIcon,
-  Close as CloseIcon,
-  Save as SaveIcon,
-  Cancel as CancelIcon,
-  Done as DoneIcon,
-  DoneAll as DoneAllIcon,
-  Pending as PendingIcon,
-  AccessTime as AccessTimeIcon,
-  HourglassEmpty as HourglassEmptyIcon,
-  Timer as TimerIcon,
-  Schedule as ScheduleIcon,
-  Event as EventIcon,
-  Update as UpdateIcon,
-  Autorenew as AutorenewIcon,
-  Wifi as WifiIcon,
-  WifiOff as WifiOffIcon,
-  VerifiedUser as VerifiedUserIcon,
-  QrCode as QrCodeIcon
+  SwapVert as SwapVertIcon
 } from '@mui/icons-material';
-import SpeedDialIcon from '@mui/material/SpeedDialIcon';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { format, subDays, subMonths, startOfMonth, parseISO, isToday, differenceInDays } from 'date-fns';
+import { format, subDays, subMonths, parseISO, isValid, isDate } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
-import { financesAPI, facturationAPI, remboursementsAPI } from '../../services/api';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { financesAPI, facturationAPI } from '../../services/api';
 import PaymentDialog from './PaymentDialog';
 import FactureDialog from './FactureDialog';
 import DetailDialog from './DetailDialog';
-import BeneficiaireSearchDialog from './BeneficiaireSearchDialog';
-import InvoiceGenerator from './InvoiceGenerator';
-
-// Importer le CSS
 import './Reglements.css';
-
-// Animation variants
-const pageVariants = {
-  initial: { opacity: 0, y: 20 },
-  in: { opacity: 1, y: 0 },
-  out: { opacity: 0, y: -20 }
-};
-
-const cardVariants = {
-  hover: { scale: 1.02, transition: { duration: 0.2 } },
-  tap: { scale: 0.98 }
-};
 
 // Fonction pour formater les dates pour l'API
 const formatDateForAPI = (date) => {
@@ -153,6 +120,125 @@ const formatDateForAPI = (date) => {
   }
 };
 
+// Fonction utilitaire pour valider et formater les données - VERSION RÉCURSIVE CORRIGÉE
+const validateData = (data, type = 'transaction') => {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return null;
+  }
+  
+  // Fonction helper récursive pour convertir en string
+  const toStringRecursive = (value, defaultValue = '') => {
+    if (value === null || value === undefined) return defaultValue;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return value.toString();
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    if (typeof value === 'object') {
+      // Si c'est un objet, vérifier s'il a des propriétés spécifiques
+      if (value._id || value.id || value.code) {
+        // Si c'est un objet avec un identifiant, essayer de l'afficher
+        return String(value._id || value.id || value.code || '');
+      }
+      // Si c'est un objet simple, essayer de le sérialiser
+      try {
+        const str = JSON.stringify(value);
+        // Si la chaîne JSON est trop longue, la tronquer
+        return str.length > 100 ? str.substring(0, 100) + '...' : str;
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value || defaultValue);
+  };
+
+  // Fonction pour nettoyer récursivement un objet
+  const cleanObject = (obj) => {
+    if (!obj || typeof obj !== 'object') return obj;
+    
+    const cleaned = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        const value = obj[key];
+        
+        // Convertir les valeurs primitives en string
+        if (value === null || value === undefined) {
+          cleaned[key] = '';
+        } else if (typeof value === 'string') {
+          cleaned[key] = value;
+        } else if (typeof value === 'number') {
+          cleaned[key] = value;
+        } else if (typeof value === 'boolean') {
+          cleaned[key] = value;
+        } else if (Array.isArray(value)) {
+          // Pour les tableaux, les laisser tels quels (seront traités séparément)
+          cleaned[key] = value;
+        } else if (typeof value === 'object') {
+          // Pour les sous-objets, les convertir en string
+          cleaned[key] = toStringRecursive(value, '');
+        } else {
+          cleaned[key] = String(value);
+        }
+      }
+    }
+    return cleaned;
+  };
+
+  if (type === 'transaction') {
+    const baseData = {
+      COD_TRANS: data.COD_TRANS || data.id || null,
+      REFERENCE_TRANSACTION: toStringRecursive(data.REFERENCE_TRANSACTION || data.reference, 'N/A'),
+      BENEFICIAIRE: toStringRecursive(data.BENEFICIAIRE || data.NOM_BEN || data.nom_ben, 'N/A'),
+      DATE_INITIATION: data.DATE_INITIATION || data.date_initiation,
+      MONTANT: Number(data.MONTANT || data.montant || 0),
+      STATUT_TRANSACTION: toStringRecursive(data.STATUT_TRANSACTION || data.statut, 'N/A'),
+      METHODE_PAIEMENT: toStringRecursive(data.METHODE_PAIEMENT || data.methode, 'N/A'),
+    };
+    
+    // Nettoyer le reste des données
+    const cleanedRest = cleanObject(data);
+    
+    return {
+      ...baseData,
+      ...cleanedRest
+    };
+  } else {
+    const baseData = {
+      id: data.id || data.COD_FACTURE || null,
+      numero: toStringRecursive(data.numero || data.numero_facture, 'N/A'),
+      numero_facture: toStringRecursive(data.numero_facture || data.numero, 'N/A'),
+      nom_ben: toStringRecursive(data.nom_ben || data.NOM_BEN, ''),
+      prenom_ben: toStringRecursive(data.prenom_ben || data.PRE_BEN, ''),
+      date_echeance: data.date_echeance || data.DATE_ECHEANCE,
+      date_facture: data.date_facture || data.DATE_FACTURE,
+      montant_total: Number(data.montant_total || data.MONTANT_TOTAL || 0),
+      montant_restant: Number(data.montant_restant || data.MONTANT_RESTANT || 0),
+      statut: toStringRecursive(data.statut, 'N/A'),
+      telephone: toStringRecursive(data.telephone || data.TELEPHONE, ''),
+    };
+    
+    // Nettoyer le reste des données
+    const cleanedRest = cleanObject(data);
+    
+    return {
+      ...baseData,
+      ...cleanedRest
+    };
+  }
+};
+
+// Fonction pour calculer les jours de retard
+const calculateDaysLate = (dateEcheance) => {
+  if (!dateEcheance) return 0;
+  try {
+    const echeance = new Date(dateEcheance);
+    const aujourdhui = new Date();
+    const diffTime = aujourdhui - echeance;
+    const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+    return diffDays;
+  } catch (error) {
+    return 0;
+  }
+};
+
 const ReglementPage = () => {
   const theme = useTheme();
   const { user } = useAuth();
@@ -162,13 +248,10 @@ const ReglementPage = () => {
   const [loading, setLoading] = useState({
     dashboard: false,
     transactions: false,
-    factures: false,
-    beneficiaires: false,
-    stats: false,
-    export: false
+    factures: false
   });
   
-  // États pour les données enrichies
+  // États pour les données
   const [dashboardData, setDashboardData] = useState({
     resume: {
       transactions: { total_jour: 0, total_mois: 0, montant_total_mois: 0 },
@@ -176,13 +259,7 @@ const ReglementPage = () => {
     },
     transactions_recentes: [],
     factures_en_retard: [],
-    evolution_mensuelle: [],
-    stats_avancees: {
-      taux_reussite: 95,
-      temps_moyen_traitement: 2.5,
-      satisfaction_clients: 4.5,
-      objectifs: 85
-    }
+    evolution_mensuelle: []
   });
   
   const [transactions, setTransactions] = useState([]);
@@ -197,8 +274,7 @@ const ReglementPage = () => {
     limit: 10,
     total: 0,
     sortBy: 'date',
-    sortOrder: 'desc',
-    viewMode: 'table'
+    sortOrder: 'desc'
   });
   
   const [factures, setFactures] = useState([]);
@@ -211,16 +287,14 @@ const ReglementPage = () => {
     limit: 10,
     total: 0,
     sortBy: 'date_echeance',
-    sortOrder: 'asc',
-    viewMode: 'table'
+    sortOrder: 'asc'
   });
   
   // États pour les dialogues
   const [paymentDialog, setPaymentDialog] = useState({
     open: false,
     type: 'facture',
-    data: null,
-    autoAmount: true
+    data: null
   });
   
   const [factureDialog, setFactureDialog] = useState({
@@ -229,51 +303,18 @@ const ReglementPage = () => {
     data: null
   });
   
-  const [invoiceDialog, setInvoiceDialog] = useState({
-    open: false,
-    data: null,
-    type: 'proforma',
-    beneficiary: null
-  });
-  
   const [detailDialog, setDetailDialog] = useState({
     open: false,
     type: '',
     data: null
   });
   
-  const [beneficiaireSearchDialog, setBeneficiaireSearchDialog] = useState({
-    open: false,
-    onSelect: null
-  });
-  
   // États pour les notifications
   const [notification, setNotification] = useState({
     open: false,
     message: '',
-    type: 'info',
-    duration: 6000
+    type: 'info'
   });
-  
-  // État pour les bénéficiaires recherchés
-  const [beneficiaires, setBeneficiaires] = useState([]);
-  const [beneficiaireSearchTerm, setBeneficiaireSearchTerm] = useState('');
-  
-  // État pour le drawer de filtres avancés
-  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
-  
-  // État pour le SpeedDial
-  const [speedDialOpen, setSpeedDialOpen] = useState(false);
-  
-  // État pour les données en temps réel
-  const [realTimeData, setRealTimeData] = useState({
-    lastUpdate: new Date(),
-    online: true,
-    newTransactions: 0
-  });
-
-  // État pour le bénéficiaire sélectionné
-  const [selectedBeneficiary, setSelectedBeneficiary] = useState(null);
   
   // Configuration des couleurs par statut
   const statusConfig = {
@@ -281,105 +322,55 @@ const ReglementPage = () => {
       color: theme.palette.success.main, 
       label: 'Réussi', 
       icon: <CheckIcon />,
-      bgColor: alpha(theme.palette.success.main, 0.1),
-      description: 'Transaction complétée avec succès',
-      level: 'success'
+      bgColor: alpha(theme.palette.success.main, 0.1)
     },
     'Validé': { 
       color: theme.palette.success.main, 
       label: 'Validé', 
-      icon: <VerifiedUserIcon />,
-      bgColor: alpha(theme.palette.success.main, 0.1),
-      description: 'Paiement validé',
-      level: 'success'
+      icon: <CheckIcon />,
+      bgColor: alpha(theme.palette.success.main, 0.1)
     },
     'Payé': { 
       color: theme.palette.success.main, 
       label: 'Payé', 
-      icon: <PaidIcon />,
-      bgColor: alpha(theme.palette.success.main, 0.1),
-      description: 'Facture payée intégralement',
-      level: 'success'
+      icon: <CheckIcon />,
+      bgColor: alpha(theme.palette.success.main, 0.1)
     },
     'Payée': { 
       color: theme.palette.success.main, 
       label: 'Payée', 
-      icon: <PaidIcon />,
-      bgColor: alpha(theme.palette.success.main, 0.1),
-      description: 'Facture payée',
-      level: 'success'
+      icon: <CheckIcon />,
+      bgColor: alpha(theme.palette.success.main, 0.1)
     },
     'En cours': { 
       color: theme.palette.warning.main, 
       label: 'En cours', 
-      icon: <HourglassEmptyIcon />,
-      bgColor: alpha(theme.palette.warning.main, 0.1),
-      description: 'Transaction en cours de traitement',
-      level: 'warning'
+      icon: <RefreshIcon />,
+      bgColor: alpha(theme.palette.warning.main, 0.1)
     },
     'En attente': { 
       color: theme.palette.warning.main, 
       label: 'En attente', 
-      icon: <PendingIcon />,
-      bgColor: alpha(theme.palette.warning.main, 0.1),
-      description: 'En attente de traitement',
-      level: 'warning'
+      icon: <WarningIcon />,
+      bgColor: alpha(theme.palette.warning.main, 0.1)
     },
     'Echoue': { 
       color: theme.palette.error.main, 
       label: 'Échoué', 
       icon: <ErrorIcon />,
-      bgColor: alpha(theme.palette.error.main, 0.1),
-      description: 'Transaction échouée',
-      level: 'error'
-    },
-    'Rejeté': { 
-      color: theme.palette.error.main, 
-      label: 'Rejeté', 
-      icon: <CancelIcon />,
-      bgColor: alpha(theme.palette.error.main, 0.1),
-      description: 'Paiement rejeté',
-      level: 'error'
+      bgColor: alpha(theme.palette.error.main, 0.1)
     },
     'Annulee': { 
       color: theme.palette.error.main, 
       label: 'Annulée', 
-      icon: <CancelIcon />,
-      bgColor: alpha(theme.palette.error.main, 0.1),
-      description: 'Facture annulée',
-      level: 'error'
+      icon: <ErrorIcon />,
+      bgColor: alpha(theme.palette.error.main, 0.1)
     },
     'Partiellement payée': { 
       color: theme.palette.info.main, 
       label: 'Partiel', 
-      icon: <MoneyIcon />,
-      bgColor: alpha(theme.palette.info.main, 0.1),
-      description: 'Paiement partiel',
-      level: 'info'
-    },
-    'Complet': { 
-      color: theme.palette.success.main, 
-      label: 'Complet', 
-      icon: <DoneAllIcon />,
-      bgColor: alpha(theme.palette.success.main, 0.1),
-      description: 'Traitement complet',
-      level: 'success'
-    },
-    'En retard': { 
-      color: theme.palette.error.dark, 
-      label: 'En retard', 
       icon: <WarningIcon />,
-      bgColor: alpha(theme.palette.error.main, 0.1),
-      description: 'Échéance dépassée',
-      level: 'error'
-    },
-    'À venir': { 
-      color: theme.palette.info.main, 
-      label: 'À venir', 
-      icon: <CalendarIcon />,
-      bgColor: alpha(theme.palette.info.main, 0.1),
-      description: 'Échéance à venir',
-      level: 'info'
+      bgColor: alpha(theme.palette.info.main, 0.1)
     }
   };
   
@@ -387,94 +378,66 @@ const ReglementPage = () => {
     'MobileMoney': { 
       icon: <MobileIcon />, 
       label: 'Mobile Money',
-      color: theme.palette.primary.main,
-      description: 'Paiement par mobile money',
-      providers: ['Orange Money', 'MTN Mobile Money', 'Moov Money']
+      color: theme.palette.primary.main
     },
     'CarteBancaire': { 
       icon: <CardIcon />, 
       label: 'Carte Bancaire',
-      color: theme.palette.secondary.main,
-      description: 'Paiement par carte bancaire',
-      providers: ['Visa', 'Mastercard', 'Carte Bleue']
+      color: theme.palette.secondary.main
     },
     'Virement': { 
       icon: <BankIcon />, 
       label: 'Virement',
-      color: theme.palette.info.main,
-      description: 'Virement bancaire',
-      providers: ['Virement SEPA', 'Virement instantané']
+      color: theme.palette.info.main
     },
     'Espèces': { 
       icon: <CashIcon />, 
       label: 'Espèces',
-      color: theme.palette.success.main,
-      description: 'Paiement en espèces',
-      providers: ['Guichet', 'Caisse']
-    },
-    'Chèque': { 
-      icon: <ReceiptIcon />, 
-      label: 'Chèque',
-      color: theme.palette.warning.main,
-      description: 'Paiement par chèque',
-      providers: ['Chèque bancaire']
-    },
-    'Prélèvement': { 
-      icon: <ReceiptIcon />, 
-      label: 'Prélèvement',
-      color: theme.palette.success.dark,
-      description: 'Prélèvement automatique',
-      providers: ['Prélèvement SEPA']
+      color: theme.palette.success.main
     }
   };
   
   // Fonction utilitaire pour formater les montants
-  const formatCurrency = (amount, currency = 'XAF') => {
+  const formatCurrency = (amount) => {
+    const num = Number(amount) || 0;
     return new Intl.NumberFormat('fr-FR', { 
       style: 'currency', 
-      currency: currency,
+      currency: 'XAF',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(amount || 0);
+    }).format(num);
   };
   
   // Fonction utilitaire pour formater les dates
   const formatDate = (date, formatStr = 'dd/MM/yyyy') => {
     if (!date) return 'N/A';
     try {
-      const dateObj = date instanceof Date ? date : parseISO(date);
+      let dateObj;
+      if (date instanceof Date) {
+        dateObj = date;
+      } else if (typeof date === 'string') {
+        dateObj = parseISO(date);
+      } else {
+        dateObj = new Date(date);
+      }
+      
+      if (!isValid(dateObj) || isNaN(dateObj.getTime())) {
+        return 'Date invalide';
+      }
+      
       return format(dateObj, formatStr, { locale: fr });
     } catch (error) {
-      return 'Date invalide';
+      console.error('Erreur formatage date:', error);
+      return 'N/A';
     }
   };
   
-  // Fonction pour formater la date relative
-  const formatRelativeDate = (date) => {
-    if (!date) return 'N/A';
-    try {
-      const dateObj = date instanceof Date ? date : parseISO(date);
-      const now = new Date();
-      const diffDays = differenceInDays(now, dateObj);
-      
-      if (diffDays === 0) return "Aujourd'hui";
-      if (diffDays === 1) return 'Hier';
-      if (diffDays < 7) return `Il y a ${diffDays} jours`;
-      if (diffDays < 30) return `Il y a ${Math.floor(diffDays / 7)} semaines`;
-      if (diffDays < 365) return `Il y a ${Math.floor(diffDays / 30)} mois`;
-      return `Il y a ${Math.floor(diffDays / 365)} ans`;
-    } catch (error) {
-      return 'Date invalide';
-    }
-  };
-  
-  // Fonction pour afficher des notifications améliorées
-  const showNotification = (message, type = 'info', duration = 6000) => {
+  // Fonction pour afficher des notifications
+  const showNotification = (message, type = 'info') => {
     setNotification({
       open: true,
-      message,
-      type,
-      duration
+      message: message.toString(),
+      type
     });
   };
   
@@ -483,214 +446,85 @@ const ReglementPage = () => {
     setNotification({ ...notification, open: false });
   };
   
-  // Fonction pour calculer les statistiques
-  const calculateStatistics = () => {
-    const { resume, factures_en_retard, stats_avancees } = dashboardData;
-    
-    return {
-      transactionsToday: resume.transactions.total_jour || 0,
-      transactionsMonth: resume.transactions.total_mois || 0,
-      amountMonth: resume.transactions.montant_total_mois || 0,
-      overdueInvoices: resume.factures_en_retard || factures_en_retard?.length || 0,
-      totalOverdueAmount: factures_en_retard?.reduce((sum, facture) => 
-        sum + (facture.montant_restant || 0), 0) || 0,
-      successRate: stats_avancees?.taux_reussite || 95,
-      avgProcessingTime: stats_avancees?.temps_moyen_traitement || 2.5,
-      clientSatisfaction: stats_avancees?.satisfaction_clients || 4.5,
-      objectives: stats_avancees?.objectifs || 85
-    };
-  };
-  
-  // Rechercher des bénéficiaires
-  const searchBeneficiaires = async (searchTerm) => {
-    try {
-      setLoading(prev => ({ ...prev, beneficiaires: true }));
-      
-      if (!searchTerm || searchTerm.trim().length < 2) {
-        setBeneficiaires([]);
-        return;
-      }
-      
-      console.log('🔍 Recherche bénéficiaires:', searchTerm);
-      
-      let response;
-      
-      try {
-        response = await facturationAPI.searchPatients(searchTerm);
-      } catch (apiError) {
-        console.warn('API patients non disponible, tentative méthode alternative');
-        
-        const filteredBeneficiaires = [...new Set(
-          factures
-            .filter(f => 
-              f.nom_ben?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              f.prenom_ben?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              f.identifiant_ben?.includes(searchTerm)
-            )
-            .map(f => ({
-              id: f.COD_BEN || f.id_ben,
-              nom: f.nom_ben,
-              prenom: f.prenom_ben,
-              identifiant: f.identifiant_ben,
-              telephone: f.telephone,
-              email: f.email
-            }))
-        )];
-        
-        setBeneficiaires(filteredBeneficiaires);
-        return;
-      }
-      
-      if (response.success) {
-        console.log('✅ Bénéficiaires trouvés:', response.patients?.length || 0);
-        
-        const formattedBeneficiaires = (response.patients || []).map(patient => ({
-          id: patient.ID_BEN || patient.id,
-          nom: patient.NOM_BEN || patient.nom,
-          prenom: patient.PRE_BEN || patient.prenom,
-          identifiant: patient.IDENTIFIANT_NATIONAL || patient.identifiant,
-          telephone: patient.TELEPHONE_MOBILE || patient.telephone,
-          email: patient.EMAIL || patient.email,
-          date_naissance: patient.NAI_BEN || patient.date_naissance,
-          sexe: patient.SEX_BEN || patient.sexe,
-          profession: patient.PROFESSION || patient.profession
-        }));
-        
-        setBeneficiaires(formattedBeneficiaires);
-      } else {
-        const mockBeneficiaires = [
-          {
-            id: 1,
-            nom: 'DUPONT',
-            prenom: 'Jean',
-            identifiant: 'PAT001',
-            telephone: '+33 6 12 34 56 78',
-            email: 'jean.dupont@email.com'
-          },
-          {
-            id: 2,
-            nom: 'MARTIN',
-            prenom: 'Marie',
-            identifiant: 'PAT002',
-            telephone: '+33 6 23 45 67 89',
-            email: 'marie.martin@email.com'
-          },
-          {
-            id: 3,
-            nom: 'DURAND',
-            prenom: 'Pierre',
-            identifiant: 'PAT003',
-            telephone: '+33 6 34 56 78 90',
-            email: 'pierre.durand@email.com'
-          }
-        ].filter(b => 
-          b.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          b.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          b.identifiant.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-        
-        setBeneficiaires(mockBeneficiaires);
-      }
-    } catch (error) {
-      console.error('❌ Erreur recherche bénéficiaires:', error);
-      setBeneficiaires([]);
-    } finally {
-      setLoading(prev => ({ ...prev, beneficiaires: false }));
-    }
-  };
-  
-  // Charger le tableau de bord amélioré
+  // Charger le tableau de bord
   const loadDashboard = async () => {
     try {
-      setLoading(prev => ({ ...prev, dashboard: true, stats: true }));
+      setLoading(prev => ({ ...prev, dashboard: true }));
       
-      console.log('📊 Chargement du tableau de bord amélioré...');
-      const [dashboardResponse, statsResponse] = await Promise.all([
-        financesAPI.getDashboard('mois'),
-        financesAPI.getStatistiques({ periode: 'mois' })
-      ]);
+      console.log('📊 Chargement du tableau de bord...');
+      const response = await financesAPI.getDashboard('mois');
       
-      if (dashboardResponse.success) {
-        console.log('📊 Données dashboard reçues:', dashboardResponse);
+      if (response && response.success) {
+        console.log('📊 Données dashboard reçues:', response);
         
-        const data = dashboardResponse.dashboard || dashboardResponse.data || dashboardResponse;
+        const data = response.dashboard || response.data || response;
         
-        const transactions_today = data.transactions_aujourdhui || 
-                                  data.today_transactions || 
-                                  data.resume?.transactions?.total_jour || 0;
+        // Valider et formater les transactions récentes
+        const rawTransactions = data.transactions_recentes || 
+                               data.recent_transactions || 
+                               data.recentTransactions || [];
         
-        const transactions_month = data.transactions_mois || 
-                                  data.month_transactions || 
-                                  data.resume?.transactions?.total_mois || 0;
+        const transactionsValidees = Array.isArray(rawTransactions) 
+          ? rawTransactions
+              .filter(item => item && typeof item === 'object')
+              .map(item => validateData(item, 'transaction'))
+              .filter(item => item !== null)
+          : [];
         
-        const montant_month = data.montant_total_mois || 
-                             data.monthly_amount || 
-                             data.resume?.transactions?.montant_total_mois || 0;
+        // Valider et formater les factures en retard
+        const rawFactures = data.factures_en_retard_liste || 
+                           data.overdue_invoices_list || 
+                           data.overdueInvoicesList || [];
         
-        const factures_en_retard = data.factures_en_retard || 
-                                  data.overdue_invoices || 
-                                  data.resume?.factures_en_retard || 0;
-        
-        const advancedStats = statsResponse.success ? statsResponse.statistiques : {
-          taux_reussite: 95 + Math.floor(Math.random() * 5),
-          temps_moyen_traitement: 2.5,
-          satisfaction_clients: 4.5,
-          objectifs: 85
-        };
+        const facturesValidees = Array.isArray(rawFactures)
+          ? rawFactures
+              .filter(item => item && typeof item === 'object')
+              .map(item => validateData(item, 'facture'))
+              .filter(item => item !== null)
+          : [];
         
         setDashboardData({
           resume: {
             transactions: { 
-              total_jour: transactions_today, 
-              total_mois: transactions_month, 
-              montant_total_mois: montant_month 
+              total_jour: data.transactions_aujourdhui || 
+                         data.today_transactions || 
+                         data.resume?.transactions?.total_jour || 0, 
+              total_mois: data.transactions_mois || 
+                         data.month_transactions || 
+                         data.resume?.transactions?.total_mois || 0, 
+              montant_total_mois: data.montant_total_mois || 
+                                 data.monthly_amount || 
+                                 data.resume?.transactions?.montant_total_mois || 0 
             },
-            factures_en_retard: factures_en_retard
+            factures_en_retard: data.factures_en_retard || 
+                               data.overdue_invoices || 
+                               data.resume?.factures_en_retard || 0
           },
-          transactions_recentes: data.transactions_recentes || 
-                                data.recent_transactions || 
-                                data.recentTransactions || [],
-          factures_en_retard: data.factures_en_retard_liste || 
-                             data.overdue_invoices_list || 
-                             data.overdueInvoicesList || [],
+          transactions_recentes: transactionsValidees,
+          factures_en_retard: facturesValidees,
           evolution_mensuelle: data.evolution_mensuelle || 
                               data.monthly_evolution || 
-                              data.monthlyEvolution || [],
-          stats_avancees: advancedStats
+                              data.monthlyEvolution || []
         });
         
-        setRealTimeData(prev => ({
-          ...prev,
-          lastUpdate: new Date(),
-          newTransactions: data.transactions_recentes?.filter(t => 
-            isToday(new Date(t.DATE_INITIATION || t.date_initiation))
-          ).length || 0
-        }));
-        
       } else {
-        console.warn('⚠️ Réponse dashboard non réussie:', dashboardResponse);
+        console.warn('⚠️ Réponse dashboard non réussie:', response);
         
         setDashboardData({
           resume: {
             transactions: { 
-              total_jour: 15, 
-              total_mois: 287, 
-              montant_total_mois: 12500000 
+              total_jour: 0, 
+              total_mois: 0, 
+              montant_total_mois: 0 
             },
-            factures_en_retard: 3
+            factures_en_retard: 0
           },
           transactions_recentes: [],
           factures_en_retard: [],
-          evolution_mensuelle: [],
-          stats_avancees: {
-            taux_reussite: 98.5,
-            temps_moyen_traitement: 2.3,
-            satisfaction_clients: 4.7,
-            objectifs: 92
-          }
+          evolution_mensuelle: []
         });
         
-        showNotification('Mode développement - Données simulées', 'info');
+        showNotification(response?.message || 'Erreur lors du chargement du tableau de bord', 'error');
       }
     } catch (error) {
       console.error('❌ Erreur chargement dashboard:', error);
@@ -706,22 +540,16 @@ const ReglementPage = () => {
         },
         transactions_recentes: [],
         factures_en_retard: [],
-        evolution_mensuelle: [],
-        stats_avancees: {
-          taux_reussite: 0,
-          temps_moyen_traitement: 0,
-          satisfaction_clients: 0,
-          objectifs: 0
-        }
+        evolution_mensuelle: []
       });
       
       showNotification('Erreur lors du chargement du tableau de bord', 'error');
     } finally {
-      setLoading(prev => ({ ...prev, dashboard: false, stats: false }));
+      setLoading(prev => ({ ...prev, dashboard: false }));
     }
   };
   
-  // Charger les transactions améliorées
+  // Charger les transactions
   const loadTransactions = async () => {
     try {
       setLoading(prev => ({ ...prev, transactions: true }));
@@ -744,15 +572,23 @@ const ReglementPage = () => {
       
       const response = await facturationAPI.getTransactions(params);
       
-      if (response.success) {
+      if (response && response.success) {
         console.log('✅ Transactions reçues:', response.transactions?.length || 0, 'éléments');
-        setTransactions(response.transactions || []);
+        
+        const validatedTransactions = Array.isArray(response.transactions) 
+          ? response.transactions
+              .filter(item => item && typeof item === 'object')
+              .map(item => validateData(item, 'transaction'))
+              .filter(item => item !== null)
+          : [];
+        
+        setTransactions(validatedTransactions);
         setTransactionFilters(prev => ({
           ...prev,
           total: response.pagination?.total || response.total || 0
         }));
       } else {
-        showNotification(response.message || 'Erreur lors du chargement des transactions', 'error');
+        showNotification(response?.message || 'Erreur lors du chargement des transactions', 'error');
       }
     } catch (error) {
       console.error('❌ Erreur chargement transactions:', error);
@@ -762,7 +598,7 @@ const ReglementPage = () => {
     }
   };
   
-  // Charger les factures améliorées
+  // Charger les factures
   const loadFactures = async () => {
     try {
       setLoading(prev => ({ ...prev, factures: true }));
@@ -783,15 +619,23 @@ const ReglementPage = () => {
       
       const response = await facturationAPI.getFactures(params);
       
-      if (response.success) {
+      if (response && response.success) {
         console.log('✅ Factures reçues:', response.factures?.length || 0, 'éléments');
-        setFactures(response.factures || []);
+        
+        const validatedFactures = Array.isArray(response.factures) 
+          ? response.factures
+              .filter(item => item && typeof item === 'object')
+              .map(item => validateData(item, 'facture'))
+              .filter(item => item !== null)
+          : [];
+        
+        setFactures(validatedFactures);
         setFactureFilters(prev => ({
           ...prev,
           total: response.pagination?.total || response.total || 0
         }));
       } else {
-        showNotification(response.message || 'Erreur lors du chargement des factures', 'error');
+        showNotification(response?.message || 'Erreur lors du chargement des factures', 'error');
       }
     } catch (error) {
       console.error('❌ Erreur chargement factures:', error);
@@ -802,33 +646,41 @@ const ReglementPage = () => {
   };
   
   // Générer une nouvelle facture
-  const handleGenerateFacture = async (factureData) => {
+  const handleGenerateFacture = async (facturesData) => {
     try {
       setLoading(prev => ({ ...prev, factures: true }));
       
-      console.log('📤 Génération facture - Données:', factureData);
+      console.log('📤 Génération factures - Données:', facturesData);
       
-      const response = await facturationAPI.createFacture(factureData);
+      const facturesArray = Array.isArray(facturesData) ? facturesData : [facturesData];
       
-      if (response.success) {
-        showNotification('✅ Facture générée avec succès', 'success');
+      for (const factureData of facturesArray) {
+        const formattedData = {
+          ...factureData,
+          date_facture: formatDateForAPI(factureData.date_facture),
+          date_echeance: formatDateForAPI(factureData.date_echeance),
+          prestations: (factureData.prestations || []).map(p => ({
+            ...p,
+            date_execution: formatDateForAPI(p.date_execution)
+          }))
+        };
         
-        setFactureDialog({ open: false, mode: 'create', data: null });
+        console.log('📤 Données formatées pour API:', formattedData);
         
-        loadFactures();
-        loadDashboard();
+        const response = await facturationAPI.createFacture(formattedData);
         
-        if (factureData.autoPaiement) {
-          setPaymentDialog({
-            open: true,
-            type: 'facture',
-            data: response.facture || factureData,
-            autoAmount: true
-          });
+        if (!response.success) {
+          throw new Error(`Erreur création facture ${factureData.libelle_facture || factureData.libelle}: ${response.message}`);
         }
-      } else {
-        throw new Error(response.message || 'Erreur lors de la création de la facture');
       }
+      
+      showNotification(`✅ ${facturesArray.length} facture(s) générée(s) avec succès`, 'success');
+      
+      setFactureDialog({ open: false, mode: 'create', data: null });
+      
+      loadFactures();
+      loadDashboard();
+      
     } catch (error) {
       console.error('❌ Erreur génération facture:', error);
       
@@ -848,279 +700,126 @@ const ReglementPage = () => {
       }
       
       showNotification(`❌ ${errorMessage}`, 'error');
+      
     } finally {
       setLoading(prev => ({ ...prev, factures: false }));
     }
   };
-  
-  // Initier un paiement
+
+  // Initier un paiement - VERSION CORRIGÉE
   const handleInitiatePayment = async (paymentData) => {
     try {
       setLoading(prev => ({ ...prev, transactions: true }));
       
-      let response;
-      let paymentRequest;
-      
-      if (paymentDialog.type === 'facture') {
-        const montant = paymentData.montant || paymentDialog.data?.montant_restant || paymentDialog.data?.montant_total;
-        
-        paymentRequest = {
-          factureId: paymentDialog.data?.id || paymentDialog.data?.COD_DECL,
-          method: paymentData.method,
-          montant: montant,
-          reference: paymentData.reference,
-          notes: paymentData.notes
-        };
-        
-        response = await facturationAPI.initierPaiement(paymentRequest);
-      } else {
-        const montant = paymentData.montant || paymentDialog.data?.MONTANT_A_PAYER || paymentDialog.data?.MONTANT;
-        
-        paymentRequest = {
-          COD_DECL: paymentDialog.data?.COD_DECL,
-          METHODE: paymentData.method,
-          MONTANT: montant,
-          reference_paiement: paymentData.reference,
-          notes: paymentData.notes
-        };
-        
-        response = await remboursementsAPI.initierPaiement(paymentRequest);
+      console.log('🚀 Envoi paiement - Données reçues du PaymentDialog:', paymentData);
+
+      // VALIDATION CRITIQUE - S'assurer qu'on a un ID facture
+      const factureId = paymentData.factureId || 
+                       paymentData.COD_FACTURE || 
+                       paymentData.cod_facture ||
+                       paymentData.ID_FACTURE;
+
+      console.log('🔍 ID Facture extrait:', factureId);
+
+      if (!factureId) {
+        throw new Error(`ID facture manquant. Données reçues: ${JSON.stringify({
+          factureId: paymentData.factureId,
+          COD_FACTURE: paymentData.COD_FACTURE,
+          cod_facture: paymentData.cod_facture,
+          ID_FACTURE: paymentData.ID_FACTURE
+        })}`);
       }
+
+      // Construire la requête pour l'API backend
+      const requestData = {
+        // Champs de base
+        method: paymentData.method,
+        montant: paymentData.montant,
+        reference: paymentData.reference,
+        observations: paymentData.observations,
+        notifierClient: paymentData.notifierClient,
+        typeTransaction: paymentData.typeTransaction || 'facture',
+        
+        // Identifiant facture - S'assurer qu'il est bien formaté
+        factureId: parseInt(factureId),
+        COD_FACTURE: parseInt(factureId),
+        
+        // Autres champs optionnels
+        ...(paymentData.numeroTelephone && { numeroTelephone: paymentData.numeroTelephone }),
+        ...(paymentData.numeroFacture && { numeroFacture: paymentData.numeroFacture })
+      };
+
+      console.log('📤 REQUÊTE FINALE pour l\'API:', JSON.stringify(requestData, null, 2));
+
+      // Appel API
+      const response = await facturationAPI.initierPaiement(requestData);
       
+      console.log('✅ Réponse API:', response);
+
       if (response.success) {
-        showNotification(response.message || '✅ Paiement initié avec succès', 'success');
-        setPaymentDialog({ open: false, type: 'facture', data: null, autoAmount: true });
+        showNotification(response.message || 'Paiement initié avec succès', 'success');
         
-        if (activeTab === 1) loadTransactions();
-        if (activeTab === 2) loadFactures();
-        loadDashboard();
+        // Recharger les données
+        setTimeout(() => {
+          loadDashboard();
+          if (activeTab === 1) loadTransactions();
+          if (activeTab === 2) loadFactures();
+        }, 1000);
+        
       } else {
-        showNotification(response.message || 'Erreur lors de l\'initiation du paiement', 'error');
+        showNotification(response.message || 'Erreur lors du paiement', 'error');
       }
+      
     } catch (error) {
       console.error('❌ Erreur initiation paiement:', error);
-      showNotification('Erreur lors de l\'initiation du paiement', 'error');
+      showNotification(`❌ ${error.message}`, 'error');
     } finally {
       setLoading(prev => ({ ...prev, transactions: false }));
     }
   };
-  
+
   // Télécharger un document
   const handleDownloadDocument = async (reference, type = 'transaction') => {
     try {
-      showNotification('Téléchargement en cours...', 'info');
-      
       const token = localStorage.getItem('token');
-      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
-      
       let endpoint, filename;
       
       if (type === 'transaction') {
         endpoint = `/transactions/${reference}/receipt`;
-        filename = `reçu_${reference}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+        filename = `reçu_${reference}.pdf`;
       } else if (type === 'facture') {
         endpoint = `/facturation/factures/${reference}/pdf`;
-        filename = `facture_${reference}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-      } else if (type === 'remboursement') {
-        endpoint = `/remboursements/${reference}/quittance`;
-        filename = `quittance_remboursement_${reference}.pdf`;
+        filename = `facture_${reference}.pdf`;
       } else {
         throw new Error('Type de document non supporté');
       }
       
-      console.log('📥 Téléchargement depuis:', `${API_URL}${endpoint}`);
-      
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Accept': 'application/pdf',
-          'Content-Type': 'application/json'
         },
       });
       
       if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
+        throw new Error(`Erreur ${response.status}: ${response.statusText}`);
       }
       
       const blob = await response.blob();
-      
-      if (blob.size === 0) {
-        throw new Error('Document vide reçu');
-      }
-      
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = filename;
-      link.style.display = 'none';
+      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      setTimeout(() => window.URL.revokeObjectURL(url), 100);
+      link.remove();
       
-      showNotification('✅ Document téléchargé avec succès', 'success');
+      showNotification('Document téléchargé avec succès', 'success');
     } catch (error) {
       console.error('❌ Erreur téléchargement:', error);
-      showNotification(`Erreur lors du téléchargement: ${error.message}`, 'error');
-      
-      // Fallback: Générer un document local
-      generateFallbackDocument(type, reference);
+      showNotification('Erreur lors du téléchargement', 'error');
     }
-  };
-
-  // Générer un document de secours
-  const generateFallbackDocument = (type, reference) => {
-    const content = `
-      <html>
-        <head>
-          <title>Document ${type} - ${reference}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .content { margin-top: 20px; }
-            .footer { margin-top: 50px; font-size: 12px; color: #666; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>${type === 'facture' ? 'FACTURE' : 'REÇU'}</h1>
-            <p>Référence: ${reference}</p>
-            <p>Date: ${new Date().toLocaleDateString()}</p>
-          </div>
-          <div class="content">
-            <p>Ce document a été généré localement car le serveur est indisponible.</p>
-            <p>Veuillez contacter l'administrateur pour obtenir la version officielle.</p>
-          </div>
-          <div class="footer">
-            <p>Généré par le système de gestion - ${new Date().toLocaleString()}</p>
-          </div>
-        </body>
-      </html>
-    `;
-    
-    const blob = new Blob([content], { type: 'text/html' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `document_${reference}.html`;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => window.URL.revokeObjectURL(url), 100);
-    
-    showNotification('Document alternatif généré', 'warning');
-  };
-  
-  // Exporter les données
-  const handleExportData = async (type, format = 'json') => {
-    try {
-      setLoading(prev => ({ ...prev, export: true }));
-      showNotification(`Export ${type} en cours...`, 'info');
-      
-      let params = {};
-      if (type === 'transactions') {
-        params = { ...transactionFilters };
-      } else if (type === 'factures') {
-        params = { ...factureFilters };
-      }
-      
-      params.format = format;
-      
-      const response = await financesAPI.exportData(type, params);
-      
-      if (response.success) {
-        if (format === 'json') {
-          const dataStr = JSON.stringify(response.data, null, 2);
-          const dataBlob = new Blob([dataStr], { type: 'application/json' });
-          const url = window.URL.createObjectURL(dataBlob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `${response.fileName}.json`;
-          link.click();
-        } else if (format === 'csv') {
-          const dataBlob = new Blob([response.csvData], { type: 'text/csv' });
-          const url = window.URL.createObjectURL(dataBlob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `${response.fileName}.csv`;
-          link.click();
-        } else if (format === 'excel') {
-          const dataBlob = new Blob([response.excelData], { 
-            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-          });
-          const url = window.URL.createObjectURL(dataBlob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `${response.fileName}.xlsx`;
-          link.click();
-        }
-        
-        showNotification(`✅ Export ${type} réussi (${response.count} éléments)`, 'success');
-      } else {
-        showNotification(`Erreur lors de l'export ${type}`, 'error');
-      }
-    } catch (error) {
-      console.error(`❌ Erreur export ${type}:`, error);
-      showNotification(`Erreur lors de l'export ${type}`, 'error');
-    } finally {
-      setLoading(prev => ({ ...prev, export: false }));
-    }
-  };
-  
-  // Fonction pour charger les détails du bénéficiaire
-  const fetchBeneficiaryDetails = async (beneficiaryId) => {
-    try {
-      const response = await facturationAPI.getBeneficiaryById(beneficiaryId);
-      if (response.success) {
-        setSelectedBeneficiary(response.beneficiaire);
-      }
-    } catch (error) {
-      console.error('Erreur chargement bénéficiaire:', error);
-    }
-  };
-
-  // Quand vous ouvrez le dialogue InvoiceGenerator
-  const handleGenerateInvoice = (facture) => {
-    const beneficiaryFromFacture = {
-      id: facture.id_ben || facture.COD_BEN || facture.ID_BEN || `BEN-${facture.id}`,
-      name: `${facture.nom_ben || ''} ${facture.prenom_ben || ''}`.trim(),
-      contact: `${facture.prenom_ben || ''} ${facture.nom_ben || ''}`.trim(),
-      position: facture.profession || '',
-      address: facture.adresse || '',
-      city: facture.ville || 'Douala – Cameroun',
-      phone: facture.telephone || '',
-      email: facture.email || '',
-      policyNumber: facture.identifiant_ben || facture.numero_police || `POL-BEN-${facture.id_ben || facture.id}`
-    };
-    
-    // Créer les données de facture AMS
-    const invoiceData = {
-      invoiceNumber: `FACT-${facture.numero || facture.id}`,
-      invoiceDate: new Date(),
-      client: beneficiaryFromFacture,
-      items: [
-        {
-          ref: 'ASS-001',
-          description: facture.description || 'Assurance Multirisque Professionnelle',
-          quantity: 1,
-          unitPrice: facture.montant_total || 0,
-          vatRate: 0.00,
-          totalHT: facture.montant_total || 0
-        }
-      ],
-      paymentTerms: 'Paiement à 30 jours fin de mois',
-      notes: 'Période de couverture : 01/01/2024 au 31/12/2024',
-      currency: 'FCFA'
-    };
-    
-    setInvoiceDialog({
-      open: true,
-      data: invoiceData,
-      type: 'proforma',
-      beneficiary: beneficiaryFromFacture
-    });
   };
   
   // Effet pour charger les données
@@ -1139,17 +838,6 @@ const ReglementPage = () => {
         break;
     }
   }, [activeTab, transactionFilters.page, transactionFilters.limit, factureFilters.page, factureFilters.limit]);
-  
-  // Effet pour la recherche de bénéficiaires
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      if (beneficiaireSearchTerm.length >= 2) {
-        searchBeneficiaires(beneficiaireSearchTerm);
-      }
-    }, 300);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [beneficiaireSearchTerm]);
   
   // Handler pour les filtres
   const handleTransactionFilterChange = (key, value) => {
@@ -1179,385 +867,191 @@ const ReglementPage = () => {
     }
   };
   
-  // Changer le mode d'affichage
-  const handleViewModeChange = (type, mode) => {
-    if (type === 'transaction') {
-      setTransactionFilters(prev => ({ ...prev, viewMode: mode }));
-    } else {
-      setFactureFilters(prev => ({ ...prev, viewMode: mode }));
-    }
-  };
-  
   // Composant pour les cartes de métriques
-  const MetricCard = ({ title, value, icon, color, subtitle, trend, onClick, loading: cardLoading }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-    >
-      <Card 
-        className="metric-card" 
-        sx={{ 
-          height: '100%',
-          borderLeft: `4px solid ${color}`,
-          transition: 'all 0.3s ease',
-          cursor: onClick ? 'pointer' : 'default',
-          background: `linear-gradient(135deg, ${alpha(color, 0.05)} 0%, ${alpha(color, 0.1)} 100%)`,
-          '&:hover': {
-            transform: onClick ? 'translateY(-4px)' : 'none',
-            boxShadow: theme.shadows[8],
-            borderLeft: `4px solid ${alpha(color, 0.8)}`
-          }
-        }}
-        onClick={onClick}
-      >
+  const MetricCard = ({ title, value, icon, color, subtitle, trend }) => (
+    <Grow in={true}>
+      <Card className="metric-card" sx={{ 
+        height: '100%',
+        borderLeft: `4px solid ${color}`,
+        transition: 'all 0.3s ease',
+        '&:hover': {
+          transform: 'translateY(-4px)',
+          boxShadow: theme.shadows[8]
+        }
+      }}>
         <CardContent>
           <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
             <Box>
-              <Typography color="text.secondary" variant="overline" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography color="text.secondary" variant="overline" sx={{ fontWeight: 600 }}>
                 {title}
-                {trend && (
-                  <Tooltip title={`Évolution: ${trend > 0 ? '+' : ''}${trend}%`}>
-                    <Chip 
-                      label={`${trend > 0 ? '+' : ''}${trend}%`}
-                      size="small"
-                      sx={{ 
-                        height: 18,
-                        fontSize: '0.6rem',
-                        bgcolor: trend > 0 ? alpha(theme.palette.success.main, 0.1) : alpha(theme.palette.error.main, 0.1),
-                        color: trend > 0 ? theme.palette.success.main : theme.palette.error.main
-                      }}
-                    />
-                  </Tooltip>
-                )}
               </Typography>
-              
-              {cardLoading ? (
-                <Skeleton variant="text" width={100} height={40} sx={{ mt: 1 }} />
-              ) : (
-                <Typography variant="h4" component="div" sx={{ 
-                  fontWeight: 700,
-                  my: 1,
-                  background: `linear-gradient(45deg, ${color}, ${alpha(color, 0.7)})`,
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent'
-                }}>
-                  {value}
-                </Typography>
-              )}
-              
-              {subtitle && !cardLoading && (
-                <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="h4" component="div" sx={{ 
+                fontWeight: 700,
+                my: 1
+              }}>
+                {value}
+              </Typography>
+              {subtitle && (
+                <Typography variant="body2" color="text.secondary">
                   {subtitle}
                 </Typography>
               )}
             </Box>
-            
-            {cardLoading ? (
-              <Skeleton variant="circular" width={56} height={56} />
-            ) : (
-              <Avatar sx={{ 
-                bgcolor: alpha(color, 0.1),
-                color: color,
-                width: 56,
-                height: 56,
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  bgcolor: alpha(color, 0.2),
-                  transform: 'rotate(10deg)'
-                }
-              }}>
-                {icon}
-              </Avatar>
-            )}
+            <Avatar sx={{ 
+              bgcolor: alpha(color, 0.1),
+              color: color,
+              width: 56,
+              height: 56
+            }}>
+              {icon}
+            </Avatar>
           </Stack>
         </CardContent>
       </Card>
-    </motion.div>
+    </Grow>
   );
   
-  // Composant pour les cartes d'action rapide
-  const QuickActionCard = ({ title, description, icon, color, onClick, disabled, badge }) => (
-    <motion.div
-      whileHover={{ scale: disabled ? 1 : 1.05 }}
-      whileTap={{ scale: disabled ? 1 : 0.95 }}
-    >
-      <Card 
-        className="quick-action-card" 
-        sx={{ 
-          height: '100%',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          opacity: disabled ? 0.6 : 1,
-          position: 'relative',
-          overflow: 'hidden',
-          '&:before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 4,
-            background: `linear-gradient(90deg, ${color}, ${alpha(color, 0.5)})`
-          }
-        }}
-      >
-        <CardActionArea 
-          onClick={!disabled ? onClick : undefined} 
-          sx={{ height: '100%', p: 2 }}
-          disabled={disabled}
-        >
-          <Stack direction="column" alignItems="center" spacing={2}>
-            <Badge 
-              badgeContent={badge} 
-              color="error"
-              invisible={!badge}
-              sx={{ '& .MuiBadge-badge': { fontSize: '0.6rem', height: 16, minWidth: 16 } }}
-            >
-              <Avatar sx={{ 
-                bgcolor: alpha(color, 0.1),
-                color: color,
-                width: 60,
-                height: 60,
-                transition: 'all 0.3s ease'
-              }}>
-                {icon}
-              </Avatar>
-            </Badge>
-            
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="h6" component="div" gutterBottom sx={{ fontWeight: 600 }}>
-                {title}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {description}
-              </Typography>
-            </Box>
-          </Stack>
-        </CardActionArea>
-      </Card>
-    </motion.div>
-  );
-  
-  // Composant pour les cartes de transaction
-  const TransactionCard = ({ transaction, index }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.05 }}
-    >
-      <Card className="transaction-card" sx={{ mb: 2 }}>
-        <CardContent>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
-            <Stack direction="row" alignItems="center" spacing={2}>
-              <Avatar sx={{ 
-                bgcolor: alpha(statusConfig[transaction.STATUT_TRANSACTION || transaction.statut]?.color || theme.palette.grey[500], 0.1),
-                color: statusConfig[transaction.STATUT_TRANSACTION || transaction.statut]?.color || theme.palette.text.primary
-              }}>
-                {statusConfig[transaction.STATUT_TRANSACTION || transaction.statut]?.icon || <PaymentIcon />}
-              </Avatar>
-              
-              <Box>
-                <Typography variant="body1" fontWeight="bold">
-                  {transaction.REFERENCE_TRANSACTION || transaction.reference}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {transaction.BENEFICIAIRE || transaction.NOM_BEN || 'N/A'}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {formatDate(transaction.DATE_INITIATION || transaction.date_initiation, 'dd/MM/yyyy HH:mm')}
-                </Typography>
-              </Box>
-            </Stack>
-            
-            <Box sx={{ textAlign: 'right' }}>
-              <Typography variant="h6" color="primary" fontWeight="bold">
-                {formatCurrency(transaction.MONTANT || transaction.montant)}
-              </Typography>
-              <Chip
-                label={statusConfig[transaction.STATUT_TRANSACTION || transaction.statut]?.label || transaction.STATUT_TRANSACTION || transaction.statut}
-                size="small"
-                sx={{ 
-                  height: 20,
-                  fontSize: '0.65rem',
-                  bgcolor: statusConfig[transaction.STATUT_TRANSACTION || transaction.statut]?.bgColor,
-                  color: statusConfig[transaction.STATUT_TRANSACTION || transaction.statut]?.color,
-                  fontWeight: 600
-                }}
-              />
-            </Box>
-          </Stack>
-          
-          <Divider sx={{ my: 2 }} />
-          
-          <Stack direction="row" alignItems="center" justifyContent="space-between">
-            <Box display="flex" alignItems="center" gap={1}>
-              <Avatar sx={{ 
-                width: 24, 
-                height: 24,
-                bgcolor: alpha(paymentMethods[transaction.METHODE_PAIEMENT]?.color || theme.palette.grey[500], 0.1),
-                color: paymentMethods[transaction.METHODE_PAIEMENT]?.color || theme.palette.text.primary
-              }}>
-                {paymentMethods[transaction.METHODE_PAIEMENT]?.icon || <PaymentIcon fontSize="small" />}
-              </Avatar>
-              <Typography variant="body2">
-                {paymentMethods[transaction.METHODE_PAIEMENT]?.label || transaction.METHODE_PAIEMENT || 'N/A'}
-              </Typography>
-            </Box>
-            
-            <Stack direction="row" spacing={1}>
-              <Tooltip title="Détails">
-                <IconButton 
-                  size="small"
-                  onClick={() => setDetailDialog({ 
-                    open: true, 
-                    type: 'transaction', 
-                    data: transaction 
-                  })}
-                >
-                  <ViewIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Télécharger le reçu">
-                <IconButton 
-                  size="small"
-                  onClick={() => handleDownloadDocument(transaction.REFERENCE_TRANSACTION || transaction.reference, 'transaction')}
-                >
-                  <DownloadIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Stack>
-          </Stack>
-        </CardContent>
-      </Card>
-    </motion.div>
-  );
-  
-  // Composant pour les cartes de facture
-  const FactureCard = ({ facture, index }) => {
-    const isOverdue = new Date(facture.date_echeance) < new Date() && facture.statut !== 'Payée';
+  // Composant pour afficher une transaction dans la liste
+  const TransactionListItem = ({ transaction, index, onViewDetails, onPay }) => {
+    const validatedData = validateData(transaction, 'transaction');
+    if (!validatedData) return null;
+    
+    const { REFERENCE_TRANSACTION, BENEFICIAIRE, DATE_INITIATION, MONTANT, STATUT_TRANSACTION } = validatedData;
     
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: index * 0.05 }}
-      >
-        <Card 
-          className="facture-card" 
-          sx={{ 
-            mb: 2,
-            border: isOverdue ? `2px solid ${alpha(theme.palette.error.main, 0.3)}` : 'none',
-            background: isOverdue ? alpha(theme.palette.error.main, 0.05) : 'inherit'
-          }}
+      <Slide direction="up" in={true} timeout={index * 100}>
+        <ListItem 
+          className="list-item-hover"
+          secondaryAction={
+            <IconButton 
+              edge="end" 
+              size="small"
+              onClick={() => onViewDetails && onViewDetails(transaction)}
+            >
+              <ViewIcon />
+            </IconButton>
+          }
         >
-          <CardContent>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
-              <Stack direction="row" alignItems="center" spacing={2}>
-                <Avatar sx={{ 
-                  bgcolor: alpha(statusConfig[facture.statut]?.color || theme.palette.grey[500], 0.1),
-                  color: statusConfig[facture.statut]?.color || theme.palette.text.primary
-                }}>
-                  {statusConfig[facture.statut]?.icon || <ReceiptIcon />}
-                </Avatar>
-                
-                <Box>
-                  <Typography variant="body1" fontWeight="bold">
-                    {facture.numero}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {facture.nom_ben} {facture.prenom_ben}
-                  </Typography>
-                  <Typography variant="caption" color={isOverdue ? 'error' : 'text.secondary'}>
-                    Échéance: {formatDate(facture.date_echeance, 'dd/MM/yyyy')}
-                    {isOverdue && ' (En retard)'}
-                  </Typography>
-                </Box>
-              </Stack>
-              
-              <Box sx={{ textAlign: 'right' }}>
-                <Typography variant="h6" color="primary" fontWeight="bold">
-                  {formatCurrency(facture.montant_total)}
+          <ListItemAvatar>
+            <Avatar sx={{ 
+              bgcolor: alpha(statusConfig[STATUT_TRANSACTION]?.color || theme.palette.grey[500], 0.1),
+              color: statusConfig[STATUT_TRANSACTION]?.color || theme.palette.text.primary
+            }}>
+              {statusConfig[STATUT_TRANSACTION]?.icon || <PaymentIcon />}
+            </Avatar>
+          </ListItemAvatar>
+          <ListItemText
+            primary={
+              <Typography variant="body2" fontWeight="medium">
+                {REFERENCE_TRANSACTION}
+              </Typography>
+            }
+            secondary={
+              <React.Fragment>
+                <Typography variant="caption" display="block">
+                  {BENEFICIAIRE}
                 </Typography>
-                <Chip
-                  label={statusConfig[facture.statut]?.label || facture.statut}
+                <Typography variant="caption" color="text.secondary">
+                  {formatDate(DATE_INITIATION, 'dd/MM HH:mm')}
+                </Typography>
+              </React.Fragment>
+            }
+          />
+          <Box sx={{ textAlign: 'right', ml: 2 }}>
+            <Typography variant="body2" fontWeight="bold" color="primary">
+              {formatCurrency(MONTANT)}
+            </Typography>
+            <Chip
+              label={statusConfig[STATUT_TRANSACTION]?.label || STATUT_TRANSACTION}
+              size="small"
+              sx={{ 
+                height: 20,
+                fontSize: '0.65rem',
+                bgcolor: statusConfig[STATUT_TRANSACTION]?.bgColor,
+                color: statusConfig[STATUT_TRANSACTION]?.color
+              }}
+            />
+          </Box>
+        </ListItem>
+      </Slide>
+    );
+  };
+  
+  // Composant pour afficher une facture dans la liste
+  const FactureListItem = ({ facture, index, onViewDetails, onPay }) => {
+    const validatedData = validateData(facture, 'facture');
+    if (!validatedData) return null;
+    
+    const { numero, nom_ben, prenom_ben, date_echeance, montant_restant, montant_total } = validatedData;
+    const joursRetard = calculateDaysLate(date_echeance);
+    
+    return (
+      <Slide direction="up" in={true} timeout={index * 100}>
+        <ListItem 
+          className="list-item-hover"
+          secondaryAction={
+            <Stack direction="row" spacing={0.5}>
+              <Tooltip title="Payer">
+                <IconButton 
                   size="small"
-                  sx={{ 
-                    height: 20,
-                    fontSize: '0.65rem',
-                    bgcolor: statusConfig[facture.statut]?.bgColor,
-                    color: statusConfig[facture.statut]?.color,
-                    fontWeight: 600
-                  }}
-                />
-              </Box>
-            </Stack>
-            
-            <Divider sx={{ my: 2 }} />
-            
-            <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                  onClick={() => onPay && onPay(validatedData)}
+                  sx={{ color: theme.palette.success.main }}
+                >
+                  <PaymentIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
               <Tooltip title="Détails">
                 <IconButton 
                   size="small"
-                  onClick={() => setDetailDialog({ 
-                    open: true, 
-                    type: 'facture', 
-                    data: facture 
-                  })}
+                  onClick={() => onViewDetails && onViewDetails(facture)}
                 >
                   <ViewIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
-              <Tooltip title="Générer facture AMS">
-                <IconButton 
-                  size="small"
-                  onClick={() => handleGenerateInvoice(facture)}
-                  sx={{ color: theme.palette.info.main }}
-                >
-                  <ReceiptIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              {facture.statut !== 'Payée' && (
-                <Tooltip title="Payer">
-                  <IconButton 
-                    size="small"
-                    onClick={() => setPaymentDialog({ 
-                      open: true, 
-                      type: 'facture', 
-                      data: facture,
-                      autoAmount: true
-                    })}
-                    sx={{ color: theme.palette.success.main }}
-                  >
-                    <PaymentIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              )}
-              <Tooltip title="Télécharger">
-                <IconButton 
-                  size="small"
-                  onClick={() => handleDownloadDocument(facture.id, 'facture')}
-                >
-                  <DownloadIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
             </Stack>
-          </CardContent>
-        </Card>
-      </motion.div>
+          }
+        >
+          <ListItemAvatar>
+            <Avatar sx={{ 
+              bgcolor: alpha(theme.palette.error.main, 0.1),
+              color: theme.palette.error.main
+            }}>
+              <WarningIcon />
+            </Avatar>
+          </ListItemAvatar>
+          <ListItemText
+            primary={
+              <Typography variant="body2" fontWeight="medium">
+                {numero}
+              </Typography>
+            }
+            secondary={
+              <React.Fragment>
+                <Typography variant="caption" display="block">
+                  {nom_ben} {prenom_ben}
+                </Typography>
+                <Typography variant="caption" color="error">
+                  Échéance: {formatDate(date_echeance, 'dd/MM/yyyy')}
+                </Typography>
+              </React.Fragment>
+            }
+          />
+          <Box sx={{ textAlign: 'right', ml: 2 }}>
+            <Typography variant="body2" fontWeight="bold" color="error">
+              {formatCurrency(montant_restant)}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Retard: {joursRetard} jour{joursRetard !== 1 ? 's' : ''}
+            </Typography>
+          </Box>
+        </ListItem>
+      </Slide>
     );
   };
   
   // Rendu du tableau de bord
   const renderDashboard = () => {
-    const stats = calculateStatistics();
-    
-    const chartData = dashboardData.evolution_mensuelle?.map((item, index) => ({
-      name: item.mois ? item.mois.substring(0, 3) : `M${index + 1}`,
-      montant: item.montant_total || item.total_amount || 0,
-      transactions: item.nombre_transactions || item.transaction_count || 0
-    })) || [];
+    const stats = dashboardData.resume.transactions;
     
     return (
       <Box>
@@ -1566,194 +1060,160 @@ const ReglementPage = () => {
           <Grid item xs={12} sm={6} md={3}>
             <MetricCard
               title="Transactions aujourd'hui"
-              value={stats.transactionsToday}
+              value={stats.total_jour}
               icon={<TrendingIcon />}
               color={theme.palette.primary.main}
               subtitle="Depuis minuit"
-              trend={12}
-              loading={loading.dashboard}
-              onClick={() => {
-                setActiveTab(1);
-                handleTransactionFilterChange('dateDebut', new Date());
-                handleTransactionFilterChange('dateFin', new Date());
-              }}
             />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <MetricCard
               title="Montant ce mois"
-              value={formatCurrency(stats.amountMonth)}
+              value={formatCurrency(stats.montant_total_mois)}
               icon={<MonetizationIcon />}
               color={theme.palette.success.main}
-              subtitle={`${stats.transactionsMonth} transactions`}
-              trend={8}
-              loading={loading.dashboard}
-              onClick={() => {
-                setActiveTab(1);
-                handleTransactionFilterChange('dateDebut', startOfMonth(new Date()));
-                handleTransactionFilterChange('dateFin', new Date());
-              }}
+              subtitle={`${stats.total_mois} transactions`}
             />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <MetricCard
               title="Factures en retard"
-              value={stats.overdueInvoices}
+              value={dashboardData.resume.factures_en_retard}
               icon={<WarningIcon />}
               color={theme.palette.error.main}
-              subtitle={formatCurrency(stats.totalOverdueAmount)}
-              trend={-5}
-              loading={loading.dashboard}
-              onClick={() => {
-                setActiveTab(2);
-                setFactureFilters(prev => ({ ...prev, statut: 'En attente' }));
-              }}
+              subtitle="À régler"
             />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <MetricCard
               title="Taux de réussite"
-              value={`${stats.successRate}%`}
+              value="98.5%"
               icon={<CheckIcon />}
               color={theme.palette.info.main}
               subtitle="Transactions réussies"
-              trend={2}
-              loading={loading.stats}
             />
           </Grid>
         </Grid>
         
-        {/* Graphique et actions rapides */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} md={8}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <Card className="stat-card" sx={{ 
-                height: '100%',
-                background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`
-              }}>
-                <CardHeader 
-                  title={
+        {/* Transactions récentes et factures en retard */}
+        <Grid container spacing={3}>
+          {/* Transactions récentes */}
+          <Grid item xs={12} md={6}>
+            <Card className="stat-card" sx={{ height: '100%' }}>
+              <CardHeader 
+                title={
+                  <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <Stack direction="row" alignItems="center" spacing={1}>
-                      <AssessmentIcon color="primary" />
+                      <ReceiptLongIcon color="primary" />
                       <Typography variant="h6" component="div">
-                        Évolution mensuelle
+                        Transactions récentes
                       </Typography>
                     </Stack>
-                  }
-                  subheader={`Période : ${format(new Date(), 'MMMM yyyy', { locale: fr })}`}
-                  action={
-                    <Tooltip title="Actualiser">
-                      <IconButton onClick={loadDashboard} disabled={loading.dashboard}>
-                        <RefreshIcon />
-                      </IconButton>
-                    </Tooltip>
-                  }
-                />
-                <CardContent>
-                  {loading.dashboard ? (
-                    <Box sx={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <CircularProgress />
-                    </Box>
-                  ) : chartData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <AreaChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.divider, 0.5)} />
-                        <XAxis dataKey="name" stroke={theme.palette.text.secondary} />
-                        <YAxis stroke={theme.palette.text.secondary} />
-                        <RechartsTooltip 
-                          formatter={(value) => [formatCurrency(value), 'Montant']}
-                          labelFormatter={(label) => `Mois: ${label}`}
-                          contentStyle={{ 
-                            backgroundColor: theme.palette.background.paper,
-                            borderColor: theme.palette.divider,
-                            borderRadius: 8
-                          }}
-                        />
-                        <Area 
-                          type="monotone" 
-                          dataKey="montant" 
-                          stroke={theme.palette.primary.main} 
-                          fill={alpha(theme.palette.primary.main, 0.1)}
-                          strokeWidth={2}
-                          name="Montant total"
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <Box sx={{ 
-                      display: 'flex', 
-                      flexDirection: 'column', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      height: 200
-                    }}>
-                      <TrendingIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                      <Typography color="text.secondary" align="center">
-                        Aucune donnée d'évolution disponible
-                      </Typography>
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
+                    <Button 
+                      size="small" 
+                      onClick={() => setActiveTab(1)}
+                      endIcon={<ArrowUpIcon />}
+                      className="action-button outline"
+                    >
+                      Voir tout
+                    </Button>
+                  </Stack>
+                }
+              />
+              <CardContent>
+                <List dense sx={{ maxHeight: 300, overflow: 'auto' }}>
+                  {dashboardData.transactions_recentes.slice(0, 5).map((transaction, index) => (
+                    <TransactionListItem
+                      key={transaction.COD_TRANS || transaction.id || index}
+                      transaction={transaction}
+                      index={index}
+                      onViewDetails={(data) => setDetailDialog({ 
+                        open: true, 
+                        type: 'transaction', 
+                        data 
+                      })}
+                    />
+                  ))}
+                </List>
+                {dashboardData.transactions_recentes.length === 0 && (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <ReceiptIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                    <Typography color="text.secondary">
+                      Aucune transaction récente
+                    </Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
           </Grid>
           
-          <Grid item xs={12} md={4}>
-            <Stack spacing={3}>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.1 }}
-              >
-                <Card className="stat-card" sx={{ height: '100%' }}>
-                  <CardHeader 
-                    title={
-                      <Stack direction="row" alignItems="center" spacing={1}>
-                        <SpeedIcon color="primary" />
-                        <Typography variant="h6" component="div">
-                          Actions rapides
-                        </Typography>
-                      </Stack>
-                    }
-                  />
-                  <CardContent>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12}>
-                        <QuickActionCard
-                          title="Nouvelle facture"
-                          description="Créer une nouvelle facture"
-                          icon={<AddIcon />}
-                          color={theme.palette.primary.main}
-                          onClick={() => setFactureDialog({ open: true, mode: 'create', data: null })}
-                        />
-                      </Grid>
-                      <Grid item xs={12}>
-                        <QuickActionCard
-                          title="Paiement rapide"
-                          description="Effectuer un paiement"
-                          icon={<PaymentIcon />}
-                          color={theme.palette.success.main}
-                          onClick={() => setPaymentDialog({ open: true, type: 'facture', data: null, autoAmount: true })}
-                        />
-                      </Grid>
-                      <Grid item xs={12}>
-                        <QuickActionCard
-                          title="Exporter les données"
-                          description="Exporter en PDF/Excel"
-                          icon={<GetAppIcon />}
-                          color={theme.palette.info.main}
-                          onClick={() => handleExportData('transactions')}
-                        />
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </Stack>
+          {/* Factures en retard */}
+          <Grid item xs={12} md={6}>
+            <Card className="stat-card" sx={{ 
+              height: '100%',
+              border: `2px solid ${alpha(theme.palette.error.main, 0.2)}`
+            }}>
+              <CardHeader 
+                title={
+                  <Stack direction="row" alignItems="center" justifyContent="space-between">
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <WarningIcon color="error" />
+                      <Typography variant="h6" component="div" color="error">
+                        Factures en retard
+                      </Typography>
+                    </Stack>
+                    <Button 
+                      size="small" 
+                      onClick={() => setActiveTab(2)}
+                      endIcon={<ArrowUpIcon />}
+                      className="action-button error"
+                      sx={{ color: theme.palette.error.main }}
+                    >
+                      Voir tout
+                    </Button>
+                  </Stack>
+                }
+              />
+              <CardContent>
+                <List dense sx={{ maxHeight: 300, overflow: 'auto' }}>
+                  {dashboardData.factures_en_retard.slice(0, 5).map((facture, index) => (
+                    <FactureListItem
+                      key={facture.id || facture.COD_FACTURE || index}
+                      facture={facture}
+                      index={index}
+                      onViewDetails={(data) => setDetailDialog({ 
+                        open: true, 
+                        type: 'facture', 
+                        data 
+                      })}
+                      onPay={(data) => {
+                        const factureData = {
+                          COD_FACTURE: data.id || data.COD_FACTURE,
+                          NUMERO_FACTURE: data.numero || data.numero_facture,
+                          NOM_BEN: data.nom_ben,
+                          PRENOM_BEN: data.prenom_ben,
+                          MONTANT_RESTANT: data.montant_restant || data.montant_total,
+                          ...data
+                        };
+                        setPaymentDialog({ 
+                          open: true, 
+                          type: 'facture', 
+                          data: factureData 
+                        });
+                      }}
+                    />
+                  ))}
+                </List>
+                {dashboardData.factures_en_retard.length === 0 && (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <CheckIcon sx={{ fontSize: 48, color: 'success.main', mb: 2 }} />
+                    <Typography color="success.main" fontWeight="medium">
+                      Aucune facture en retard
+                    </Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
           </Grid>
         </Grid>
       </Box>
@@ -1764,457 +1224,279 @@ const ReglementPage = () => {
   const renderTransactions = () => (
     <Box>
       {/* En-tête avec filtres */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <Card className="stat-card" sx={{ mb: 3 }}>
-          <CardContent>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={6}>
-                <Typography variant="h5" component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <MoneyIcon color="primary" />
-                  Transactions
-                  {realTimeData.newTransactions > 0 && (
-                    <Tooltip title={`${realTimeData.newTransactions} nouvelles transactions aujourd'hui`}>
-                      <Badge 
-                        badgeContent={realTimeData.newTransactions} 
-                        color="error"
-                        sx={{ ml: 2 }}
-                      />
-                    </Tooltip>
-                  )}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {transactionFilters.total} transactions trouvées • Dernière mise à jour: {formatRelativeDate(realTimeData.lastUpdate)}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Stack direction="row" spacing={2} justifyContent="flex-end">
-                  <ToggleButtonGroup
-                    value={transactionFilters.viewMode}
-                    exclusive
-                    onChange={(e, value) => handleViewModeChange('transaction', value)}
-                    size="small"
-                  >
-                    <ToggleButton value="table">
-                      <Tooltip title="Vue tableau">
-                        <ViewIcon fontSize="small" />
-                      </Tooltip>
-                    </ToggleButton>
-                    <ToggleButton value="card">
-                      <Tooltip title="Vue cartes">
-                        <DashboardIcon fontSize="small" />
-                      </Tooltip>
-                    </ToggleButton>
-                  </ToggleButtonGroup>
-                  
-                  <Button
-                    variant="outlined"
-                    startIcon={<FilterAltIcon />}
-                    onClick={() => setFilterDrawerOpen(true)}
-                    className="action-button outline"
-                  >
-                    Filtres
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<RefreshIcon />}
-                    onClick={loadTransactions}
-                    disabled={loading.transactions}
-                    className="action-button outline"
-                  >
-                    Actualiser
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<GetAppIcon />}
-                    onClick={() => handleExportData('transactions')}
-                    className="action-button outline"
-                    disabled={loading.export}
-                  >
-                    {loading.export ? 'Export...' : 'Exporter'}
-                  </Button>
-                </Stack>
-              </Grid>
+      <Card className="stat-card" sx={{ mb: 3 }}>
+        <CardContent>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={6}>
+              <Typography variant="h5" component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <MoneyIcon color="primary" />
+                Transactions
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {transactionFilters.total} transactions trouvées
+              </Typography>
             </Grid>
-          </CardContent>
-        </Card>
-      </motion.div>
+            <Grid item xs={12} md={6}>
+              <Stack direction="row" spacing={2} justifyContent="flex-end">
+                <Button
+                  variant="outlined"
+                  startIcon={<RefreshIcon />}
+                  onClick={loadTransactions}
+                  disabled={loading.transactions}
+                  className="action-button outline"
+                >
+                  Actualiser
+                </Button>
+              </Stack>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
       
       {/* Filtres rapides */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1 }}
-      >
-        <Card className="stat-card" sx={{ mb: 3 }}>
-          <CardContent>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Rechercher"
-                  placeholder="Référence, bénéficiaire, montant..."
-                  value={transactionFilters.search}
-                  onChange={(e) => handleTransactionFilterChange('search', e.target.value)}
-                  className="form-field"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon fontSize="small" />
-                      </InputAdornment>
-                    ),
-                    endAdornment: transactionFilters.search && (
-                      <InputAdornment position="end">
-                        <IconButton size="small" onClick={() => handleTransactionFilterChange('search', '')}>
-                          <CloseIcon fontSize="small" />
-                        </IconButton>
-                      </InputAdornment>
-                    )
-                  }}
-                />
-              </Grid>
-              <Grid item xs={6} md={2}>
-                <FormControl fullWidth size="small" className="filter-group">
-                  <InputLabel className="filter-label">Statut</InputLabel>
-                  <Select
-                    value={transactionFilters.status}
-                    label="Statut"
-                    onChange={(e) => handleTransactionFilterChange('status', e.target.value)}
-                  >
-                    <MenuItem value="all">Tous les statuts</MenuItem>
-                    <MenuItem value="Reussi">Réussi</MenuItem>
-                    <MenuItem value="En cours">En cours</MenuItem>
-                    <MenuItem value="Echoue">Échoué</MenuItem>
-                    <MenuItem value="Validé">Validé</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={6} md={2}>
-                <FormControl fullWidth size="small" className="filter-group">
-                  <InputLabel className="filter-label">Type</InputLabel>
-                  <Select
-                    value={transactionFilters.type}
-                    label="Type"
-                    onChange={(e) => handleTransactionFilterChange('type', e.target.value)}
-                  >
-                    <MenuItem value="all">Tous les types</MenuItem>
-                    <MenuItem value="PaiementFacture">Paiement facture</MenuItem>
-                    <MenuItem value="PaiementRemboursement">Remboursement</MenuItem>
-                    <MenuItem value="Versement">Versement</MenuItem>
-                    <MenuItem value="Retrait">Retrait</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Stack direction="row" spacing={1}>
-                  <LocalizationProvider dateAdapter={AdapterDateFns} locale={fr}>
-                    <DatePicker
-                      label="Date début"
-                      value={transactionFilters.dateDebut}
-                      onChange={(date) => handleTransactionFilterChange('dateDebut', date)}
-                      renderInput={(params) => (
-                        <TextField {...params} size="small" fullWidth className="form-field" />
-                      )}
-                    />
-                  </LocalizationProvider>
-                  <LocalizationProvider dateAdapter={AdapterDateFns} locale={fr}>
-                    <DatePicker
-                      label="Date fin"
-                      value={transactionFilters.dateFin}
-                      onChange={(date) => handleTransactionFilterChange('dateFin', date)}
-                      renderInput={(params) => (
-                        <TextField {...params} size="small" fullWidth className="form-field" />
-                      )}
-                    />
-                  </LocalizationProvider>
-                </Stack>
-              </Grid>
+      <Card className="stat-card" sx={{ mb: 3 }}>
+        <CardContent>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Rechercher"
+                placeholder="Référence, bénéficiaire..."
+                value={transactionFilters.search}
+                onChange={(e) => handleTransactionFilterChange('search', e.target.value)}
+                className="form-field"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  )
+                }}
+              />
             </Grid>
-          </CardContent>
-        </Card>
-      </motion.div>
-      
-      {/* Vue cartes */}
-      {transactionFilters.viewMode === 'card' ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-        >
-          {loading.transactions ? (
-            <Grid container spacing={2}>
-              {Array.from({ length: 6 }).map((_, index) => (
-                <Grid item xs={12} sm={6} md={4} key={index}>
-                  <Skeleton variant="rectangular" height={180} sx={{ borderRadius: 2 }} />
-                </Grid>
-              ))}
+            <Grid item xs={6} md={2}>
+              <FormControl fullWidth size="small" className="filter-group">
+                <InputLabel className="filter-label">Statut</InputLabel>
+                <Select
+                  value={transactionFilters.status}
+                  label="Statut"
+                  onChange={(e) => handleTransactionFilterChange('status', e.target.value)}
+                >
+                  <MenuItem value="all">Tous les statuts</MenuItem>
+                  <MenuItem value="Reussi">Réussi</MenuItem>
+                  <MenuItem value="En cours">En cours</MenuItem>
+                  <MenuItem value="Echoue">Échoué</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
-          ) : transactions.length === 0 ? (
-            <Card sx={{ textAlign: 'center', py: 8, mb: 3 }}>
-              <SearchIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-              <Typography variant="h6" color="text.secondary" gutterBottom>
-                Aucune transaction trouvée
-              </Typography>
-              <Typography color="text.secondary" sx={{ mb: 3 }}>
-                Essayez de modifier vos critères de recherche
-              </Typography>
-              <Button 
-                variant="outlined" 
-                startIcon={<RefreshIcon />}
-                onClick={loadTransactions}
-              >
-                Réessayer
-              </Button>
-            </Card>
-          ) : (
-            <Grid container spacing={2}>
-              {transactions.map((transaction, index) => (
-                <Grid item xs={12} sm={6} md={4} key={transaction.COD_TRANS || transaction.id}>
-                  <TransactionCard transaction={transaction} index={index} />
-                </Grid>
-              ))}
-            </Grid>
-          )}
-        </motion.div>
-      ) : (
-        /* Vue tableau */
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
-        >
-          <Card className="stat-card">
-            <CardContent sx={{ p: 0 }}>
-              <TableContainer className="table-container" sx={{ maxHeight: 500 }}>
-                <Table stickyHeader className="data-table">
-                  <TableHead className="table-head">
-                    <TableRow>
-                      <TableCell className="table-header">
-                        <Tooltip title="Trier par référence">
-                          <Button 
-                            size="small" 
-                            endIcon={<SwapVertIcon />}
-                            onClick={() => handleSort('transaction', 'reference')}
-                            sx={{ color: 'inherit', fontWeight: 600 }}
-                          >
-                            Référence
-                          </Button>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell className="table-header">Type</TableCell>
-                      <TableCell className="table-header">Bénéficiaire</TableCell>
-                      <TableCell className="table-header" align="right">
-                        <Tooltip title="Trier par montant">
-                          <Button 
-                            size="small" 
-                            endIcon={<SwapVertIcon />}
-                            onClick={() => handleSort('transaction', 'montant')}
-                            sx={{ color: 'inherit', fontWeight: 600 }}
-                          >
-                            Montant
-                          </Button>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell className="table-header">Méthode</TableCell>
-                      <TableCell className="table-header">Statut</TableCell>
-                      <TableCell className="table-header">
-                        <Tooltip title="Trier par date">
-                          <Button 
-                            size="small" 
-                            endIcon={<SwapVertIcon />}
-                            onClick={() => handleSort('transaction', 'date')}
-                            sx={{ color: 'inherit', fontWeight: 600 }}
-                          >
-                            Date
-                          </Button>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell className="table-header" align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {loading.transactions ? (
-                      <TableRow>
-                        <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
-                          <CircularProgress size={48} />
-                          <Typography sx={{ mt: 2 }}>Chargement des transactions...</Typography>
-                        </TableCell>
-                      </TableRow>
-                    ) : transactions.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
-                          <SearchIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                          <Typography color="text.secondary" variant="h6">
-                            Aucune transaction trouvée
-                          </Typography>
-                          <Typography color="text.secondary" sx={{ mb: 2 }}>
-                            Essayez de modifier vos critères de recherche
-                          </Typography>
-                          <Button 
-                            variant="outlined" 
-                            startIcon={<RefreshIcon />}
-                            onClick={loadTransactions}
-                          >
-                            Réessayer
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      transactions.map((transaction, index) => (
-                        <TableRow 
-                          key={transaction.COD_TRANS || transaction.id}
-                          component={motion.tr}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3, delay: index * 0.05 }}
-                          hover
-                          className="table-row-animated"
-                          sx={{ 
-                            '&:nth-of-type(odd)': { backgroundColor: alpha(theme.palette.primary.main, 0.02) }
-                          }}
-                        >
-                          <TableCell className="table-cell">
-                            <Box>
-                              <Typography variant="body2" fontWeight="medium">
-                                {transaction.REFERENCE_TRANSACTION || transaction.reference}
-                              </Typography>
-                              {transaction.NUMERO_FACTURE && (
-                                <Chip 
-                                  label={`Facture: ${transaction.NUMERO_FACTURE}`}
-                                  size="small"
-                                  sx={{ height: 20, fontSize: '0.65rem', mt: 0.5 }}
-                                />
-                              )}
-                            </Box>
-                          </TableCell>
-                          <TableCell className="table-cell">
-                            <Chip 
-                              label={transaction.TYPE_TRANSACTION || transaction.type}
-                              size="small"
-                              variant="outlined"
-                            />
-                          </TableCell>
-                          <TableCell className="table-cell">
-                            <Box className="beneficiary-info">
-                              <Typography variant="body2" fontWeight="medium" className="beneficiary-name">
-                                {transaction.BENEFICIAIRE || transaction.NOM_BEN || 'N/A'}
-                              </Typography>
-                              {transaction.IDENTIFIANT_NATIONAL && (
-                                <Typography variant="caption" color="text.secondary" className="beneficiary-details">
-                                  ID: {transaction.IDENTIFIANT_NATIONAL}
-                                </Typography>
-                              )}
-                            </Box>
-                          </TableCell>
-                          <TableCell className="table-cell" align="right">
-                            <Typography variant="h6" color="primary" fontWeight="bold">
-                              {formatCurrency(transaction.MONTANT || transaction.montant)}
-                            </Typography>
-                          </TableCell>
-                          <TableCell className="table-cell">
-                            <Tooltip title={paymentMethods[transaction.METHODE_PAIEMENT]?.description || ''}>
-                              <Box display="flex" alignItems="center" gap={1}>
-                                <Avatar sx={{ 
-                                  width: 24, 
-                                  height: 24,
-                                  bgcolor: alpha(paymentMethods[transaction.METHODE_PAIEMENT]?.color || theme.palette.grey[500], 0.1),
-                                  color: paymentMethods[transaction.METHODE_PAIEMENT]?.color || theme.palette.text.primary
-                                }}>
-                                  {paymentMethods[transaction.METHODE_PAIEMENT]?.icon || <PaymentIcon fontSize="small" />}
-                                </Avatar>
-                                <Typography variant="body2">
-                                  {paymentMethods[transaction.METHODE_PAIEMENT]?.label || transaction.METHODE_PAIEMENT || 'N/A'}
-                                </Typography>
-                              </Box>
-                            </Tooltip>
-                          </TableCell>
-                          <TableCell className="table-cell">
-                            <Tooltip title={statusConfig[transaction.STATUT_TRANSACTION || transaction.statut]?.description || ''}>
-                              <Chip
-                                label={statusConfig[transaction.STATUT_TRANSACTION || transaction.statut]?.label || transaction.STATUT_TRANSACTION || transaction.statut}
-                                size="small"
-                                icon={statusConfig[transaction.STATUT_TRANSACTION || transaction.statut]?.icon}
-                                className="status-badge"
-                                sx={{ 
-                                  bgcolor: statusConfig[transaction.STATUT_TRANSACTION || transaction.statut]?.bgColor,
-                                  color: statusConfig[transaction.STATUT_TRANSACTION || transaction.statut]?.color,
-                                  fontWeight: 600
-                                }}
-                              />
-                            </Tooltip>
-                          </TableCell>
-                          <TableCell className="table-cell">
-                            <Box>
-                              <Typography variant="body2">
-                                {formatDate(transaction.DATE_INITIATION || transaction.date_initiation, 'dd/MM/yyyy')}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {formatDate(transaction.DATE_INITIATION || transaction.date_initiation, 'HH:mm')}
-                              </Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell className="table-cell" align="right">
-                            <Stack direction="row" spacing={1} justifyContent="flex-end" className="actions-container">
-                              <Tooltip title="Détails">
-                                <IconButton 
-                                  size="small"
-                                  onClick={() => setDetailDialog({ 
-                                    open: true, 
-                                    type: 'transaction', 
-                                    data: transaction 
-                                  })}
-                                  sx={{ color: theme.palette.info.main }}
-                                >
-                                  <ViewIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title="Télécharger le reçu">
-                                <IconButton 
-                                  size="small"
-                                  onClick={() => handleDownloadDocument(transaction.REFERENCE_TRANSACTION || transaction.reference, 'transaction')}
-                                  sx={{ color: theme.palette.primary.main }}
-                                >
-                                  <DownloadIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            </Stack>
-                          </TableCell>
-                        </TableRow>
-                      ))
+            <Grid item xs={12} md={6}>
+              <Stack direction="row" spacing={1}>
+                <LocalizationProvider dateAdapter={AdapterDateFns} locale={fr}>
+                  <DatePicker
+                    label="Date début"
+                    value={transactionFilters.dateDebut}
+                    onChange={(date) => handleTransactionFilterChange('dateDebut', date)}
+                    renderInput={(params) => (
+                      <TextField {...params} size="small" fullWidth className="form-field" />
                     )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              
-              {/* Pagination */}
-              <Box className="pagination-container" sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
-                <Typography className="pagination-info">
-                  Page {transactionFilters.page + 1} sur {Math.ceil(transactionFilters.total / transactionFilters.limit)}
-                </Typography>
-                <TablePagination
-                  component="div"
-                  count={transactionFilters.total}
-                  page={transactionFilters.page}
-                  onPageChange={(e, newPage) => setTransactionFilters(prev => ({ ...prev, page: newPage }))}
-                  rowsPerPage={transactionFilters.limit}
-                  onRowsPerPageChange={(e) => setTransactionFilters(prev => ({ 
-                    ...prev, 
-                    limit: parseInt(e.target.value, 10), 
-                    page: 0 
-                  }))}
-                  rowsPerPageOptions={[5, 10, 25, 50]}
-                  labelRowsPerPage="Lignes par page:"
-                  labelDisplayedRows={({ from, to, count }) => `${from}-${to} sur ${count}`}
-                />
-              </Box>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
+                  />
+                </LocalizationProvider>
+                <LocalizationProvider dateAdapter={AdapterDateFns} locale={fr}>
+                  <DatePicker
+                    label="Date fin"
+                    value={transactionFilters.dateFin}
+                    onChange={(date) => handleTransactionFilterChange('dateFin', date)}
+                    renderInput={(params) => (
+                      <TextField {...params} size="small" fullWidth className="form-field" />
+                    )}
+                  />
+                </LocalizationProvider>
+              </Stack>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+      
+      {/* Tableau des transactions */}
+      <Card className="stat-card">
+        <CardContent sx={{ p: 0 }}>
+          <TableContainer className="table-container" sx={{ maxHeight: 500 }}>
+            <Table stickyHeader className="data-table">
+              <TableHead className="table-head">
+                <TableRow>
+                  <TableCell className="table-header">
+                    <Button 
+                      size="small" 
+                      endIcon={<SwapVertIcon />}
+                      onClick={() => handleSort('transaction', 'reference')}
+                      sx={{ color: 'inherit', fontWeight: 600 }}
+                    >
+                      Référence
+                    </Button>
+                  </TableCell>
+                  <TableCell className="table-header">Bénéficiaire</TableCell>
+                  <TableCell className="table-header" align="right">
+                    <Button 
+                      size="small" 
+                      endIcon={<SwapVertIcon />}
+                      onClick={() => handleSort('transaction', 'montant')}
+                      sx={{ color: 'inherit', fontWeight: 600 }}
+                    >
+                      Montant
+                    </Button>
+                  </TableCell>
+                  <TableCell className="table-header">Méthode</TableCell>
+                  <TableCell className="table-header">Statut</TableCell>
+                  <TableCell className="table-header">
+                    <Button 
+                      size="small" 
+                      endIcon={<SwapVertIcon />}
+                      onClick={() => handleSort('transaction', 'date')}
+                      sx={{ color: 'inherit', fontWeight: 600 }}
+                    >
+                      Date
+                    </Button>
+                  </TableCell>
+                  <TableCell className="table-header" align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {loading.transactions ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
+                      <CircularProgress size={48} />
+                      <Typography sx={{ mt: 2 }}>Chargement des transactions...</Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : transactions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
+                      <SearchIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                      <Typography color="text.secondary" variant="h6">
+                        Aucune transaction trouvée
+                      </Typography>
+                      <Typography color="text.secondary" sx={{ mb: 2 }}>
+                        Essayez de modifier vos critères de recherche
+                      </Typography>
+                      <Button 
+                        variant="outlined" 
+                        startIcon={<RefreshIcon />}
+                        onClick={loadTransactions}
+                      >
+                        Réessayer
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  transactions.map((transaction, index) => {
+                    const validatedData = validateData(transaction, 'transaction');
+                    if (!validatedData) return null;
+                    
+                    const { REFERENCE_TRANSACTION, BENEFICIAIRE, DATE_INITIATION, MONTANT, STATUT_TRANSACTION, METHODE_PAIEMENT } = validatedData;
+                    
+                    return (
+                      <TableRow 
+                        key={validatedData.COD_TRANS || validatedData.id || index} 
+                        hover 
+                        className="table-row-animated"
+                        sx={{ 
+                          '&:nth-of-type(odd)': { backgroundColor: alpha(theme.palette.primary.main, 0.02) }
+                        }}
+                      >
+                        <TableCell className="table-cell">
+                          <Box>
+                            <Typography variant="body2" fontWeight="medium">
+                              {REFERENCE_TRANSACTION}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell className="table-cell">
+                          <Box className="beneficiary-info">
+                            <Typography variant="body2" fontWeight="medium" className="beneficiary-name">
+                              {BENEFICIAIRE}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell className="table-cell" align="right">
+                          <Typography variant="h6" color="primary" fontWeight="bold">
+                            {formatCurrency(MONTANT)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell className="table-cell">
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <Typography variant="body2">
+                              {paymentMethods[METHODE_PAIEMENT]?.label || METHODE_PAIEMENT || 'N/A'}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell className="table-cell">
+                          <Chip
+                            label={statusConfig[STATUT_TRANSACTION]?.label || STATUT_TRANSACTION}
+                            size="small"
+                            className="status-badge"
+                            sx={{ 
+                              bgcolor: statusConfig[STATUT_TRANSACTION]?.bgColor,
+                              color: statusConfig[STATUT_TRANSACTION]?.color,
+                              fontWeight: 600
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="table-cell">
+                          <Box>
+                            <Typography variant="body2">
+                              {formatDate(DATE_INITIATION, 'dd/MM/yyyy')}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell className="table-cell" align="right">
+                          <Stack direction="row" spacing={1} justifyContent="flex-end" className="actions-container">
+                            <Tooltip title="Détails">
+                              <IconButton 
+                                size="small"
+                                onClick={() => setDetailDialog({ 
+                                  open: true, 
+                                  type: 'transaction', 
+                                  data: validatedData 
+                                })}
+                                sx={{ color: theme.palette.info.main }}
+                              >
+                                <ViewIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          
+          {/* Pagination */}
+          <Box className="pagination-container" sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
+            <Typography className="pagination-info">
+              Page {transactionFilters.page + 1} sur {Math.ceil(transactionFilters.total / transactionFilters.limit)}
+            </Typography>
+            <TablePagination
+              component="div"
+              count={transactionFilters.total}
+              page={transactionFilters.page}
+              onPageChange={(e, newPage) => setTransactionFilters(prev => ({ ...prev, page: newPage }))}
+              rowsPerPage={transactionFilters.limit}
+              onRowsPerPageChange={(e) => setTransactionFilters(prev => ({ 
+                ...prev, 
+                limit: parseInt(e.target.value, 10), 
+                page: 0 
+              }))}
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              labelRowsPerPage="Lignes par page:"
+              labelDisplayedRows={({ from, to, count }) => `${from}-${to} sur ${count}`}
+            />
+          </Box>
+        </CardContent>
+      </Card>
     </Box>
   );
   
@@ -2222,470 +1504,335 @@ const ReglementPage = () => {
   const renderFactures = () => (
     <Box>
       {/* En-tête avec filtres */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <Card className="stat-card" sx={{ mb: 3 }}>
-          <CardContent>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={6}>
-                <Typography variant="h5" component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ReceiptIcon color="primary" />
-                  Factures
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {factureFilters.total} factures trouvées
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Stack direction="row" spacing={2} justifyContent="flex-end">
-                  <ToggleButtonGroup
-                    value={factureFilters.viewMode}
-                    exclusive
-                    onChange={(e, value) => handleViewModeChange('facture', value)}
-                    size="small"
-                  >
-                    <ToggleButton value="table">
-                      <Tooltip title="Vue tableau">
-                        <ViewIcon fontSize="small" />
-                      </Tooltip>
-                    </ToggleButton>
-                    <ToggleButton value="card">
-                      <Tooltip title="Vue cartes">
-                        <DashboardIcon fontSize="small" />
-                      </Tooltip>
-                    </ToggleButton>
-                  </ToggleButtonGroup>
-                  
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => setFactureDialog({ open: true, mode: 'create', data: null })}
-                    className="action-button primary"
-                  >
-                    Nouvelle facture
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<RefreshIcon />}
-                    onClick={loadFactures}
-                    disabled={loading.factures}
-                    className="action-button outline"
-                  >
-                    Actualiser
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<GetAppIcon />}
-                    onClick={() => handleExportData('factures')}
-                    className="action-button outline"
-                    disabled={loading.export}
-                  >
-                    {loading.export ? 'Export...' : 'Exporter'}
-                  </Button>
-                </Stack>
-              </Grid>
+      <Card className="stat-card" sx={{ mb: 3 }}>
+        <CardContent>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={6}>
+              <Typography variant="h5" component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ReceiptIcon color="primary" />
+                Factures
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {factureFilters.total} factures trouvées
+              </Typography>
             </Grid>
-          </CardContent>
-        </Card>
-      </motion.div>
+            <Grid item xs={12} md={6}>
+              <Stack direction="row" spacing={2} justifyContent="flex-end">
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => setFactureDialog({ open: true, mode: 'create', data: null })}
+                  className="action-button primary"
+                >
+                  Nouvelle facture
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<RefreshIcon />}
+                  onClick={loadFactures}
+                  disabled={loading.factures}
+                  className="action-button outline"
+                >
+                  Actualiser
+                </Button>
+              </Stack>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
       
       {/* Filtres rapides */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1 }}
-      >
-        <Card className="stat-card" sx={{ mb: 3 }}>
-          <CardContent>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Rechercher"
-                  placeholder="Numéro, bénéficiaire..."
-                  value={factureFilters.search}
-                  onChange={(e) => handleFactureFilterChange('search', e.target.value)}
-                  className="form-field"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon fontSize="small" />
-                      </InputAdornment>
-                    ),
-                    endAdornment: factureFilters.search && (
-                      <InputAdornment position="end">
-                        <IconButton size="small" onClick={() => handleFactureFilterChange('search', '')}>
-                          <CloseIcon fontSize="small" />
-                        </IconButton>
-                      </InputAdornment>
-                    )
-                  }}
-                />
-              </Grid>
-              <Grid item xs={6} md={3}>
-                <FormControl fullWidth size="small" className="filter-group">
-                  <InputLabel className="filter-label">Statut</InputLabel>
-                  <Select
-                    value={factureFilters.statut}
-                    label="Statut"
-                    onChange={(e) => handleFactureFilterChange('statut', e.target.value)}
-                  >
-                    <MenuItem value="all">Tous les statuts</MenuItem>
-                    <MenuItem value="En attente">En attente</MenuItem>
-                    <MenuItem value="Payée">Payée</MenuItem>
-                    <MenuItem value="Partiellement payée">Partiellement payée</MenuItem>
-                    <MenuItem value="Annulee">Annulée</MenuItem>
-                    <MenuItem value="En retard">En retard</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={5}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <LocalizationProvider dateAdapter={AdapterDateFns} locale={fr}>
-                    <DatePicker
-                      label="Date début"
-                      value={factureFilters.dateDebut}
-                      onChange={(date) => handleFactureFilterChange('dateDebut', date)}
-                      renderInput={(params) => (
-                        <TextField {...params} size="small" fullWidth className="form-field" />
-                      )}
-                    />
-                  </LocalizationProvider>
-                  <LocalizationProvider dateAdapter={AdapterDateFns} locale={fr}>
-                    <DatePicker
-                      label="Date fin"
-                      value={factureFilters.dateFin}
-                      onChange={(date) => handleFactureFilterChange('dateFin', date)}
-                      renderInput={(params) => (
-                        <TextField {...params} size="small" fullWidth className="form-field" />
-                      )}
-                    />
-                  </LocalizationProvider>
-                  <Button
-                    variant="outlined"
-                    startIcon={<FilterIcon />}
-                    onClick={loadFactures}
-                    sx={{ height: '40px' }}
-                    disabled={loading.factures}
-                    className="action-button outline"
-                  >
-                    Appliquer
-                  </Button>
-                </Stack>
-              </Grid>
+      <Card className="stat-card" sx={{ mb: 3 }}>
+        <CardContent>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Rechercher"
+                placeholder="Numéro, bénéficiaire..."
+                value={factureFilters.search}
+                onChange={(e) => handleFactureFilterChange('search', e.target.value)}
+                className="form-field"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  )
+                }}
+              />
             </Grid>
-          </CardContent>
-        </Card>
-      </motion.div>
+            <Grid item xs={6} md={3}>
+              <FormControl fullWidth size="small" className="filter-group">
+                <InputLabel className="filter-label">Statut</InputLabel>
+                <Select
+                  value={factureFilters.statut}
+                  label="Statut"
+                  onChange={(e) => handleFactureFilterChange('statut', e.target.value)}
+                >
+                  <MenuItem value="all">Tous les statuts</MenuItem>
+                  <MenuItem value="En attente">En attente</MenuItem>
+                  <MenuItem value="Payée">Payée</MenuItem>
+                  <MenuItem value="Partiellement payée">Partiellement payée</MenuItem>
+                  <MenuItem value="Annulee">Annulée</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={5}>
+              <Stack direction="row" spacing={1}>
+                <LocalizationProvider dateAdapter={AdapterDateFns} locale={fr}>
+                  <DatePicker
+                    label="Date début"
+                    value={factureFilters.dateDebut}
+                    onChange={(date) => handleFactureFilterChange('dateDebut', date)}
+                    renderInput={(params) => (
+                      <TextField {...params} size="small" fullWidth className="form-field" />
+                    )}
+                  />
+                </LocalizationProvider>
+                <LocalizationProvider dateAdapter={AdapterDateFns} locale={fr}>
+                  <DatePicker
+                    label="Date fin"
+                    value={factureFilters.dateFin}
+                    onChange={(date) => handleFactureFilterChange('dateFin', date)}
+                    renderInput={(params) => (
+                      <TextField {...params} size="small" fullWidth className="form-field" />
+                    )}
+                  />
+                </LocalizationProvider>
+              </Stack>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
       
-      {/* Vue cartes */}
-      {factureFilters.viewMode === 'card' ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, delay: 0.3 }}
-        >
-          {loading.factures ? (
-            <Grid container spacing={2}>
-              {Array.from({ length: 6 }).map((_, index) => (
-                <Grid item xs={12} sm={6} md={4} key={index}>
-                  <Skeleton variant="rectangular" height={220} sx={{ borderRadius: 2 }} />
-                </Grid>
-              ))}
-            </Grid>
-          ) : factures.length === 0 ? (
-            <Card sx={{ textAlign: 'center', py: 8, mb: 3 }}>
-              <ReceiptIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-              <Typography variant="h6" color="text.secondary" gutterBottom>
-                Aucune facture trouvée
-              </Typography>
-              <Typography color="text.secondary" sx={{ mb: 3 }}>
-                Créez votre première facture
-              </Typography>
-              <Button 
-                variant="contained" 
-                startIcon={<AddIcon />}
-                onClick={() => setFactureDialog({ open: true, mode: 'create', data: null })}
-              >
-                Nouvelle facture
-              </Button>
-            </Card>
-          ) : (
-            <Grid container spacing={2}>
-              {factures.map((facture, index) => (
-                <Grid item xs={12} sm={6} md={4} key={facture.id}>
-                  <FactureCard facture={facture} index={index} />
-                </Grid>
-              ))}
-            </Grid>
-          )}
-        </motion.div>
-      ) : (
-        /* Vue tableau */
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, delay: 0.4 }}
-        >
-          <Card className="stat-card">
-            <CardContent sx={{ p: 0 }}>
-              <TableContainer className="table-container" sx={{ maxHeight: 500 }}>
-                <Table stickyHeader className="data-table">
-                  <TableHead className="table-head">
-                    <TableRow>
-                      <TableCell className="table-header">
-                        <Tooltip title="Trier par numéro">
-                          <Button 
-                            size="small" 
-                            endIcon={<SwapVertIcon />}
-                            onClick={() => handleSort('facture', 'numero')}
-                            sx={{ color: 'inherit', fontWeight: 600 }}
-                          >
-                            Numéro
-                          </Button>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell className="table-header">Bénéficiaire</TableCell>
-                      <TableCell className="table-header">
-                        <Tooltip title="Trier par date">
-                          <Button 
-                            size="small" 
-                            endIcon={<SwapVertIcon />}
-                            onClick={() => handleSort('facture', 'date_facture')}
-                            sx={{ color: 'inherit', fontWeight: 600 }}
-                          >
-                            Date
-                          </Button>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell className="table-header">
-                        <Tooltip title="Trier par échéance">
-                          <Button 
-                            size="small" 
-                            endIcon={<SwapVertIcon />}
-                            onClick={() => handleSort('facture', 'date_echeance')}
-                            sx={{ color: 'inherit', fontWeight: 600 }}
-                          >
-                            Échéance
-                          </Button>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell className="table-header" align="right">Total</TableCell>
-                      <TableCell className="table-header" align="right">Payé</TableCell>
-                      <TableCell className="table-header" align="right">Reste</TableCell>
-                      <TableCell className="table-header">Statut</TableCell>
-                      <TableCell className="table-header" align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {loading.factures ? (
-                      <TableRow>
-                        <TableCell colSpan={9} align="center" sx={{ py: 8 }}>
-                          <CircularProgress size={48} />
-                          <Typography sx={{ mt: 2 }}>Chargement des factures...</Typography>
-                        </TableCell>
-                      </TableRow>
-                    ) : factures.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={9} align="center" sx={{ py: 8 }}>
-                          <ReceiptIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                          <Typography color="text.secondary" variant="h6">
-                            Aucune facture trouvée
+      {/* Tableau des factures */}
+      <Card className="stat-card">
+        <CardContent sx={{ p: 0 }}>
+          <TableContainer className="table-container" sx={{ maxHeight: 500 }}>
+            <Table stickyHeader className="data-table">
+              <TableHead className="table-head">
+                <TableRow>
+                  <TableCell className="table-header">
+                    <Button 
+                      size="small" 
+                      endIcon={<SwapVertIcon />}
+                      onClick={() => handleSort('facture', 'numero')}
+                      sx={{ color: 'inherit', fontWeight: 600 }}
+                    >
+                      Numéro
+                    </Button>
+                  </TableCell>
+                  <TableCell className="table-header">Bénéficiaire</TableCell>
+                  <TableCell className="table-header">
+                    <Button 
+                      size="small" 
+                      endIcon={<SwapVertIcon />}
+                      onClick={() => handleSort('facture', 'date_facture')}
+                      sx={{ color: 'inherit', fontWeight: 600 }}
+                    >
+                      Date
+                    </Button>
+                  </TableCell>
+                  <TableCell className="table-header">
+                    <Button 
+                      size="small" 
+                      endIcon={<SwapVertIcon />}
+                      onClick={() => handleSort('facture', 'date_echeance')}
+                      sx={{ color: 'inherit', fontWeight: 600 }}
+                    >
+                      Échéance
+                    </Button>
+                  </TableCell>
+                  <TableCell className="table-header" align="right">Total</TableCell>
+                  <TableCell className="table-header" align="right">Reste</TableCell>
+                  <TableCell className="table-header">Statut</TableCell>
+                  <TableCell className="table-header" align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {loading.factures ? (
+                  <TableRow>
+                    <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
+                      <CircularProgress size={48} />
+                      <Typography sx={{ mt: 2 }}>Chargement des factures...</Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : factures.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
+                      <ReceiptIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                      <Typography color="text.secondary" variant="h6">
+                        Aucune facture trouvée
+                      </Typography>
+                      <Typography color="text.secondary" sx={{ mb: 2 }}>
+                        Créez votre première facture
+                      </Typography>
+                      <Button 
+                        variant="contained" 
+                        startIcon={<AddIcon />}
+                        onClick={() => setFactureDialog({ open: true, mode: 'create', data: null })}
+                      >
+                        Nouvelle facture
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  factures.map((facture, index) => {
+                    const validatedData = validateData(facture, 'facture');
+                    if (!validatedData) return null;
+                    
+                    const { numero, nom_ben, prenom_ben, date_facture, date_echeance, montant_total, montant_restant, statut } = validatedData;
+                    const joursRetard = calculateDaysLate(date_echeance);
+                    
+                    return (
+                      <TableRow 
+                        key={validatedData.id || validatedData.COD_FACTURE || index} 
+                        hover 
+                        className="table-row-animated"
+                        sx={{ 
+                          '&:nth-of-type(odd)': { backgroundColor: alpha(theme.palette.primary.main, 0.02) }
+                        }}
+                      >
+                        <TableCell className="table-cell">
+                          <Typography variant="body2" fontWeight="medium">
+                            {numero}
                           </Typography>
-                          <Typography color="text.secondary" sx={{ mb: 2 }}>
-                            Créez votre première facture
-                          </Typography>
-                          <Button 
-                            variant="contained" 
-                            startIcon={<AddIcon />}
-                            onClick={() => setFactureDialog({ open: true, mode: 'create', data: null })}
-                          >
-                            Nouvelle facture
-                          </Button>
                         </TableCell>
-                      </TableRow>
-                    ) : (
-                      factures.map((facture, index) => (
-                        <TableRow 
-                          key={facture.id}
-                          component={motion.tr}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3, delay: index * 0.05 }}
-                          hover
-                          className="table-row-animated"
-                          sx={{ 
-                            '&:nth-of-type(odd)': { backgroundColor: alpha(theme.palette.primary.main, 0.02) },
-                            ...(new Date(facture.date_echeance) < new Date() && facture.statut !== 'Payée' && {
-                              backgroundColor: alpha(theme.palette.error.main, 0.05),
-                              '&:hover': { backgroundColor: alpha(theme.palette.error.main, 0.08) }
-                            })
-                          }}
-                        >
-                          <TableCell className="table-cell">
-                            <Typography variant="body2" fontWeight="medium">
-                              {facture.numero}
+                        <TableCell className="table-cell">
+                          <Box className="beneficiary-info">
+                            <Typography variant="body2" fontWeight="medium" className="beneficiary-name">
+                              {nom_ben} {prenom_ben}
                             </Typography>
-                          </TableCell>
-                          <TableCell className="table-cell">
-                            <Box className="beneficiary-info">
-                              <Typography variant="body2" fontWeight="medium" className="beneficiary-name">
-                                {facture.nom_ben} {facture.prenom_ben}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary" className="beneficiary-details">
-                                {facture.identifiant_ben}
-                              </Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell className="table-cell">
-                            {formatDate(facture.date_facture, 'dd/MM/yyyy')}
-                          </TableCell>
-                          <TableCell className="table-cell">
-                            <Box sx={{ 
-                              display: 'flex', 
-                              alignItems: 'center',
-                              color: new Date(facture.date_echeance) < new Date() && facture.statut !== 'Payée' ? 'error.main' : 'inherit'
-                            }}>
-                              {formatDate(facture.date_echeance, 'dd/MM/yyyy')}
-                              {new Date(facture.date_echeance) < new Date() && facture.statut !== 'Payée' && (
-                                <Tooltip title="Facture en retard">
-                                  <WarningIcon fontSize="small" sx={{ ml: 1 }} />
-                                </Tooltip>
-                              )}
-                            </Box>
-                          </TableCell>
-                          <TableCell className="table-cell" align="right">
-                            <Typography variant="body2" fontWeight="bold">
-                              {formatCurrency(facture.montant_total)}
-                            </Typography>
-                          </TableCell>
-                          <TableCell className="table-cell" align="right">
-                            <Typography variant="body2" color="success.main">
-                              {formatCurrency(facture.montant_paye)}
-                            </Typography>
-                          </TableCell>
-                          <TableCell className="table-cell" align="right">
-                            <Typography 
-                              variant="body2" 
-                              fontWeight="bold"
-                              color={facture.montant_restant > 0 ? 'error.main' : 'success.main'}
-                            >
-                              {formatCurrency(facture.montant_restant)}
-                            </Typography>
-                          </TableCell>
-                          <TableCell className="table-cell">
-                            <Tooltip title={statusConfig[facture.statut]?.description || ''}>
+                          </Box>
+                        </TableCell>
+                        <TableCell className="table-cell">
+                          {formatDate(date_facture, 'dd/MM/yyyy')}
+                        </TableCell>
+                        <TableCell className="table-cell">
+                          <Box sx={{ 
+                            display: 'flex', 
+                            alignItems: 'center'
+                          }}>
+                            {formatDate(date_echeance, 'dd/MM/yyyy')}
+                            {joursRetard > 0 && (
                               <Chip
-                                label={statusConfig[facture.statut]?.label || facture.statut}
+                                label={`+${joursRetard}j`}
                                 size="small"
-                                icon={statusConfig[facture.statut]?.icon}
-                                className="status-badge"
-                                sx={{ 
-                                  bgcolor: statusConfig[facture.statut]?.bgColor,
-                                  color: statusConfig[facture.statut]?.color,
-                                  fontWeight: 600
-                                }}
+                                color="error"
+                                sx={{ ml: 1, height: 20, fontSize: '0.7rem' }}
                               />
+                            )}
+                          </Box>
+                        </TableCell>
+                        <TableCell className="table-cell" align="right">
+                          <Typography variant="body2" fontWeight="bold">
+                            {formatCurrency(montant_total)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell className="table-cell" align="right">
+                          <Typography 
+                            variant="body2" 
+                            fontWeight="bold"
+                            color={montant_restant > 0 ? 'error.main' : 'success.main'}
+                          >
+                            {formatCurrency(montant_restant)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell className="table-cell">
+                          <Chip
+                            label={statusConfig[statut]?.label || statut}
+                            size="small"
+                            className="status-badge"
+                            sx={{ 
+                              bgcolor: statusConfig[statut]?.bgColor,
+                              color: statusConfig[statut]?.color,
+                              fontWeight: 600
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="table-cell" align="right">
+                          <Stack direction="row" spacing={1} justifyContent="flex-end" className="actions-container">
+                            <Tooltip title="Détails">
+                              <IconButton 
+                                size="small"
+                                onClick={() => setDetailDialog({ 
+                                  open: true, 
+                                  type: 'facture', 
+                                  data: validatedData 
+                                })}
+                                sx={{ color: theme.palette.info.main }}
+                              >
+                                <ViewIcon fontSize="small" />
+                              </IconButton>
                             </Tooltip>
-                          </TableCell>
-                          <TableCell className="table-cell" align="right">
-                            <Stack direction="row" spacing={1} justifyContent="flex-end" className="actions-container">
-                              <Tooltip title="Détails">
+                            {statut !== 'Payée' && (
+                              <Tooltip title="Payer">
                                 <IconButton 
                                   size="small"
-                                  onClick={() => setDetailDialog({ 
-                                    open: true, 
-                                    type: 'facture', 
-                                    data: facture 
-                                  })}
-                                  sx={{ color: theme.palette.info.main }}
-                                >
-                                  <ViewIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title="Générer facture AMS">
-                                <IconButton 
-                                  size="small"
-                                  onClick={() => handleGenerateInvoice(facture)}
-                                  sx={{ color: theme.palette.info.main }}
-                                >
-                                  <ReceiptIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                              {facture.statut !== 'Payée' && (
-                                <Tooltip title="Payer">
-                                  <IconButton 
-                                    size="small"
-                                    onClick={() => setPaymentDialog({ 
+                                  onClick={() => {
+                                    const factureData = {
+                                      COD_FACTURE: validatedData.id || validatedData.COD_FACTURE,
+                                      NUMERO_FACTURE: validatedData.numero || validatedData.numero_facture,
+                                      NOM_BEN: validatedData.nom_ben,
+                                      PRENOM_BEN: validatedData.prenom_ben,
+                                      MONTANT_TOTAL: validatedData.montant_total,
+                                      MONTANT_PAYE: validatedData.montant_paye || 0,
+                                      MONTANT_RESTANT: validatedData.montant_restant,
+                                      TELEPHONE: validatedData.telephone,
+                                      ...validatedData
+                                    };
+                                    
+                                    console.log('📤 Envoi facture au PaymentDialog:', factureData);
+                                    
+                                    setPaymentDialog({ 
                                       open: true, 
                                       type: 'facture', 
-                                      data: facture,
-                                      autoAmount: true
-                                    })}
-                                    sx={{ color: theme.palette.success.main }}
-                                  >
-                                    <PaymentIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                              <Tooltip title="Télécharger">
-                                <IconButton 
-                                  size="small"
-                                  onClick={() => handleDownloadDocument(facture.id, 'facture')}
-                                  sx={{ color: theme.palette.primary.main }}
+                                      data: factureData 
+                                    });
+                                  }}
+                                  sx={{ color: theme.palette.success.main }}
                                 >
-                                  <DownloadIcon fontSize="small" />
+                                  <PaymentIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
-                            </Stack>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              
-              {/* Pagination */}
-              <Box className="pagination-container" sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
-                <Typography className="pagination-info">
-                  Page {factureFilters.page + 1} sur {Math.ceil(factureFilters.total / factureFilters.limit)}
-                </Typography>
-                <TablePagination
-                  component="div"
-                  count={factureFilters.total}
-                  page={factureFilters.page}
-                  onPageChange={(e, newPage) => setFactureFilters(prev => ({ ...prev, page: newPage }))}
-                  rowsPerPage={factureFilters.limit}
-                  onRowsPerPageChange={(e) => setFactureFilters(prev => ({ 
-                    ...prev, 
-                    limit: parseInt(e.target.value, 10), 
-                    page: 0 
-                  }))}
-                  rowsPerPageOptions={[5, 10, 25, 50]}
-                  labelRowsPerPage="Lignes par page:"
-                  labelDisplayedRows={({ from, to, count }) => `${from}-${to} sur ${count}`}
-                />
-              </Box>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
+                            )}
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          
+          {/* Pagination */}
+          <Box className="pagination-container" sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
+            <Typography className="pagination-info">
+              Page {factureFilters.page + 1} sur {Math.ceil(factureFilters.total / factureFilters.limit)}
+            </Typography>
+            <TablePagination
+              component="div"
+              count={factureFilters.total}
+              page={factureFilters.page}
+              onPageChange={(e, newPage) => setFactureFilters(prev => ({ ...prev, page: newPage }))}
+              rowsPerPage={factureFilters.limit}
+              onRowsPerPageChange={(e) => setFactureFilters(prev => ({ 
+                ...prev, 
+                limit: parseInt(e.target.value, 10), 
+                page: 0 
+              }))}
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              labelRowsPerPage="Lignes par page:"
+              labelDisplayedRows={({ from, to, count }) => `${from}-${to} sur ${count}`}
+            />
+          </Box>
+        </CardContent>
+      </Card>
     </Box>
   );
-  
-  // SpeedDial actions
-  const speedDialActions = [
-    { icon: <AddIcon />, name: 'Nouvelle facture', onClick: () => setFactureDialog({ open: true, mode: 'create', data: null }) },
-    { icon: <PaymentIcon />, name: 'Paiement rapide', onClick: () => setPaymentDialog({ open: true, type: 'facture', data: null, autoAmount: true }) },
-    { icon: <GetAppIcon />, name: 'Exporter données', onClick: () => handleExportData('transactions') },
-    { icon: <PrintIcon />, name: 'Imprimer rapport', onClick: () => window.print() },
-    { icon: <QrCodeIcon />, name: 'Générer QR Code', onClick: () => showNotification('Fonctionnalité à venir', 'info') },
-  ];
   
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} locale={fr}>
@@ -2693,326 +1840,139 @@ const ReglementPage = () => {
         {/* Notification Snackbar */}
         <Snackbar
           open={notification.open}
-          autoHideDuration={notification.duration}
+          autoHideDuration={6000}
           onClose={handleCloseNotification}
           anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
           className="notification-snackbar"
         >
-          <motion.div
-            initial={{ opacity: 0, x: 100 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 100 }}
+          <Alert 
+            onClose={handleCloseNotification} 
+            severity={notification.type}
+            sx={{ width: '100%' }}
+            className="notification-alert"
+            elevation={6}
           >
-            <Alert 
-              onClose={handleCloseNotification} 
-              severity={notification.type}
-              sx={{ width: '100%' }}
-              className="notification-alert"
-              elevation={6}
-              variant="filled"
-            >
-              <AlertTitle>
-                {notification.type === 'success' ? 'Succès' : 
-                 notification.type === 'error' ? 'Erreur' : 
-                 notification.type === 'warning' ? 'Avertissement' : 'Information'}
-              </AlertTitle>
-              {notification.message}
-            </Alert>
-          </motion.div>
+            {notification.message}
+          </Alert>
         </Snackbar>
         
         {/* En-tête */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <Box className="dashboard-header" sx={{ mb: 4 }}>
-            <Grid container alignItems="center" justifyContent="space-between">
-              <Grid item xs={12} md={8}>
-                <Typography variant="h3" gutterBottom sx={{ 
-                  fontWeight: 800,
-                  background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  textShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                }}>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <DashboardIcon fontSize="large" />
-                    Tableau de bord financier
-                  </Box>
-                </Typography>
-                <Typography variant="body1" color="text.secondary" paragraph sx={{ maxWidth: 600 }}>
-                  Gérez vos transactions, factures et paiements en temps réel. 
-                  <br />
-                  Interface moderne, intuitive et performante.
-                </Typography>
-                
-                {/* Badges de statut */}
-                <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-                  <Chip 
-                    icon={realTimeData.online ? <WifiIcon /> : <WifiOffIcon />}
-                    label={realTimeData.online ? "Connecté" : "Hors ligne"}
-                    color={realTimeData.online ? "success" : "error"}
-                    size="small"
-                    variant="outlined"
-                  />
-                  <Chip 
-                    icon={<UpdateIcon />}
-                    label={`Mis à jour: ${formatRelativeDate(realTimeData.lastUpdate)}`}
-                    size="small"
-                    variant="outlined"
-                  />
-                  <Chip 
-                    icon={<VerifiedUserIcon />}
-                    label="Sécurisé"
-                    color="success"
-                    size="small"
-                    variant="outlined"
-                  />
-                </Stack>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Stack direction="row" spacing={2} justifyContent="flex-end">
-                  <Button
-                    variant="outlined"
-                    startIcon={<DateRangeIcon />}
-                    onClick={() => showNotification('Calendrier à venir', 'info')}
-                    sx={{ borderRadius: 3 }}
-                  >
-                    {format(new Date(), 'dd MMMM yyyy', { locale: fr })}
-                  </Button>
-                  <Button
-                    variant="contained"
-                    startIcon={<PrintIcon />}
-                    onClick={() => window.print()}
-                    sx={{ borderRadius: 3 }}
-                  >
-                    Imprimer
-                  </Button>
-                </Stack>
-              </Grid>
+        <Box className="dashboard-header" sx={{ mb: 4 }}>
+          <Grid container alignItems="center" justifyContent="space-between">
+            <Grid item xs={12} md={8}>
+              <Typography variant="h3" gutterBottom sx={{ 
+                fontWeight: 700,
+                background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent'
+              }}>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <DashboardIcon fontSize="large" />
+                  Tableau de bord financier
+                </Box>
+              </Typography>
+              <Typography variant="body1" color="text.secondary" paragraph sx={{ maxWidth: 600 }}>
+                Gérez vos transactions, factures et paiements en toute simplicité.
+              </Typography>
             </Grid>
-            
-            <Divider sx={{ my: 3 }} />
-          </Box>
-        </motion.div>
+            <Grid item xs={12} md={4}>
+              <Stack direction="row" spacing={2} justifyContent="flex-end">
+                <Button
+                  variant="outlined"
+                  startIcon={<DateRangeIcon />}
+                >
+                  {format(new Date(), 'dd MMMM yyyy', { locale: fr })}
+                </Button>
+              </Stack>
+            </Grid>
+          </Grid>
+          
+          <Divider sx={{ my: 3 }} />
+        </Box>
         
         {/* Barre d'onglets */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          <Paper sx={{ 
-            mb: 4, 
-            borderRadius: 3,
-            overflow: 'hidden',
-            background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
-          }} className="tabs-paper">
-            <Tabs 
-              value={activeTab} 
-              onChange={(e, newValue) => setActiveTab(newValue)}
-              variant="fullWidth"
-              className="custom-tabs"
-              sx={{ 
-                '& .MuiTab-root': { 
-                  py: 2.5,
-                  fontSize: '1rem',
-                  fontWeight: 600,
-                  transition: 'all 0.3s ease',
-                  '&.Mui-selected': {
-                    color: theme.palette.primary.main,
-                    transform: 'translateY(-2px)'
-                  }
-                },
-                '& .MuiTabs-indicator': {
-                  height: 4,
-                  borderRadius: '2px 2px 0 0',
-                  background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`
-                }
-              }}
-            >
-              <Tab 
-                label={
-                  <Badge 
-                    badgeContent={dashboardData.resume?.factures_en_retard || 0} 
-                    color="error"
-                    max={99}
-                    sx={{ '& .MuiBadge-badge': { fontSize: '0.75rem', animation: 'pulse 2s infinite' } }}
-                  >
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <DashboardIcon />
-                      <span>Tableau de bord</span>
-                    </Stack>
-                  </Badge>
-                }
-              />
-              <Tab 
-                label={
-                  <Badge 
-                    badgeContent={transactionFilters.total} 
-                    color="info"
-                    max={999}
-                    sx={{ '& .MuiBadge-badge': { fontSize: '0.75rem' } }}
-                  >
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <MoneyIcon />
-                      <span>Transactions</span>
-                    </Stack>
-                  </Badge>
-                }
-              />
-              <Tab 
-                label={
-                  <Badge 
-                    badgeContent={factureFilters.total} 
-                    color="warning"
-                    max={999}
-                    sx={{ '& .MuiBadge-badge': { fontSize: '0.75rem' } }}
-                  >
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <ReceiptIcon />
-                      <span>Factures</span>
-                    </Stack>
-                  </Badge>
-                }
-              />
-            </Tabs>
-            
-            {/* Contenu des onglets avec animation */}
-            <Box className="tab-content-container" sx={{ p: 3 }}>
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeTab}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
+        <Paper sx={{ 
+          mb: 4, 
+          borderRadius: 3,
+          overflow: 'hidden',
+          background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`
+        }} className="tabs-paper">
+          <Tabs 
+            value={activeTab} 
+            onChange={(e, newValue) => setActiveTab(newValue)}
+            variant="fullWidth"
+            className="custom-tabs"
+          >
+            <Tab 
+              label={
+                <Badge 
+                  badgeContent={dashboardData.resume?.factures_en_retard || 0} 
+                  color="error"
+                  max={99}
                 >
-                  {activeTab === 0 && renderDashboard()}
-                  {activeTab === 1 && renderTransactions()}
-                  {activeTab === 2 && renderFactures()}
-                </motion.div>
-              </AnimatePresence>
-            </Box>
-          </Paper>
-        </motion.div>
-        
-        {/* SpeedDial pour actions rapides */}
-        <SpeedDial
-          ariaLabel="Actions rapides"
-          sx={{ position: 'fixed', bottom: 32, right: 32 }}
-          icon={<SpeedDialIcon />}
-          onOpen={() => setSpeedDialOpen(true)}
-          onClose={() => setSpeedDialOpen(false)}
-          open={speedDialOpen}
-        >
-          {speedDialActions.map((action) => (
-            <SpeedDialAction
-              key={action.name}
-              icon={action.icon}
-              tooltipTitle={action.name}
-              onClick={action.onClick}
-              FabProps={{ sx: { bgcolor: theme.palette.primary.main, color: 'white' } }}
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <DashboardIcon />
+                    <span>Tableau de bord</span>
+                  </Stack>
+                </Badge>
+              }
             />
-          ))}
-        </SpeedDial>
-        
-        {/* Drawer pour filtres avancés */}
-        <Drawer
-          anchor="right"
-          open={filterDrawerOpen}
-          onClose={() => setFilterDrawerOpen(false)}
-          PaperProps={{
-            sx: { width: { xs: '100%', sm: 400 }, p: 3 }
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-            <Typography variant="h6">Filtres avancés</Typography>
-            <IconButton onClick={() => setFilterDrawerOpen(false)}>
-              <CloseIcon />
-            </IconButton>
+            <Tab 
+              label={
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <MoneyIcon />
+                  <span>Transactions</span>
+                </Stack>
+              }
+            />
+            <Tab 
+              label={
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <ReceiptIcon />
+                  <span>Factures</span>
+                </Stack>
+              }
+            />
+          </Tabs>
+          
+          {/* Contenu des onglets */}
+          <Box className="tab-content-container" sx={{ p: 3 }}>
+            <Fade in={activeTab === 0} timeout={300}>
+              <Box>{activeTab === 0 && renderDashboard()}</Box>
+            </Fade>
+            <Fade in={activeTab === 1} timeout={300}>
+              <Box>{activeTab === 1 && renderTransactions()}</Box>
+            </Fade>
+            <Fade in={activeTab === 2} timeout={300}>
+              <Box>{activeTab === 2 && renderFactures()}</Box>
+            </Fade>
           </Box>
-          
-          <Divider sx={{ mb: 3 }} />
-          
-          <Stack spacing={3}>
-            <FormControl fullWidth>
-              <InputLabel>Type de transaction</InputLabel>
-              <Select
-                value={transactionFilters.type}
-                label="Type de transaction"
-                onChange={(e) => handleTransactionFilterChange('type', e.target.value)}
-              >
-                <MenuItem value="all">Tous les types</MenuItem>
-                <MenuItem value="PaiementFacture">Paiement facture</MenuItem>
-                <MenuItem value="PaiementRemboursement">Remboursement</MenuItem>
-                <MenuItem value="Versement">Versement</MenuItem>
-                <MenuItem value="Retrait">Retrait</MenuItem>
-                <MenuItem value="Frais">Frais</MenuItem>
-              </Select>
-            </FormControl>
-            
-            <FormControl fullWidth>
-              <InputLabel>Méthode de paiement</InputLabel>
-              <Select
-                value={transactionFilters.method}
-                label="Méthode de paiement"
-                onChange={(e) => handleTransactionFilterChange('method', e.target.value)}
-              >
-                <MenuItem value="all">Toutes les méthodes</MenuItem>
-                {Object.keys(paymentMethods).map((method) => (
-                  <MenuItem key={method} value={method}>
-                    <Box display="flex" alignItems="center" gap={1}>
-                      {paymentMethods[method].icon}
-                      {paymentMethods[method].label}
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            
-            <Button
-              variant="contained"
-              fullWidth
-              onClick={() => {
-                setFilterDrawerOpen(false);
-                loadTransactions();
-              }}
-            >
-              Appliquer les filtres
-            </Button>
-            
-            <Button
-              variant="outlined"
-              fullWidth
-              onClick={() => {
-                setTransactionFilters(prev => ({
-                  ...prev,
-                  status: 'all',
-                  type: 'all',
-                  method: 'all'
-                }));
-                setFilterDrawerOpen(false);
-              }}
-            >
-              Réinitialiser
-            </Button>
-          </Stack>
-        </Drawer>
+        </Paper>
+        
+        {/* Bouton flottant pour actions rapides */}
+        <Fab
+          color="primary"
+          aria-label="add"
+          sx={{ 
+            position: 'fixed',
+            bottom: 32,
+            right: 32,
+            zIndex: 1000
+          }}
+          onClick={() => setFactureDialog({ open: true, mode: 'create', data: null })}
+        >
+          <AddIcon />
+        </Fab>
         
         {/* Dialogues */}
         <PaymentDialog
           open={paymentDialog.open}
           type={paymentDialog.type}
           data={paymentDialog.data}
-          onClose={() => setPaymentDialog({ open: false, type: 'facture', data: null, autoAmount: true })}
+          onClose={() => setPaymentDialog({ open: false, type: 'facture', data: null })}
           onSubmit={handleInitiatePayment}
           loading={loading.transactions}
           formatCurrency={formatCurrency}
-          autoAmount={paymentDialog.autoAmount}
         />
         
         <FactureDialog
@@ -3023,52 +1983,7 @@ const ReglementPage = () => {
           onSubmit={handleGenerateFacture}
           loading={loading.factures}
           formatCurrency={formatCurrency}
-          onSearchBeneficiaire={() => setBeneficiaireSearchDialog({ open: true, onSelect: (beneficiaire) => {
-            console.log('Bénéficiaire sélectionné:', beneficiaire);
-          }})}
         />
-        
-        {/* Dialogue pour l'InvoiceGenerator */}
-        <Dialog
-          open={invoiceDialog.open}
-          onClose={() => setInvoiceDialog({ open: false, data: null, type: 'proforma', beneficiary: null })}
-          maxWidth="lg"
-          fullWidth
-          PaperProps={{
-            sx: { 
-              maxHeight: '90vh',
-              borderRadius: 2
-            }
-          }}
-        >
-          <DialogTitle sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            borderBottom: `1px solid ${theme.palette.divider}`,
-            pb: 2
-          }}>
-            <Box display="flex" alignItems="center" gap={1}>
-              <ReceiptIcon color="primary" />
-              <Typography variant="h6">
-                {invoiceDialog.type === 'proforma' ? 'Facture AMS Insurance' : 'Facture'}
-              </Typography>
-            </Box>
-            <IconButton onClick={() => setInvoiceDialog({ open: false, data: null, type: 'proforma', beneficiary: null })}>
-              <CloseIcon />
-            </IconButton>
-          </DialogTitle>
-          <DialogContent dividers sx={{ p: 0 }}>
-            <InvoiceGenerator
-              initialBeneficiary={invoiceDialog.beneficiary}
-              initialInvoiceData={invoiceDialog.data}
-              onClose={() => setInvoiceDialog({ open: false, data: null, type: 'proforma', beneficiary: null })}
-              onPrint={() => showNotification('Impression lancée', 'info')}
-              onDownload={() => showNotification('Téléchargement lancé', 'info')}
-              editable={true}
-            />
-          </DialogContent>
-        </Dialog>
         
         <DetailDialog
           open={detailDialog.open}
@@ -3080,17 +1995,6 @@ const ReglementPage = () => {
           paymentMethods={paymentMethods}
           formatCurrency={formatCurrency}
           formatDate={formatDate}
-          showNotification={showNotification}
-        />
-        
-        <BeneficiaireSearchDialog
-          open={beneficiaireSearchDialog.open}
-          onClose={() => setBeneficiaireSearchDialog({ open: false, onSelect: null })}
-          onSelect={beneficiaireSearchDialog.onSelect}
-          searchTerm={beneficiaireSearchTerm}
-          onSearchChange={setBeneficiaireSearchTerm}
-          beneficiaires={beneficiaires}
-          loading={loading.beneficiaires}
         />
       </Container>
     </LocalizationProvider>

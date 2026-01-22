@@ -19,59 +19,40 @@ import {
 } from '../../services/api';
 import './Beneficiaires.css';
 import AMSlogo from "../../assets/AMS-logo.png";
-import backgroundCard from "../../assets/backgroundCard.png";
+import frontBackgroundCard from "../../assets/FrontbackgroundCard.png";
+import backBackgroundCard from "../../assets/backBackground.jpeg";
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
 // ==============================================
-// FONCTION POUR RÉCUPÉRER L'URL DES PHOTOS - CORRIGÉE
+// FONCTION UNIFIÉE ET SIMPLIFIÉE POUR LES PHOTOS
 // ==============================================
-const getPhotoUrl = (photoFileName, apiBaseUrl = null) => {
+const getPhotoUrl = (photoFileName) => {
   if (!photoFileName || ['null', 'undefined', ''].includes(photoFileName)) {
     return null;
   }
   
-  // Si c'est déjà une URL complète (http ou https)
-  if (photoFileName.startsWith('http')) {
+  // Si c'est déjà une URL complète
+  if (photoFileName.startsWith('photo')) {
     return photoFileName;
   }
   
-  // Déterminer l'URL de base de l'API
-  const baseUrl = apiBaseUrl || 
-                  (window._env_ && window._env_.REACT_APP_API_URL) || 
+  // Base URL de l'API
+  const baseUrl = (window._env_ && window._env_.REACT_APP_API_URL) || 
                   window.REACT_APP_API_URL || 
                   'http://localhost:5000';
   
-  // Normaliser les séparateurs de chemin (Windows -> Unix)
-  let normalizedPath = photoFileName.replace(/\\/g, '/');
+  // Nettoyer le nom de fichier
+  let fileName = photoFileName.toString().replace(/\\/g, '/');
   
-  // Si le chemin commence déjà par uploads/beneficiaires/, utiliser tel quel
-  if (normalizedPath.startsWith('uploads/beneficiaires/')) {
-    return `${baseUrl}/${normalizedPath}`;
-  }
+  // Extraire uniquement le nom du fichier (dernière partie après /)
+  const fileNameParts = fileName.split('/');
+  fileName = fileNameParts[fileNameParts.length - 1];
   
-  // Si le chemin commence par backend/uploads/beneficiaires/
-  if (normalizedPath.includes('backend/uploads/beneficiaires/')) {
-    // Extraire juste le nom de fichier
-    const fileName = normalizedPath.split('backend/uploads/beneficiaires/').pop();
-    return `${baseUrl}/uploads/beneficiaires/${fileName}`;
-  }
+  // Construire l'URL complète
+  const finalUrl = `${baseUrl}/uploads/beneficiaires/${fileName}`;
   
-  // Si le chemin contient des ../ et finit par uploads/beneficiaires/
-  if (normalizedPath.includes('uploads/beneficiaires/')) {
-    // Extraire le nom de fichier après le dernier uploads/beneficiaires/
-    const parts = normalizedPath.split('uploads/beneficiaires/');
-    const fileName = parts[parts.length - 1];
-    return `${baseUrl}/uploads/beneficiaires/${fileName}`;
-  }
-  
-  // Si c'est juste un nom de fichier simple
-  if (!normalizedPath.includes('/')) {
-    return `${baseUrl}/uploads/beneficiaires/${normalizedPath}`;
-  }
-  
-  // Retourner l'URL complète
-  return `${baseUrl}/${normalizedPath}`;
+  return finalUrl;
 };
 
 // Fonction alternative plus simple pour tester
@@ -130,8 +111,6 @@ const BeneficiaryPhoto = ({ photoUrl, sex, className = '', size = 'medium' }) =>
   const [imgSrc, setImgSrc] = useState(null);
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [attempts, setAttempts] = useState(0);
-  const maxAttempts = 2;
 
   useEffect(() => {
     const loadImage = async () => {
@@ -144,39 +123,45 @@ const BeneficiaryPhoto = ({ photoUrl, sex, className = '', size = 'medium' }) =>
       setIsLoading(true);
       setHasError(false);
       
+      // Vérifier si l'URL est valide
       try {
-        // Vérifier si l'URL est valide
-        new URL(photoUrl);
+        const url = new URL(photoUrl);
         
-        // Essayer de vérifier si l'image existe
-        const exists = await checkImageExists(photoUrl);
+        // Vérifier si l'image existe
+        const img = new window.Image();
         
-        if (exists) {
+        img.onload = () => {
           setImgSrc(photoUrl);
           setIsLoading(false);
-        } else {
+        };
+        
+        img.onerror = () => {
+          console.warn('Erreur de chargement de l\'image:', photoUrl);
           setHasError(true);
           setIsLoading(false);
-          
-          // Si c'est la première tentative, essayer avec un cache-buster
-          if (attempts < maxAttempts) {
-            setTimeout(() => {
-              setAttempts(prev => prev + 1);
-              // Essayer différentes variations de l'URL
-              const newUrl = `${photoUrl}${photoUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
-              setImgSrc(newUrl);
-            }, 300);
+        };
+        
+        img.src = photoUrl;
+        
+        // Timeout après 5 secondes
+        const timeout = setTimeout(() => {
+          if (isLoading) {
+            console.warn('Timeout de chargement pour:', photoUrl);
+            setHasError(true);
+            setIsLoading(false);
           }
-        }
+        }, 5000);
+        
+        return () => clearTimeout(timeout);
       } catch (error) {
-        console.warn('Erreur lors de la vérification de l\'image:', error);
+        console.warn('URL photo invalide:', photoUrl);
         setHasError(true);
         setIsLoading(false);
       }
     };
 
     loadImage();
-  }, [photoUrl, attempts]);
+  }, [photoUrl]);
 
   const sizeClasses = {
     small: 'photo-small',
@@ -185,31 +170,32 @@ const BeneficiaryPhoto = ({ photoUrl, sex, className = '', size = 'medium' }) =>
     xlarge: 'photo-xlarge'
   };
 
+  if (isLoading) {
+    return (
+      <div className={`photo-placeholder loading ${sex === 'F' ? 'female' : 'male'} ${sizeClasses[size]} ${className}`}>
+        <Loader2 size={size === 'small' ? 16 : size === 'medium' ? 20 : 24} className="animate-spin" />
+      </div>
+    );
+  }
+
   if (hasError || !imgSrc) {
     return (
       <div className={`photo-placeholder ${sex === 'F' ? 'female' : 'male'} ${sizeClasses[size]} ${className}`}>
-        {sex === 'F' ? '♀' : '♂'}
-        <div className="placeholder-text">Ph</div>
+        <User size={size === 'small' ? 20 : size === 'medium' ? 30 : 40} />
       </div>
     );
   }
 
   return (
-    <div className={`photo-container ${isLoading ? 'loading' : ''} ${className}`}>
-      {isLoading && (
-        <div className="photo-loading">
-          <Loader2 size={16} className="animate-spin" />
-        </div>
-      )}
+    <div className={`photo-container ${className}`}>
       <img 
         src={imgSrc} 
         alt="Photo bénéficiaire"
-        className={`beneficiary-photo ${sizeClasses[size]} ${isLoading ? 'hidden' : ''}`}
+        className={`beneficiary-photo ${sizeClasses[size]}`}
         onError={() => {
-          console.warn(`Erreur de chargement de la photo: ${imgSrc}`);
+          console.warn(`Erreur d'affichage de la photo: ${imgSrc}`);
           setHasError(true);
         }}
-        onLoad={() => setIsLoading(false)}
         loading="lazy"
       />
     </div>
@@ -714,133 +700,153 @@ const loadBeneficiaires = useCallback(async () => {
       
       console.log('Données reçues du backend:', beneficiairesList[0]); // Debug
       
-      // Normaliser les bénéficiaires - Version simplifiée
-      const normalizedBeneficiaires = beneficiairesList.map((ben) => {
-        // PRIORITÉ 1: Utiliser PHOTO_URL du backend si disponible
-        // PRIORITÉ 2: Sinon, construire l'URL avec getPhotoUrlSimple
-        let photoUrl = ben.PHOTO_URL || null;
-        
-        if (!photoUrl && (ben.PHOTO || ben.photo)) {
-          const photoFileName = ben.PHOTO || ben.photo;
-          photoUrl = getPhotoUrlSimple(photoFileName);
-        }
-        
-        // Log pour débogage
-        if (ben.PHOTO || ben.photo) {
-          console.log('Photo info:', {
-            id: ben.ID_BEN || ben.id,
-            nom: ben.NOM_BEN,
-            prenom: ben.PRE_BEN,
-            photoField: ben.PHOTO,
-            photoUrl: photoUrl,
-            photoUrlBackend: ben.PHOTO_URL
-          });
-        }
-        
-        return {
-          // Champs principaux avec noms multiples pour compatibilité
-          ID_BEN: ben.ID_BEN || ben.id || 0,
-          id: ben.ID_BEN || ben.id || 0,
-          
-          // Informations personnelles
-          NOM_BEN: ben.NOM_BEN || ben.nom || '',
-          nom: ben.NOM_BEN || ben.nom || '',
-          
-          PRE_BEN: ben.PRE_BEN || ben.prenom || '',
-          prenom: ben.PRE_BEN || ben.prenom || '',
-          
-          FIL_BEN: ben.FIL_BEN || ben.nom_marital || '',
-          nom_marital: ben.FIL_BEN || ben.nom_marital || '',
-          
-          SEX_BEN: ben.SEX_BEN || ben.sexe || 'M',
-          sexe: ben.SEX_BEN || ben.sexe || 'M',
-          
-          NAI_BEN: ben.NAI_BEN || ben.date_naissance || '',
-          date_naissance: ben.NAI_BEN || ben.date_naissance || '',
-          
-          AGE: ben.AGE || calculateAge(ben.NAI_BEN || ben.date_naissance),
-          
-          // Identifiants
-          IDENTIFIANT_NATIONAL: ben.IDENTIFIANT_NATIONAL || ben.identifiant_national || '',
-          identifiant_national: ben.IDENTIFIANT_NATIONAL || ben.identifiant_national || '',
-          
-          // Contacts
-          TELEPHONE_MOBILE: ben.TELEPHONE_MOBILE || ben.telephone_mobile || ben.telephone || '',
-          TELEPHONE: ben.TELEPHONE || '',
-          EMAIL: ben.EMAIL || ben.email || '',
-          
-          telephone: ben.TELEPHONE_MOBILE || ben.telephone_mobile || ben.telephone || '',
-          email: ben.EMAIL || ben.email || '',
-          
-          // Profession
-          PROFESSION: ben.PROFESSION || ben.profession || '',
-          EMPLOYEUR: ben.EMPLOYEUR || ben.employeur || 'Non spécifié',
-          
-          profession: ben.PROFESSION || ben.profession || '',
-          employeur: ben.EMPLOYEUR || ben.employeur || 'Non spécifié',
-          
-          // Situation familiale
-          SITUATION_FAMILIALE: ben.SITUATION_FAMILIALE || ben.situation_familiale || '',
-          NOMBRE_ENFANTS: ben.NOMBRE_ENFANTS || 0,
-          
-          situation_familiale: ben.SITUATION_FAMILIALE || ben.situation_familiale || '',
-          
-          // Statut ACE
-          STATUT_ACE: ben.STATUT_ACE || ben.statut_ace || '',
-          statut_ace: ben.STATUT_ACE || ben.statut_ace || '',
-          
-          ID_ASSURE_PRINCIPAL: ben.ID_ASSURE_PRINCIPAL || ben.id_assure_principal || null,
-          id_assure_principal: ben.ID_ASSURE_PRINCIPAL || ben.id_assure_principal || null,
-          
-          // Localisation
-          ZONE_HABITATION: ben.ZONE_HABITATION || ben.zone_habitation || '',
-          zone_habitation: ben.ZONE_HABITATION || ben.zone_habitation || '',
-          
-          COD_PAY: ben.COD_PAY || 'CMR',
-          
-          // Assurance
-          ASSURANCE_PRIVE: ben.ASSURANCE_PRIVE || ben.assurance_prive || false,
-          assurance_prive: ben.ASSURANCE_PRIVE || ben.assurance_prive || false,
-          
-          MUTUELLE: ben.MUTUELLE || ben.mutuelle || '',
-          mutuelle: ben.MUTUELLE || ben.mutuelle || '',
-          
-          // PHOTO - Utiliser l'URL complète
-          PHOTO: photoUrl,
-          photo: photoUrl,
-          PHOTO_URL: photoUrl,
-          PHOTO_FILENAME: ben.PHOTO || ben.photo || null,
-          
-          // Informations d'assuré principal
-          nom_assure_principal: ben.nom_assure_principal || ben.NOM_ASSURE_PRINCIPAL || '',
-          prenom_assure_principal: ben.prenom_assure_principal || ben.PRE_ASSURE_PRINCIPAL || '',
-          
-          // Autres champs
-          GROUPE_SANGUIN: ben.GROUPE_SANGUIN || '',
-          ANTECEDENTS_MEDICAUX: ben.ANTECEDENTS_MEDICAUX || '',
-          ALLERGIES: ben.ALLERGIES || '',
-          TRAITEMENTS_EN_COURS: ben.TRAITEMENTS_EN_COURS || '',
-          CONTACT_URGENCE: ben.CONTACT_URGENCE || '',
-          TEL_URGENCE: ben.TEL_URGENCE || '',
-          COD_REGION: ben.COD_REGION || null,
-          CODE_TRIBAL: ben.CODE_TRIBAL || '',
-          TYPE_HABITAT: ben.TYPE_HABITAT || '',
-          NIVEAU_ETUDE: ben.NIVEAU_ETUDE || '',
-          RELIGION: ben.RELIGION || '',
-          LANGUE_MATERNEL: ben.LANGUE_MATERNEL || '',
-          LANGUE_PARLEE: ben.LANGUE_PARLEE || '',
-          SALAIRE: ben.SALAIRE || null,
-          ACCES_EAU: ben.ACCES_EAU !== undefined ? ben.ACCES_EAU : true,
-          ACCES_ELECTRICITE: ben.ACCES_ELECTRICITE !== undefined ? ben.ACCES_ELECTRICITE : true,
-          DISTANCE_CENTRE_SANTE: ben.DISTANCE_CENTRE_SANTE || 0,
-          MOYEN_TRANSPORT: ben.MOYEN_TRANSPORT || '',
-          COD_CREUTIL: ben.COD_CREUTIL || 'SYSTEM',
-          COD_MODUTIL: ben.COD_MODUTIL || 'SYSTEM',
-          DAT_CREUTIL: ben.DAT_CREUTIL || '',
-          DAT_MODUTIL: ben.DAT_MODUTIL || ''
-        };
-      });
-      
+     // ==============================================
+// NORMALISATION DES BÉNÉFICIAIRES - VERSION CORRIGÉE
+// ==============================================
+
+const normalizedBeneficiaires = beneficiairesList.map((ben) => {
+  // Calcul de l'âge
+  const dateNaissance = ben.NAI_BEN || ben.date_naissance || '';
+  const age = ben.AGE || calculateAge(dateNaissance);
+  
+  // Gestion des photos - Version simplifiée
+  let photoUrl = null;
+  const photoField = ben.PHOTO || ben.photo || ben.PHOTO_URL;
+  
+  if (photoField && photoField !== 'null' && photoField !== 'undefined') {
+    photoUrl = getPhotoUrl(photoField);
+  }
+  
+  // Log de débogage
+  console.log('Debug photo:', {
+    id: ben.ID_BEN || ben.id,
+    nom: ben.NOM_BEN,
+    photoField: photoField,
+    photoUrl: photoUrl
+  });
+  
+  // Construction de l'objet normalisé
+  return {
+    // Identifiants
+    ID_BEN: ben.ID_BEN || ben.id || 0,
+    id: ben.ID_BEN || ben.id || 0,
+    
+    // Informations personnelles
+    NOM_BEN: ben.NOM_BEN || ben.nom || '',
+    PRE_BEN: ben.PRE_BEN || ben.prenom || '',
+    SEX_BEN: ben.SEX_BEN || ben.sexe || 'M',
+    NAI_BEN: dateNaissance,
+    AGE: age,
+    
+    // Contact
+    TELEPHONE_MOBILE: ben.TELEPHONE_MOBILE || ben.telephone_mobile || ben.telephone || '',
+    EMAIL: ben.EMAIL || ben.email || '',
+    
+    // Profession
+    PROFESSION: ben.PROFESSION || ben.profession || '',
+    EMPLOYEUR: ben.EMPLOYEUR || ben.employeur || 'Non spécifié',
+    
+    // Statut
+    STATUT_ACE: ben.STATUT_ACE || ben.statut_ace || '',
+    ID_ASSURE_PRINCIPAL: ben.ID_ASSURE_PRINCIPAL || ben.id_assure_principal || null,
+    
+    // Photo - URL complète
+    PHOTO: photoUrl,
+    photo: photoUrl,
+    PHOTO_URL: photoUrl,
+    
+    // Autres champs (simplifiés)
+    IDENTIFIANT_NATIONAL: ben.IDENTIFIANT_NATIONAL || ben.identifiant_national || '',
+    ASSURANCE_PRIVE: ben.ASSURANCE_PRIVE || ben.assurance_prive || false,
+    ZONE_HABITATION: ben.ZONE_HABITATION || ben.zone_habitation || '',
+    
+    TYPE_HABITAT: ben.TYPE_HABITAT || '',
+    
+    // ==============================================
+    // INFORMATIONS MÉDICALES (pour dossier médical)
+    // ==============================================
+    GROUPE_SANGUIN: ben.GROUPE_SANGUIN || '',
+    ANTECEDENTS_MEDICAUX: ben.ANTECEDENTS_MEDICAUX || '',
+    ALLERGIES: ben.ALLERGIES || '',
+    TRAITEMENTS_EN_COURS: ben.TRAITEMENTS_EN_COURS || '',
+    
+    // Contact d'urgence
+    CONTACT_URGENCE: ben.CONTACT_URGENCE || '',
+    TEL_URGENCE: ben.TEL_URGENCE || '',
+    
+    // ==============================================
+    // INFORMATIONS SOCIO-CULTURELLES
+    // ==============================================
+    NIVEAU_ETUDE: ben.NIVEAU_ETUDE || '',
+    RELIGION: ben.RELIGION || '',
+    LANGUE_MATERNEL: ben.LANGUE_MATERNEL || '',
+    LANGUE_PARLEE: ben.LANGUE_PARLEE || '',
+    SALAIRE: ben.SALAIRE || null,
+    
+    // ==============================================
+    // ACCESSIBILITÉ ET TRANSPORT
+    // ==============================================
+    ACCES_EAU: ben.ACCES_EAU !== undefined ? ben.ACCES_EAU : true,
+    ACCES_ELECTRICITE: ben.ACCES_ELECTRICITE !== undefined ? ben.ACCES_ELECTRICITE : true,
+    DISTANCE_CENTRE_SANTE: ben.DISTANCE_CENTRE_SANTE || 0,
+    MOYEN_TRANSPORT: ben.MOYEN_TRANSPORT || '',
+    
+    // ==============================================
+    // INFORMATIONS D'ASSURANCE
+    // ==============================================
+    ASSURANCE_PRIVE: ben.ASSURANCE_PRIVE || ben.assurance_prive || false,
+    assurance_prive: ben.ASSURANCE_PRIVE || ben.assurance_prive || false,
+    
+    MUTUELLE: ben.MUTUELLE || ben.mutuelle || '',
+    mutuelle: ben.MUTUELLE || ben.mutuelle || '',
+    
+    // ==============================================
+    // PHOTOGRAPHIE - CHAMPS UNIFIÉS
+    // ==============================================
+    PHOTO: photoUrl,           // URL complète de la photo
+    photo: photoUrl,           // Alias pour compatibilité
+    PHOTO_URL: photoUrl,       // URL complète (primaire)
+    PHOTO_FILENAME: photoField, // Nom de fichier original
+    
+    // ==============================================
+    // MÉTADONNÉES DE GESTION
+    // ==============================================
+    COD_CREUTIL: ben.COD_CREUTIL || 'SYSTEM',
+    COD_MODUTIL: ben.COD_MODUTIL || 'SYSTEM',
+    DAT_CREUTIL: ben.DAT_CREUTIL || '',
+    DAT_MODUTIL: ben.DAT_MODUTIL || '',
+    
+    // ==============================================
+    // CHAMPS UTILITAIRES POUR L'AFFICHAGE
+    // ==============================================
+    
+    // Format d'affichage de la date de naissance
+    date_naissance_formatted: formatDate(dateNaissance),
+    
+    // Statut ACE formaté pour l'affichage
+    statut_ace_formatted: !(ben.STATUT_ACE || ben.statut_ace) ? 'Assuré Principal' : 
+                         ben.STATUT_ACE === 'CONJOINT' ? 'Conjoint' :
+                         ben.STATUT_ACE === 'ENFANT' ? 'Enfant' :
+                         ben.STATUT_ACE === 'ASCENDANT' ? 'Ascendant' : 'Ayant droit',
+    
+    // Indicateur booléen pour assuré principal
+    is_assure_principal: !ben.STATUT_ACE || ben.STATUT_ACE === '' || ben.STATUT_ACE === null,
+    
+    // Groupe sanguin formaté
+    groupe_sanguin_formatted: ben.GROUPE_SANGUIN ? `${ben.GROUPE_SANGUIN}` : 'Non spécifié',
+    
+    // Assurance privée formatée
+    assurance_prive_formatted: (ben.ASSURANCE_PRIVE || ben.assurance_prive) ? 'Oui' : 'Non'
+  };
+  
+  return beneficiaireNormalise;
+
+  console.log('Données brutes du backend:', beneficiairesList);
+console.log('URLs de photos générées:', normalizedBeneficiaires.map(b => ({
+  nom: b.NOM_BEN,
+  photoUrl: b.PHOTO
+})));
+});
       setBeneficiaires(normalizedBeneficiaires);
       
       // Mettre à jour les assurés principaux (pour le dropdown du formulaire)
@@ -1164,13 +1170,12 @@ const loadBeneficiaires = useCallback(async () => {
   // Données à encoder dans le QR code
   const data = {
     id: beneficiaire.ID_BEN || beneficiaire.id,
-    matricule: beneficiaire.IDENTIFIANT_NATIONAL || '', // <- Matricule ajouté
     identifiant_national: beneficiaire.IDENTIFIANT_NATIONAL || '',
+    employeur: beneficiaire.EMPLOYEUR || '',
     nom: beneficiaire.NOM_BEN || '',
     prenom: beneficiaire.PRE_BEN || '',
     date_naissance: beneficiaire.NAI_BEN || '',
     sexe: beneficiaire.SEX_BEN || '',
-    employeur: beneficiaire.EMPLOYEUR || '',
     telephone: beneficiaire.TELEPHONE_MOBILE || '',
     type: beneficiaire.STATUT_ACE ? 'Ayant droit' : 'Assuré principal',
     statut_ace: beneficiaire.STATUT_ACE || '',
@@ -2037,20 +2042,20 @@ const handleSaveCarte = async () => {
     }
   };
 
+// Fonction pour télécharger la carte instantanément
 const handleDownloadCard = async () => {
   if (!selectedBeneficiaireForCard) return;
   
   try {
-    showNotification('Génération du PDF en cours...', 'info');
-    
     const ben = selectedBeneficiaireForCard;
     
-    // Obtenir l'URL de la photo
-    const photoUrl = ben.PHOTO || ben.photo || ben.PHOTO_URL;
-    
-    // Générer le QR code avec le matricule
+    // Générer le QR code avec les données requises
     const qrData = getBeneficiaryQRCodeData(ben);
     const qrCodeUrl = await generateQRCode(qrData, 300);
+    
+    // Récupérer la photo du bénéficiaire ou utiliser un avatar
+    const photoUrl = ben.PHOTO || ben.photo || ben.PHOTO_URL || 
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(ben.NOM_BEN + ' ' + ben.PRE_BEN)}&size=200&background=random`;
     
     // Création du conteneur temporaire pour le recto
     const tempContainerRecto = document.createElement('div');
@@ -2062,87 +2067,65 @@ const handleDownloadCard = async () => {
     tempContainerRecto.style.fontFamily = 'Arial, sans-serif';
     document.body.appendChild(tempContainerRecto);
     
-    // HTML du recto avec PHOTO et QR code
+    // HTML du recto avec photo à gauche du QR code
     const rectoHTML = `
-      <div style="width: 1480px; height: 1050px; background: url(${backgroundCard}) no-repeat center center; background-size: cover; border-radius: 80px; position: relative; overflow: hidden; box-shadow: 0 40px 120px rgba(0, 0, 0, 0.2);">
-        <div style="position: relative; height: 100%; padding: 80px; color: white; display: flex; flex-direction: column;">
-          <!-- En-tête avec logo -->
-          <div style="position: absolute; top: 50px; left: 50px; z-index: 10;">
-            <div style="display: flex; align-items: center; gap: 15px;">
-              <div style="width: 80px; height: 80px; border-radius: 50%; background: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
-                <img src="${AMSlogo}" style="width: 70px; height: auto;" alt="AMS Logo" />
-              </div>
-              <div style="font-size: 28px; font-weight: 900; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
-                AMS INSURANCE
-              </div>
-            </div>
+      <div style="width: 1480px; height: 1050px; background: url(${frontBackgroundCard}) no-repeat center center; background-size: cover; border-radius: 80px; position: relative; overflow: hidden; box-shadow: 0 40px 120px rgba(0, 0, 0, 0.2);">
+        <div style="position: relative; height: 100%; padding: 80px; color: black; display: flex; flex-direction: column;">
+          <!-- En-tête avec logo et titre -->
+         
+          <!-- Section centrale (vide) -->
+          <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; margin-top: 100px;">
+            <div style="height: 400px;"></div>
           </div>
           
-          <!-- Section principale avec photo et informations -->
-          <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; margin-top: 100px;">
-            <!-- Photo et informations personnelles -->
-            <div style="display: flex; align-items: center; gap: 60px; margin-bottom: 80px;">
-              <!-- Photo du bénéficiaire -->
-              <div style="width: 280px; height: 280px; border-radius: 20px; overflow: hidden; border: 5px solid white; box-shadow: 0 10px 30px rgba(0,0,0,0.2); background: #f5f5f5; display: flex; align-items: center; justify-content: center;">
-                ${photoUrl ? `
-                  <img 
-                    src="${photoUrl}" 
-                    style="width: 100%; height: 100%; object-fit: cover;" 
-                    alt="Photo ${ben.NOM_BEN} ${ben.PRE_BEN}" 
-                    onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\"font-size: 80px; color: #ccc;\">${ben.SEX_BEN === 'F' ? '♀' : '♂'}</div>';"
-                  />
-                ` : `
-                  <div style="font-size: 100px; color: #ccc;">
-                    ${ben.SEX_BEN === 'F' ? '♀' : '♂'}
-                  </div>
-                `}
+          <!-- Pied de page avec photo, QR code et nom -->
+          <div style="position: absolute; bottom: 80px; width: calc(100% - 160px); display: flex; justify-content: space-between; align-items: flex-end;">
+            
+            <!-- Photo à gauche -->
+            <div style="flex: 0 0 25%; text-align: left;">
+              <div style="display: inline-block; width: 250px; height: 250px; border-radius: 15px; overflow: hidden; background: white; padding: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+                <img 
+                  src="${photoUrl}" 
+                  style="width: 100%; height: 100%; object-fit: cover;" 
+                  alt="Photo ${ben.NOM_BEN} ${ben.PRE_BEN}"
+                  onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(ben.NOM_BEN + ' ' + ben.PRE_BEN)}&size=200&background=random'"
+                />
               </div>
-              
-              <!-- Informations personnelles -->
-              <div style="flex: 1;">
-                <div style="font-size: 64px; font-weight: 900; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 2px; color: white; text-shadow: 3px 3px 6px rgba(0,0,0,0.4);">
-                  <strong>${ben.NOM_BEN || ''}</strong>
-                </div>
-                <div style="font-size: 64px; font-weight: 900; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 2px; color: white; text-shadow: 3px 3px 6px rgba(0,0,0,0.4);">
-                  <strong>${ben.PRE_BEN || ''}</strong>
-                </div> 
-                <div style="font-size: 36px; font-weight: 700; background: rgba(255,255,255,0.9); color: #1a2980; padding: 15px 30px; border-radius: 10px; display: inline-block; margin-top: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.2);">
-                  Matricule: ${ben.IDENTIFIANT_NATIONAL || `AMS${String(ben.ID_BEN || '000000').padStart(6, '0')}`}
+            </div>
+            
+            <!-- QR code au centre -->
+            <div style="flex: 0 0 35%; text-align: center; margin-top: -50px;">
+              <div style="display: inline-block; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+                <div id="qrcode-container" style="position: relative; width: 250px; height: 250px;">
+                  ${qrCodeUrl ? `
+                    <img 
+                      src="${qrCodeUrl}" 
+                      style="width: 100%; height: 100%;" 
+                      alt="QR Code"
+                    />
+                  ` : `
+                    <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #f5f5f5; color: #666; font-size: 14px;">
+                      QR Code non disponible
+                    </div>
+                  `}
                 </div>
               </div>
             </div>
             
-            <!-- QR Code avec matricule -->
-            <div style="text-align: center; margin-top: 40px;">
-              <div style="display: inline-block; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
-                ${qrCodeUrl ? `
-                  <img 
-                    src="${qrCodeUrl}" 
-                    style="width: 320px; height: 320px;" 
-                    alt="QR Code Matricule: ${ben.IDENTIFIANT_NATIONAL}"
-                    onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\"width: 320px; height: 320px; display: flex; align-items: center; justify-content: center; background: #f0f0f0; border-radius: 10px; font-size: 24px; color: #333;\">QR Code<br>Matricule: ${ben.IDENTIFIANT_NATIONAL}</div>';"
-                  />
-                ` : `
-                  <div style="width: 320px; height: 320px; display: flex; align-items: center; justify-content: center; background: #f0f0f0; border-radius: 10px; font-size: 24px; color: #333; font-weight: bold;">
-                    QR Code<br>
-                    Matricule: ${ben.IDENTIFIANT_NATIONAL || `AMS${String(ben.ID_BEN || '000000').padStart(6, '0')}`}
-                  </div>
-                `}
-                <div style="margin-top: 15px; color: #333; font-size: 24px; font-weight: bold; letter-spacing: 1px;">
-                  ${ben.IDENTIFIANT_NATIONAL || `AMS${String(ben.ID_BEN || '000000').padStart(6, '0')}`}
-                </div>
-                <div style="margin-top: 10px; color: #666; font-size: 18px; font-weight: 500;">
-                  Scan pour vérifier l'authenticité
-                </div>
+            <!-- Nom à droite -->
+            <div style="flex: 0 0 35%; text-align: right;">
+              <div style="font-size: 42px; font-weight: 900; color: black; text-transform: uppercase; margin-bottom: 15px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">
+                ${ben.NOM_BEN || ''} ${ben.PRE_BEN || ''}
               </div>
-            </div>
-          </div>
-          
-          <!-- Date d'expiration -->
-          <div style="position: absolute; bottom: 50px; right: 80px; font-size: 24px; color: rgba(255,255,255,0.8); font-weight: 600; text-align: right;">
-            <div>Date d'expiration:</div>
-            <div style="font-size: 28px; color: white; font-weight: 800;">
-              ${new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              <div style="font-size: 36px; font-weight: 700; color: black; text-transform: uppercase; margin-bottom: 15px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">
+                ${ben.TELEPHONE_MOBILE || ''}
+              </div>
+              <div style="font-size: 32px; font-weight: 600; color: black; text-transform: uppercase; margin-bottom: 15px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">
+                ${ben.NUM_PASSEPORT || ''}
+              </div>
+              <div style="font-size: 28px; font-weight: 500; color: black; text-transform: uppercase; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">
+                ${ben.IDENTIFIANT_NATIONAL || ''}
+              </div>
             </div>
           </div>
         </div>
@@ -2151,8 +2134,18 @@ const handleDownloadCard = async () => {
     
     tempContainerRecto.innerHTML = rectoHTML;
     
-    // Attendre que l'image soit chargée
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Précharger les images
+    const images = tempContainerRecto.querySelectorAll('img');
+    await Promise.all(Array.from(images).map(img => {
+      return new Promise((resolve) => {
+        if (img.complete) {
+          resolve();
+        } else {
+          img.onload = resolve;
+          img.onerror = resolve;
+        }
+      });
+    }));
     
     // Capturer le recto
     const rectoCanvas = await html2canvas(tempContainerRecto, {
@@ -2161,7 +2154,7 @@ const handleDownloadCard = async () => {
       backgroundColor: null,
       logging: false,
       allowTaint: true,
-      imageTimeout: 15000
+      imageTimeout: 5000
     });
     
     document.body.removeChild(tempContainerRecto);
@@ -2178,26 +2171,17 @@ const handleDownloadCard = async () => {
     
     // HTML du verso
     const versoHTML = `
-      <div style="width: 1480px; height: 1050px; background: url(${backgroundCard}) no-repeat center center; background-size: cover; border-radius: 80px; padding: 80px; color: #333; display: flex; flex-direction: column; border: 10px solid #ccc; box-shadow: 0 40px 120px rgba(0, 0, 0, 0.1);">
+      <div style="width: 1480px; height: 1050px; background: url(${backBackgroundCard}) no-repeat center center; background-size: cover; border-radius: 80px; padding: 80px; color: black; display: flex; flex-direction: column; box-shadow: 0 40px 120px rgba(0, 0, 0, 0.1);">
         <div style="height: 100%; display: flex; flex-direction: column; justify-content: center;">
           <!-- Logo au centre -->
-          <div style="text-align: center; margin-bottom: 60px;">
-            <div style="display: inline-flex; align-items: center; gap: 20px; margin-bottom: 40px;">
-              <img src="${AMSlogo}" style="width: 120px; height: auto;" alt="AMS Logo" />
-              <div style="font-size: 56px; font-weight: 900; color: #1a2980; text-transform: uppercase;">
-                AMS INSURANCE
-              </div>
-            </div>
-            <div style="font-size: 42px; font-weight: 900; color: #1a2980; margin-bottom: 30px; text-transform: uppercase;">
-              CARTE SANTÉ
-            </div>
-            <div style="font-size: 36px; font-weight: 700; color: #333; margin-bottom: 50px;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <div style="font-size: 36px; font-weight: 700; color: black; margin-top: 280px;">
               COURTIER D'ASSURANCES
             </div>
           </div>
           
           <!-- Adresse et contacts -->
-          <div style="font-size: 30px; line-height: 1.5; text-align: center; margin-bottom: 50px; color: #333; font-weight: 500;">
+          <div style="font-size: 30px; line-height: 1.5; text-align: center; margin-bottom: 50px; color: black; font-weight: 500;">
             <div style="margin-bottom: 15px;">Bonapriso, Rue VASNITEX, Immeuble ATLANTIS</div>
             <div style="margin-bottom: 15px;">Avenue Winton Churchill, Immeuble mitoyen à l'OAPI (Yaoundé)</div>
             <div style="margin-bottom: 15px;">BP 4962 Douala – Cameroun</div>
@@ -2206,14 +2190,16 @@ const handleDownloadCard = async () => {
             </div>
           </div>
           
+          <hr style="border-top: 1px dotted red; margin: 30px 0;" />
+
           <!-- Support technique -->
-          <div style="font-size: 32px; font-weight: 700; color: #1a2980; text-align: center; margin-top: 20px; margin-bottom: 60px; text-transform: uppercase; background: rgba(26, 41, 128, 0.1); padding: 25px; border-radius: 15px;">
+          <div style="font-size: 32px; font-weight: 700; color: black; text-align: center; margin-top: 20px; margin-bottom: 60px; text-transform: uppercase; background: rgba(255, 255, 255, 0.1); padding: 25px; border-radius: 15px;">
             Support Technique: +237 690 09 61 97 / +237 674 29 01 49
           </div>
           
           <!-- Notice -->
-          <div style="font-size: 26px; line-height: 1.4; text-align: center; margin-top: auto; color: #333; padding: 40px; border-top: 5px solid red; background: rgba(255, 0, 0, 0.05); border-radius: 10px;">
-            <strong>⚠️ IMPORTANT :</strong> Cette carte est strictement personnelle et est la propriété exclusive d'AMS INSURANCE.<br/>
+          <div style="font-size: 26px; line-height: 1.4; text-align: center; margin-top: auto; color: black; padding: 40px; border-top: 5px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.05); border-radius: 10px;">
+            <strong>⚠️ IMPORTANT :</strong> Cette carte est strictement personnelle et est la propriété exclusive d'HCSINSURANCE.<br/>
             En cas de perte ou vol, contactez immédiatement le support technique.
           </div>
         </div>
@@ -2229,7 +2215,7 @@ const handleDownloadCard = async () => {
       backgroundColor: null,
       logging: false,
       allowTaint: true,
-      imageTimeout: 15000
+      imageTimeout: 5000
     });
     
     document.body.removeChild(tempContainerVerso);
@@ -2246,32 +2232,32 @@ const handleDownloadCard = async () => {
     const pageHeight = 105;
     
     // Ajouter le recto
-    const rectoDataUrl = rectoCanvas.toDataURL('image/jpeg', 0.9);
+    const rectoDataUrl = rectoCanvas.toDataURL('image/jpeg', 0.95);
     pdf.addImage(rectoDataUrl, 'JPEG', 0, 0, pageWidth, pageHeight, '', 'FAST');
     
     // Ajouter le verso
     pdf.addPage();
-    const versoDataUrl = versoCanvas.toDataURL('image/jpeg', 0.9);
+    const versoDataUrl = versoCanvas.toDataURL('image/jpeg', 0.95);
     pdf.addImage(versoDataUrl, 'JPEG', 0, 0, pageWidth, pageHeight, '', 'FAST');
     
     // Propriétés du PDF
     pdf.setProperties({
       title: `Carte Bénéficiaire - ${ben.NOM_BEN} ${ben.PRE_BEN}`,
-      subject: 'Carte d\'identification bénéficiaire AMS Insurance',
-      author: 'AMS Insurance',
-      keywords: `carte, bénéficiaire, assurance, santé, AMS, QR code, matricule: ${ben.IDENTIFIANT_NATIONAL}`,
-      creator: 'AMS System'
+      subject: 'Carte d\'identification bénéficiaire HCSInsurance',
+      author: 'HCSInsurance',
+      keywords: `carte, bénéficiaire, assurance, santé, QR code, ${ben.IDENTIFIANT_NATIONAL}, ${ben.EMPLOYEUR || ''}`,
+      creator: 'HCSSystem'
     });
     
     // Télécharger le PDF
     const nomFichier = `Carte_${ben.NOM_BEN}_${ben.PRE_BEN}_${ben.IDENTIFIANT_NATIONAL || ben.ID_BEN}.pdf`;
     pdf.save(nomFichier);
     
-    showNotification('PDF téléchargé avec succès', 'success');
+    showNotification('Carte téléchargée avec succès!', 'success');
     
   } catch (error) {
-    console.error('Erreur lors du téléchargement du PDF:', error);
-    showNotification('Erreur lors du téléchargement du PDF: ' + error.message, 'error');
+    console.error('Erreur lors du téléchargement de la carte:', error);
+    showNotification('Erreur lors du téléchargement de la carte: ' + error.message, 'error');
   }
 };
 
@@ -4583,160 +4569,176 @@ const handleDownloadCard = async () => {
     );
   };
 
-  // RENDU DE LA MODALE DE LA CARTE
-   const renderCardModal = () => {
-    if (!showCard || !selectedBeneficiaireForCard) return null;
-    
-    const ben = selectedBeneficiaireForCard;
-    const qrCodeUrl = qrCodeUrls[ben.ID_BEN || ben.id];
-    
-    return (
-      <div className="modal-overlay" onClick={(e) => {
-        if (e.target.className === 'modal-overlay') {
-          handleCloseCard();
-        }
-      }}>
-        <div className="modal-content xlarge">
-          <div className="modal-header">
-            <h2>
-              <IdCard size={20} /> Carte Bénéficiaire - {ben.NOM_BEN} {ben.PRE_BEN}
-            </h2>
-            <button onClick={handleCloseCard} className="modal-close">
-              <X size={20} />
-            </button>
-          </div>
-          
-          <div className="modal-body">
-            <div className="card-preview-container">
-              <div className="card-preview-wrapper">
-                <div className="card-instructions">
-                  <div className="instructions-box">
-                    <h3><Info size={18} /> Instructions</h3>
-                    <ul>
-                      <li><strong>Format :</strong> A6 paysage (148mm x 105mm)</li>
-                      <li><strong>Recto :</strong> Photo + Nom + QR Code</li>
-                      <li><strong>Verso :</strong> Informations du courtier d'assurances</li>
-                      <li><strong>QR Code :</strong> Contient les informations du bénéficiaire</li>
-                      <li><strong>Validité :</strong> 1 an à partir de la date d'émission</li>
-                      <li><strong>Papier recommandé :</strong> Cartonné 250-300g/m²</li>
-                    </ul>
-                  </div>
+ // RENDU DE LA MODALE DE LA CARTE
+const renderCardModal = () => {
+  if (!showCard || !selectedBeneficiaireForCard) return null;
+  
+  const ben = selectedBeneficiaireForCard;
+  const qrCodeUrl = qrCodeUrls[ben.ID_BEN || ben.id];
+  const photoUrl = ben.PHOTO || ben.photo || ben.PHOTO_URL || 
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(ben.NOM_BEN + ' ' + ben.PRE_BEN)}&size=200&background=random`;
+  
+  return (
+    <div className="modal-overlay" onClick={(e) => {
+      if (e.target.className === 'modal-overlay') {
+        handleCloseCard();
+      }
+    }}>
+      <div className="modal-content xlarge">
+        <div className="modal-header">
+          <h2>
+            <IdCard size={20} /> Carte Bénéficiaire - {ben.NOM_BEN} {ben.PRE_BEN}
+          </h2>
+          <button onClick={handleCloseCard} className="modal-close">
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="modal-body">
+          <div className="card-preview-container">
+            <div className="card-preview-wrapper">
+              <div className="card-instructions">
+                <div className="instructions-box">
+                  <h3><Info size={18} /> Instructions</h3>
+                  <ul>
+                    <li><strong>Format :</strong> A6 paysage (148mm x 105mm)</li>
+                    <li><strong>Recto :</strong> Photo + QR Code + Nom</li>
+                    <li><strong>Verso :</strong> Informations du courtier d'assurances</li>
+                    <li><strong>QR Code :</strong> Contient l'identifiant national et l'employeur</li>
+                    <li><strong>Validité :</strong> 1 an à partir de la date d'émission</li>
+                    <li><strong>Papier recommandé :</strong> Cartonné 250-300g/m²</li>
+                  </ul>
+                </div>
+              </div>
+              
+              <div className="card-preview-area">
+                <div className="preview-controls">
+                  <button 
+                    className={`preview-control-btn ${cardSide === 'front' ? 'active' : ''}`}
+                    onClick={() => setCardSide('front')}
+                  >
+                    Recto
+                  </button>
+                  <button 
+                    className={`preview-control-btn ${cardSide === 'back' ? 'active' : ''}`}
+                    onClick={() => setCardSide('back')}
+                  >
+                    Verso
+                  </button>
                 </div>
                 
-                <div className="card-preview-area">
-                  <div className="preview-controls">
-                    <button 
-                      className={`preview-control-btn ${cardSide === 'front' ? 'active' : ''}`}
-                      onClick={() => setCardSide('front')}
-                    >
-                      Recto
-                    </button>
-                    <button 
-                      className={`preview-control-btn ${cardSide === 'back' ? 'active' : ''}`}
-                      onClick={() => setCardSide('back')}
-                    >
-                      Verso
-                    </button>
-                  </div>
-                  
-                  <div className="preview-custom-container">
-                   {cardSide === 'front' ? (
-  <div className="preview-custom-front">
-    <div className="preview-custom-content">
-      <div className="preview-custom-photo-section">
-        <div className="preview-custom-photo">
-          {ben.PHOTO ? (
-            <img 
-              src={ben.PHOTO} 
-              alt={`${ben.NOM_BEN} ${ben.PRE_BEN}`}
-              className="preview-custom-photo-img"
-              onError={(e) => {
-                e.target.onerror = null;
-                e.target.src = '';
-                e.target.parentElement.innerHTML = `<div class="photo-placeholder-large">${ben.SEX_BEN === 'F' ? '♀' : '♂'}</div>`;
-              }}
-            />
-          ) : (
-            <div className="photo-placeholder-large">
-              {ben.SEX_BEN === 'F' ? '♀' : '♂'}
-            </div>
-          )}
-        </div>
-        <div className="preview-custom-name-section">
-          <div className="preview-custom-name">
-            <strong>{ben.NOM_BEN || ''} {ben.PRE_BEN || ''}</strong>
-          </div>
-          <div className="preview-custom-employer">
-            {ben.EMPLOYEUR || 'Non spécifié'}
-          </div>
-          <div className="preview-custom-birthdate">
-            📅 {formatDate(ben.NAI_BEN)}
-          </div>
-        </div>
-      </div>
-      
-      <div className="preview-custom-qrcode-section">
-        <div className="preview-custom-qrcode-container">
-          {qrCodeUrl ? (
-            <img 
-              src={qrCodeUrl} 
-              alt="QR Code" 
-              className="preview-custom-qrcode"
-            />
-          ) : (
-            <div className="qrcode-loading">
-              <Loader2 size={24} className="animate-spin" />
-              <span>Chargement du QR Code...</span>
-            </div>
-          )}
-          <div className="preview-custom-qrcode-label">
-            Matricule: {ben.IDENTIFIANT_NATIONAL || `AMS${String(ben.ID_BEN || '000000').padStart(6, '0')}`}
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-) : (
-                      <div className="preview-custom-back">
-                        <div className="preview-custom-back-content">
-                          <div className="preview-custom-back-header">
-                            <h1 className="preview-custom-back-title">CARTE SANTÉ</h1>
+                <div className="preview-custom-container">
+                  {cardSide === 'front' ? (
+                    <div className="preview-custom-front">
+                      <div className="preview-custom-content">
+                        <div className="preview-custom-header">
+                          <div className="preview-custom-title">
+                            <div className="preview-custom-title-main">HCSINSURANCE</div>
+                            <div className="preview-custom-title-sub">CARTE TIERS PAYANT</div>
                           </div>
-                          
-                          <div className="preview-custom-back-subtitle">COURTIER D'ASSURANCES</div>
-                          
-                          <div className="preview-custom-back-address">
-                            Bonapriso, Rue VASNITEX, Immeuble ATLANTIS / Avenue Winton Churchill, Immeuble mitoyen à l'OAPI ( Yaoundé )<br />
-                            BP 4962 Douala – Cameroun<br />
-                            Tel : 2 33 42 08 74 / 6 99 90 60 88 / 690096197
+                        </div>
+                        
+                        <div className="preview-custom-body">
+                          <div className="preview-custom-photo-qr-container">
+               
+                            <div className="preview-custom-photo-section">
+                              <div className="preview-custom-photo-frame">
+                                <img 
+                                  src={photoUrl} 
+                                  alt="Photo bénéficiaire"
+                                  className="preview-custom-photo"
+                                  onError={(e) => {
+                                    e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(ben.NOM_BEN + ' ' + ben.PRE_BEN)}&size=200&background=random`;
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            
+        
+                            <div className="preview-custom-qr-section">
+                              <div className="preview-custom-qr-frame">
+                                {qrCodeUrl ? (
+                                  <img 
+                                    src={qrCodeUrl} 
+                                    alt="QR Code"
+                                    className="preview-custom-qr"
+                                  />
+                                ) : (
+                                  <div className="qr-placeholder">
+                                    <QrCode size={48} />
+                                    <span>QR Code à générer</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="preview-custom-qr-info">
+                                Identifiant: {ben.IDENTIFIANT_NATIONAL || 'N/A'}
+                                {ben.EMPLOYEUR && ben.EMPLOYEUR !== 'Non spécifié' && (
+                                  <div>Employeur: {ben.EMPLOYEUR}</div>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          
-                          <div className="preview-custom-back-support">
-                            Support Technique: +237 690 09 61 97 / +237 674 29 01 49
-                          </div>
-                          
-                          <div className="preview-custom-back-notice">
-                            Cette carte est strictement personnelle et est la propriété exclusive d'AMS INSURANCE. 
-                            En cas de perte, merci de bien vouloir nous la retourner.
+                        </div>
+                        
+                        <div className="preview-custom-footer">
+                          <div className="preview-custom-name-section">
+                            <div className="preview-custom-name">
+                              <strong>{ben.NOM_BEN || ''} {ben.PRE_BEN || ''}</strong>
+                            </div>
+                            <div className="preview-custom-details">
+                              <div>Tél: {ben.TELEPHONE_MOBILE || ''}</div>
+                              <div>Passport: {ben.NUM_PASSEPORT || ''}</div>
+                            </div>
+                            <div className="preview-custom-recto">recto</div>
                           </div>
                         </div>
                       </div>
-                    )}
+                    </div>
+                  ) : (
+                    <div className="preview-custom-back">
+                      <div className="preview-custom-back-content">
+                        <div className="preview-custom-back-header">
+                          <div className="preview-custom-back-logo">
+                            <img src={AMSlogo} alt="HCSLogo" />
+                          </div>
+                          <div className="preview-custom-back-title">
+                            <h1>HCSINSURANCE</h1>
+                            <div className="preview-custom-back-subtitle">CARTE SANTÉ</div>
+                            <div className="preview-custom-back-subtitle2">COURTIER D'ASSURANCES</div>
+                          </div>
+                        </div>
+                        
+                        <div className="preview-custom-back-address">
+                          Bonapriso, Rue VASNITEX, Immeuble ATLANTIS / Avenue Winton Churchill, Immeuble mitoyen à l'OAPI ( Yaoundé )<br />
+                          BP 4962 Douala – Cameroun<br />
+                          Tel : 2 33 42 08 74 / 6 99 90 60 88 / 690096197
+                        </div>
+                        
+                        <div className="preview-custom-back-support">
+                          Support Technique: +237 690 09 61 97 / +237 674 29 01 49
+                        </div>
+                        
+                        <div className="preview-custom-back-notice">
+                          Cette carte est strictement personnelle et est la propriété exclusive d'HCSINSURANCE. 
+                          En cas de perte, merci de bien vouloir nous la retourner.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="card-actions">
+                  <div className="action-buttons-grid">
+                    <button onClick={handleDownloadCard} className="btn-success download-btn">
+                      <Download size={18} /> Télécharger la carte
+                    </button>
+                    <button onClick={handleCloseCard} className="btn-secondary">
+                      <X size={18} /> Fermer
+                    </button>
                   </div>
                   
-                  <div className="card-actions">
-                    <div className="action-buttons-grid">
-                      <button onClick={handleDownloadCard} className="btn-success download-btn">
-                        <Download size={18} /> Télécharger PDF avec QR Code
-                      </button>
-                      <button onClick={handleCloseCard} className="btn-secondary">
-                        <X size={18} /> Fermer
-                      </button>
-                    </div>
-                    
-                    <div className="format-info">
-                      <small>Format : A6 paysage (148x105mm) - QR Code contient les informations du bénéficiaire</small>
-                    </div>
+                  <div className="format-info">
+                    <small>Format : A6 paysage (148x105mm) - QR Code contient: identifiant national et employeur</small>
                   </div>
                 </div>
               </div>
@@ -4744,8 +4746,9 @@ const handleDownloadCard = async () => {
           </div>
         </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   // RENDU DES REMBOURSEMENTS
   const renderRemboursementsModal = () => {

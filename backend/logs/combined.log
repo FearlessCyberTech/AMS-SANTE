@@ -1,0 +1,12 @@
+{"ip":"127.0.0.1","level":"warn","message":"Route non trouvée","method":"GET","path":"/api/consultations/types","service":"ams-sante-api","timestamp":"2026-01-17T09:14:28.395Z"}
+{"level":"info","message":"\u001b[0mGET /api/consultations/types \u001b[33m404\u001b[0m 4.858 ms - 116\u001b[0m","service":"ams-sante-api","timestamp":"2026-01-17T09:14:28.403Z"}
+{"ip":"127.0.0.1","level":"warn","message":"Route non trouvée","method":"GET","path":"/api/centres","service":"ams-sante-api","timestamp":"2026-01-17T09:14:28.405Z"}
+{"level":"info","message":"\u001b[0mGET /api/centres \u001b[33m404\u001b[0m 0.874 ms - 104\u001b[0m","service":"ams-sante-api","timestamp":"2026-01-17T09:14:28.406Z"}
+{"ip":"127.0.0.1","level":"warn","message":"Route non trouvée","method":"GET","path":"/api/consultations/types","service":"ams-sante-api","timestamp":"2026-01-17T09:14:28.460Z"}
+{"level":"info","message":"\u001b[0mGET /api/consultations/types \u001b[33m404\u001b[0m 0.694 ms - 116\u001b[0m","service":"ams-sante-api","timestamp":"2026-01-17T09:14:28.461Z"}
+{"ip":"127.0.0.1","level":"warn","message":"Route non trouvée","method":"GET","path":"/api/centres","service":"ams-sante-api","timestamp":"2026-01-17T09:14:28.463Z"}
+{"level":"info","message":"\u001b[0mGET /api/centres \u001b[33m404\u001b[0m 0.880 ms - 104\u001b[0m","service":"ams-sante-api","timestamp":"2026-01-17T09:14:28.464Z"}
+{"level":"info","message":"\u001b[0mGET /api/prestataires?page=1&limit=200&actif=1&type_prestataire=M%C3%A9decin&sortBy=nom&sortOrder=ASC \u001b[32m200\u001b[0m 361.896 ms - -\u001b[0m","service":"ams-sante-api","timestamp":"2026-01-17T09:14:28.762Z"}
+{"level":"info","message":"\u001b[0mGET /api/prestataires?page=1&limit=200&actif=1&type_prestataire=M%C3%A9decin&sortBy=nom&sortOrder=ASC \u001b[32m200\u001b[0m 278.174 ms - -\u001b[0m","service":"ams-sante-api","timestamp":"2026-01-17T09:14:29.054Z"}
+{"level":"info","message":"\u001b[0mGET /api/prestataires?page=1&limit=200&actif=1&type_prestataire=M%C3%A9decin&sortBy=nom&sortOrder=ASC \u001b[32m200\u001b[0m 267.355 ms - -\u001b[0m","service":"ams-sante-api","timestamp":"2026-01-17T09:14:29.328Z"}
+{"level":"info","message":"\u001b[0mGET /api/prestataires?page=1&limit=200&actif=1&type_prestataire=M%C3%A9decin&sortBy=nom&sortOrder=ASC \u001b[32m200\u001b[0m 264.586 ms - -\u001b[0m","service":"ams-sante-api","timestamp":"2026-01-17T09:14:29.601Z"}

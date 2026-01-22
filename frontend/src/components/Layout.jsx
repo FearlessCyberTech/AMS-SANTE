@@ -87,12 +87,12 @@ const Layout = () => {
         '/ticket-moderateur': ['SuperAdmin', 'Admin', 'Caissier'],
         '/reglements': ['SuperAdmin', 'Admin', 'Caissier'],
         '/gestion-financiere': ['SuperAdmin', 'Admin'],
-        '/litiges': ['SuperAdmin', 'Admin', 'Caissier'],
+        '/Prestations': ['SuperAdmin', 'Admin', 'Caissier'],
         '/statistiques': ['SuperAdmin', 'Admin', 'Medecin'],
         '/rapports': ['SuperAdmin', 'Admin', 'Medecin'],
         '/tableaux-bord': ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier', 'Secretaire', 'Caissier'],
         '/evacuations': ['SuperAdmin', 'Admin', 'Medecin'],
-        '/suivi-evacuations': ['SuperAdmin', 'Admin', 'Medecin'],
+        /*'/suivi-evacuations': ['SuperAdmin', 'Admin', 'Medecin'],*/
         '/controle-fraudes': ['SuperAdmin', 'Admin'],
         '/audit': ['SuperAdmin', 'Admin'],
         '/alertes-anomalies': ['SuperAdmin', 'Admin', 'Medecin', 'Caissier'],
@@ -103,7 +103,7 @@ const Layout = () => {
         '/evaluation-prestataires': ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier', 'Utilisateur'],
         '/administration': ['SuperAdmin', 'Admin'],
         '/parametres': ['SuperAdmin', 'Admin'],
-        '/geographie': ['SuperAdmin', 'Admin'],
+        '/importation': ['SuperAdmin', 'Admin'],
         '/nomenclatures': ['SuperAdmin', 'Admin', 'Medecin'],
         '/profil': ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier', 'Secretaire', 'Caissier', 'Utilisateur']
       };
@@ -231,13 +231,13 @@ const Layout = () => {
         roles: ['SuperAdmin', 'Admin'],
         translationKey: 'declarationReimbursement'
       },
-      // { 
-      //   path: '/litiges', 
-      //   icon: Scale, 
-      //   label: t('menu.disputes', 'Litiges'), 
-      //   roles: ['SuperAdmin', 'Admin', 'Caissier'],
-      //   translationKey: 'disputes'
-      // },
+       { 
+        path: '/Prestations', 
+        icon: Scale, 
+          label: t('menu.prestations','Prestations'), 
+          roles: ['SuperAdmin', 'Admin', 'Caissier'],
+         translationKey: 'prestations'
+       },
       // Statistiques et rapports (partie administration)
       { 
         path: '/statistiques', 
@@ -268,13 +268,13 @@ const Layout = () => {
         roles: ['SuperAdmin', 'Admin', 'Medecin'],
         translationKey: 'evacuations'
       },
-      { 
-        path: '/suivi-evacuations', 
-        icon: MapPin, 
-        label: t('menu.evacuationTracking', 'Suivi des Évacuations'), 
-        roles: ['SuperAdmin', 'Admin', 'Medecin'],
-        translationKey: 'evacuationTracking'
-      },
+      // { 
+      //   path: '/suivi-evacuations', 
+      //   icon: MapPin, 
+      //   label: t('menu.evacuationTracking', 'Suivi des Évacuations'), 
+      //   roles: ['SuperAdmin', 'Admin', 'Medecin'],
+      //   translationKey: 'evacuationTracking'
+      // },
       // Contrôle et audit (administration)
       { 
         path: '/controle-fraudes', 
@@ -349,11 +349,11 @@ const Layout = () => {
         translationKey: 'settings'
       },
       { 
-        path: '/geographie', 
+        path: '/importation', 
         icon: Map, 
-        label: t('menu.geography', 'Géographie'), 
+        label: t('menu.importation', 'Importation'), 
         roles: ['SuperAdmin', 'Admin'],
-        translationKey: 'geography'
+        translationKey: 'importation'
       },
       { 
         path: '/nomenclatures', 
@@ -462,7 +462,7 @@ const Layout = () => {
         ['/consultations', '/accords-prealables', '/prescriptions', '/dossiers-medicaux', '/teleconsultations', '/urgences'].includes(item.path)
       ),
       financier: items.filter(item => 
-        ['/paiements', '/ticket-moderateur', '/reglements', '/gestion-financiere', '/litiges'].includes(item.path)
+        ['/paiements', '/ticket-moderateur', '/reglements', '/gestion-financiere', '/Prestations'].includes(item.path)
       ),
       statistiques: items.filter(item => 
         ['/statistiques', '/rapports', '/tableaux-bord'].includes(item.path)
@@ -477,7 +477,7 @@ const Layout = () => {
         ['/reseau-soins', '/prestataires', '/centres-sante', '/conventions', '/evaluation-prestataires'].includes(item.path)
       ),
       administration: items.filter(item => 
-        ['/administration', '/parametres', '/geographie', '/nomenclatures'].includes(item.path)
+        ['/administration', '/parametres', '/importation', '/nomenclatures'].includes(item.path)
       ),
       profil: items.filter(item => 
         item.path === '/profil'
@@ -848,7 +848,7 @@ const Layout = () => {
                 const path = location.pathname;
                 if (path.includes('/beneficiaires')) return t('modules.beneficiaryManagement', 'Gestion des bénéficiaires');
                 if (path.includes('/consultations')) return t('modules.carePathway', 'Parcours de soins');
-                if (path.includes('/paiements') || path.includes('/reglements') || path.includes('/gestion-financiere') || path.includes('/litiges')) 
+                if (path.includes('/paiements') || path.includes('/reglements') || path.includes('/gestion-financiere') || path.includes('/Prestations')) 
                   return t('modules.financial', 'Financier');
                 if (path.includes('/prestataires')) return t('modules.careNetwork', 'Réseau de soins');
                 if (path.includes('/statistiques')) return t('modules.statistics', 'Statistiques');

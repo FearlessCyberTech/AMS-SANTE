@@ -1,6 +1,5 @@
 // src/components/biometrie/BiometrieEnrolement.jsx
-// Composant d'enrôlement biométrique avec données réelles
-// Version production corrigée - Prêt pour déploiement
+// Version corrigée utilisant les API réelles
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -72,8 +71,12 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 
-// Services API avec données réelles
-import { patientsAPI, authAPI } from '../../services/api';
+// Import des API réelles
+import { 
+  patientsAPI, 
+  authAPI, 
+  beneficiairesAPI
+} from '../../services/api';
 
 // =============== CONSTANTS & CONFIGURATIONS ===============
 const ETAPES = [
@@ -97,7 +100,8 @@ const DOIGTS_CONFIG = [
   { code: 'auriculaire_droit', label: 'Auriculaire droit', side: 'right', priority: 5, required: false }
 ];
 
-const FINGERPRINT_QUALITY_THRESHOLD = 60; // Seuil de qualité minimum pour les empreintes
+const FINGERPRINT_QUALITY_THRESHOLD = 60;
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 // =============== STYLED COMPONENTS ===============
 const GradientPaper = styled(Paper)(({ theme }) => ({
@@ -216,90 +220,6 @@ const calculateAge = (dateString) => {
   }
 };
 
-// =============== SIMULATED BIOMETRIC API ===============
-// Fonctions simulées en attendant l'implémentation réelle de l'API
-const biometrieAPI = {
-  async getByPatient(patientId) {
-    // Simulation - à remplacer par l'API réelle
-    return {
-      success: true,
-      data: []
-    };
-  },
-
-  async getStats(patientId) {
-    // Simulation - à remplacer par l'API réelle
-    return {
-      success: true,
-      stats: {
-        photo: false,
-        fingerprints: 0,
-        signature: false,
-        complet: false
-      }
-    };
-  },
-
-  async enregistrer(data) {
-    // Simulation - à remplacer par l'API réelle
-    console.log('Enregistrement biométrique:', data);
-    return {
-      success: true,
-      message: 'Données enregistrées avec succès',
-      data: {
-        id: Date.now(),
-        ...data
-      }
-    };
-  },
-
-  async scanFingerprint(data) {
-    // Simulation de la capture d'empreinte
-    console.log('Scan empreinte:', data);
-    
-    // Simuler un délai de capture
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Générer une qualité aléatoire entre 70 et 100 pour la simulation
-    const quality = Math.floor(Math.random() * 31) + 70;
-    
-    return {
-      success: quality >= FINGERPRINT_QUALITY_THRESHOLD,
-      template: `template_${data.finger}_${Date.now()}`,
-      quality: quality,
-      attempts: 1,
-      scannerInfo: { type: 'simulated', version: '1.0' }
-    };
-  },
-
-  async finalizeEnrollment(data) {
-    // Simulation - à remplacer par l'API réelle
-    console.log('Finalisation enrôlement:', data);
-    return {
-      success: true,
-      message: 'Enrôlement finalisé avec succès',
-      enrollmentId: `ENR_${Date.now()}`
-    };
-  },
-
-  async generateCertificate(patientId) {
-    // Simulation - à remplacer par l'API réelle
-    console.log('Génération certificat pour patient:', patientId);
-    return {
-      success: true,
-      certificateUrl: '#'
-    };
-  },
-
-  async getEnrollmentHistory(patientId) {
-    // Simulation - à remplacer par l'API réelle
-    return {
-      success: true,
-      history: []
-    };
-  }
-};
-
 // =============== MAIN COMPONENT ===============
 function BiometrieEnrolement() {
   // =============== STATE MANAGEMENT ===============
@@ -335,73 +255,56 @@ function BiometrieEnrolement() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // =============== UTILITY FUNCTIONS (déclarez-les en premier) ===============
-  
-  const updatePatientStats = useCallback(async () => {
-    if (!selectedPatient?.id) return;
+  // =============== EFFECTS ===============
+  useEffect(() => {
+    // Vérifier l'authentification
+    if (!authAPI.isAuthenticated()) {
+      window.location.href = '/login';
+      return;
+    }
+
+    // Si on change d'étape sans patient, retourner à l'étape 0
+    if (activeStep > 0 && !selectedPatient) {
+      setActiveStep(0);
+      setError('Veuillez sélectionner un patient');
+    }
+
+    // Charger l'historique si patient sélectionné
+    if (selectedPatient?.id) {
+      loadEnrollmentHistory();
+    }
+
+    // Nettoyage du stream vidéo
+    return () => {
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [selectedPatient, activeStep]);
+
+  useEffect(() => {
+    // Calculer la progression
+    const photoProgress = photo ? 100 : 0;
+    const capturedFingers = Object.values(empreintes).filter(e => e?.quality >= FINGERPRINT_QUALITY_THRESHOLD).length;
+    const empreintesProgress = (capturedFingers / 10) * 100;
+    const signatureProgress = signature ? 100 : 0;
     
-    try {
-      const response = await biometrieAPI.getStats(selectedPatient.id);
-      if (response.success) {
-        setPatientStats(response.stats);
-      }
-    } catch (error) {
-      console.error('Erreur mise à jour stats:', error);
+    setCaptureProgress({
+      photo: photoProgress,
+      empreintes: empreintesProgress,
+      signature: signatureProgress
+    });
+  }, [photo, empreintes, signature]);
+
+  useEffect(() => {
+    // Initialiser la webcam
+    if (activeStep === 1 && activeTab === 0) {
+      initWebcam();
     }
-  }, [selectedPatient]);
-
-  // =============== API FUNCTIONS (déclarez-les avant de les utiliser) ===============
-  
-  const savePhotoToAPI = useCallback(async (imageData) => {
-    try {
-      // VÉRIFICATION CRUCIALE : s'assurer que selectedPatient est défini
-      if (!selectedPatient || !selectedPatient.id) {
-        const errorMsg = 'Patient non sélectionné. Impossible de sauvegarder la photo.';
-        console.error('savePhotoToAPI: selectedPatient is null or missing id');
-        setError(errorMsg);
-        return { success: false, error: errorMsg };
-      }
-
-      setLoading(true);
-      
-      // Préparer les données pour l'API
-      const photoData = {
-        ID_BEN: selectedPatient.id,
-        TYPE_BIOMETRIE: 'photo',
-        DATA_BASE64: imageData.split(',')[1], // Enlever le préfixe data:image/jpeg;base64,
-        FORMAT_DATA: 'image/jpeg',
-        QUALITE: 85,
-        STATUT: 'complet',
-        metadata: {
-          device: 'webcam',
-          resolution: '640x480',
-          timestamp: new Date().toISOString(),
-          operator: authAPI.getUser()?.username || 'system'
-        }
-      };
-
-      const response = await biometrieAPI.enregistrer(photoData);
-
-      if (response.success) {
-        setPhoto(imageData);
-        await updatePatientStats();
-        return { success: true, data: response.data };
-      } else {
-        setError(response.message || 'Erreur lors de l\'enregistrement de la photo');
-        return { success: false, error: response.message };
-      }
-    } catch (error) {
-      console.error('Erreur sauvegarde photo:', error);
-      setError('Erreur de connexion lors de la sauvegarde de la photo');
-      return { success: false, error: error.message };
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedPatient, updatePatientStats]);
+  }, [activeStep, activeTab]);
 
   // =============== WEBCAM FUNCTIONS ===============
-  
-  const initWebcam = useCallback(async () => {
+  const initWebcam = async () => {
     try {
       if (!videoRef.current) return;
 
@@ -424,58 +327,25 @@ function BiometrieEnrolement() {
       console.error('Erreur initialisation webcam:', err);
       setError('Impossible d\'accéder à la webcam. Veuillez vérifier les permissions.');
     }
-  }, []);
+  };
 
-  const capturePhoto = useCallback(async () => {
-    // VÉRIFIER QU'UN PATIENT EST SÉLECTIONNÉ
-    if (!selectedPatient) {
-      setError('Veuillez sélectionner un patient avant de capturer une photo');
-      return;
-    }
-
-    if (!videoRef.current || !canvasRef.current) {
-      setError('Webcam non disponible');
-      return;
-    }
-
+  // =============== API FUNCTIONS ===============
+  const updatePatientStats = async () => {
+    if (!selectedPatient?.id) return;
+    
     try {
-      setLoading(true);
-      
-      // Créer un canvas pour capturer l'image
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-      
-      // Configurer le canvas avec la même taille que la vidéo
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      
-      // Dessiner l'image de la vidéo sur le canvas
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      // Convertir le canvas en image base64
-      const imageData = canvas.toDataURL('image/jpeg', 0.9);
-      
-      // Sauvegarder la photo
-      const result = await savePhotoToAPI(imageData);
-      
-      if (!result.success) {
-        setError('Erreur lors de l\'enregistrement de la photo');
+      const response = await beneficiairesAPI.getStats(selectedPatient.id);
+      if (response.success) {
+        setPatientStats(response.stats);
       }
     } catch (error) {
-      console.error('Erreur capture photo:', error);
-      setError('Erreur lors de la capture de la photo');
-    } finally {
-      setLoading(false);
+      console.error('Erreur mise à jour stats:', error);
     }
-  }, [selectedPatient, savePhotoToAPI]);
+  };
 
-  // Continuez avec les autres fonctions dans l'ordre logique...
-  
-  const loadPatientDetails = useCallback(async (patientId) => {
-    // Vérifier l'ID du patient
+  const loadPatientDetails = async (patientId) => {
     if (!patientId) {
-      console.error('loadPatientDetails: patientId is null or undefined');
+      console.error('loadPatientDetails: patientId is null');
       return null;
     }
     
@@ -488,7 +358,7 @@ function BiometrieEnrolement() {
         console.log('Patient chargé:', patientData);
         
         // Charger les données biométriques existantes
-        const biometricsResponse = await biometrieAPI.getByPatient(patientId);
+        const biometricsResponse = await beneficiairesAPI.getByPatient(patientId);
         
         if (biometricsResponse.success && biometricsResponse.data) {
           const existingData = {};
@@ -512,7 +382,7 @@ function BiometrieEnrolement() {
         }
         
         // Charger les statistiques
-        const statsResponse = await biometrieAPI.getStats(patientId);
+        const statsResponse = await beneficiairesAPI.getStats(patientId);
         if (statsResponse.success) {
           setPatientStats(statsResponse.stats);
         }
@@ -527,28 +397,106 @@ function BiometrieEnrolement() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  const loadEnrollmentHistory = useCallback(async () => {
+  const loadEnrollmentHistory = async () => {
     if (!selectedPatient?.id) return;
     
     try {
-      const response = await biometrieAPI.getEnrollmentHistory(selectedPatient.id);
+      const response = await beneficiairesAPI.getEnrollmentHistory(selectedPatient.id);
       if (response.success) {
         setEnrollmentHistory(response.history || []);
       }
     } catch (error) {
       console.error('Erreur chargement historique:', error);
     }
-  }, [selectedPatient]);
+  };
 
-  // Les autres fonctions continuent ici...
-  const scanFingerprintAPI = useCallback(async (fingerCode) => {
+  const savePhotoToAPI = async (imageData) => {
+    try {
+      if (!selectedPatient || !selectedPatient.id) {
+        setError('Patient non sélectionné. Impossible de sauvegarder la photo.');
+        return { success: false, error: 'Patient non sélectionné' };
+      }
+
+      setLoading(true);
+      
+      const photoData = {
+        ID_BEN: selectedPatient.id,
+        TYPE_BIOMETRIE: 'photo',
+        DATA_BASE64: imageData.split(',')[1],
+        FORMAT_DATA: 'image/jpeg',
+        QUALITE: 85,
+        STATUT: 'complet',
+        metadata: {
+          device: 'webcam',
+          resolution: '640x480',
+          timestamp: new Date().toISOString(),
+          operator: authAPI.getUser()?.username || 'system'
+        }
+      };
+
+      const response = await beneficiairesAPI.enregistrer(photoData);
+
+      if (response.success) {
+        setPhoto(imageData);
+        await updatePatientStats();
+        return { success: true, data: response.data };
+      } else {
+        setError(response.message || 'Erreur lors de l\'enregistrement de la photo');
+        return { success: false, error: response.message };
+      }
+    } catch (error) {
+      console.error('Erreur sauvegarde photo:', error);
+      setError('Erreur de connexion lors de la sauvegarde de la photo');
+      return { success: false, error: error.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const capturePhoto = async () => {
+    if (!selectedPatient) {
+      setError('Veuillez sélectionner un patient avant de capturer une photo');
+      return;
+    }
+
+    if (!videoRef.current || !canvasRef.current) {
+      setError('Webcam non disponible');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      const imageData = canvas.toDataURL('image/jpeg', 0.9);
+      const result = await savePhotoToAPI(imageData);
+      
+      if (!result.success) {
+        setError('Erreur lors de l\'enregistrement de la photo');
+      }
+    } catch (error) {
+      console.error('Erreur capture photo:', error);
+      setError('Erreur lors de la capture de la photo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const scanFingerprintAPI = async (fingerCode) => {
     try {
       setScanningFinger(fingerCode);
       setScanProgress(0);
       
-      // Simuler la progression du scan
+      // Simulation de progression (à remplacer par le vrai scanner)
       const progressInterval = setInterval(() => {
         setScanProgress(prev => {
           if (prev >= 100) {
@@ -559,8 +507,8 @@ function BiometrieEnrolement() {
         });
       }, 300);
 
-      // Appel API au scanner
-      const response = await biometrieAPI.scanFingerprint({
+      // Appel au vrai scanner
+      const response = await beneficiairesAPI.scanFingerprint({
         patientId: selectedPatient.id,
         finger: fingerCode,
         hand: fingerCode.includes('gauche') ? 'left' : 'right',
@@ -576,7 +524,7 @@ function BiometrieEnrolement() {
           template: response.template,
           quality: response.quality || 0,
           timestamp: new Date().toISOString(),
-          image: null, // À remplacer par l'image réelle du scanner
+          image: null,
           attempts: response.attempts,
           scannerInfo: response.scannerInfo
         };
@@ -586,7 +534,7 @@ function BiometrieEnrolement() {
           [fingerCode]: fingerData
         }));
 
-        // Sauvegarde automatique si activée
+        // Sauvegarde automatique
         if (autoSave) {
           const empreinteData = {
             ID_BEN: selectedPatient.id,
@@ -603,7 +551,7 @@ function BiometrieEnrolement() {
             }
           };
           
-          await biometrieAPI.enregistrer(empreinteData);
+          await beneficiairesAPI.enregistrer(empreinteData);
           await updatePatientStats();
         }
 
@@ -620,13 +568,18 @@ function BiometrieEnrolement() {
       setScanningFinger(null);
       setScanProgress(0);
     }
-  }, [selectedPatient, autoSave, updatePatientStats]); // Ajouter updatePatientStats aux dépendances
+  };
 
-  const saveSignatureToAPI = useCallback(async (signatureData) => {
+  const saveSignatureToAPI = async (signatureData) => {
     try {
+      if (!selectedPatient || !selectedPatient.id) {
+        setError('Patient non sélectionné');
+        return { success: false, error: 'Patient non sélectionné' };
+      }
+
       setLoading(true);
       
-      const signatureBase64 = signatureData.split(',')[1]; // Enlever le préfixe
+      const signatureBase64 = signatureData.split(',')[1];
       
       const signatureAPIData = {
         ID_BEN: selectedPatient.id,
@@ -642,7 +595,7 @@ function BiometrieEnrolement() {
         }
       };
 
-      const response = await biometrieAPI.enregistrer(signatureAPIData);
+      const response = await beneficiairesAPI.enregistrer(signatureAPIData);
 
       if (response.success) {
         setSignature(signatureData);
@@ -659,95 +612,64 @@ function BiometrieEnrolement() {
     } finally {
       setLoading(false);
     }
-  }, [selectedPatient, updatePatientStats]); // Ajouter updatePatientStats aux dépendances
-
-  // =============== EFFECTS ===============
-  useEffect(() => {
-    // Si on change d'étape sans patient, retourner à l'étape 0
-    if (activeStep > 0 && !selectedPatient) {
-      console.warn('Aucun patient sélectionné, retour à l\'étape de recherche');
-      setActiveStep(0);
-      setError('Veuillez sélectionner un patient');
-    }
-  }, [activeStep, selectedPatient]);
-
-  useEffect(() => {
-    // Vérifier l'authentification
-    if (!authAPI.isAuthenticated()) {
-      window.location.href = '/login';
-      return;
-    }
-
-    // Charger l'historique si patient sélectionné
-    if (selectedPatient?.id) {
-      loadEnrollmentHistory();
-    }
-
-    // Nettoyage du stream vidéo lors du démontage
-    return () => {
-      if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [selectedPatient]);
-
-  useEffect(() => {
-    // Calculer la progression
-    const photoProgress = photo ? 100 : 0;
-    const capturedFingers = Object.values(empreintes).filter(e => e?.quality >= FINGERPRINT_QUALITY_THRESHOLD).length;
-    const empreintesProgress = (capturedFingers / 10) * 100;
-    const signatureProgress = signature ? 100 : 0;
-    
-    setCaptureProgress({
-      photo: photoProgress,
-      empreintes: empreintesProgress,
-      signature: signatureProgress
-    });
-  }, [photo, empreintes, signature]);
-
-  useEffect(() => {
-    // Initialiser la webcam quand l'étape de photo est active
-    if (activeStep === 1 && activeTab === 0) {
-      initWebcam();
-    }
-  }, [activeStep, activeTab]);
-
-
+  };
 
   // =============== HANDLER FUNCTIONS ===============
-  const handleSearch = useCallback(async () => {
-    if (searchTerm.trim().length < 2) {
-      setError('Veuillez saisir au moins 2 caractères');
+ // 2. Dans votre handleSearch fonction (ligne ~629)
+const handleSearch = async (searchTerm) => {
+  try {
+    setLoading(true);
+    const result = await beneficiairesAPI.searchAdvanced(searchTerm);
+    
+    if (result.success && Array.isArray(result.beneficiaires)) {
+      // Adaptez selon la structure de votre composant
+      setBeneficiaires(result.beneficiaires);
+      setFilteredBeneficiaires(result.beneficiaires);
+    } else {
+      setBeneficiaires([]);
+      setFilteredBeneficiaires([]);
+    }
+  } catch (error) {
+    console.error('Erreur recherche:', error);
+    setBeneficiaires([]);
+    setFilteredBeneficiaires([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+const onKeyPress = async (event) => {
+  if (event.key === 'Enter') {
+    const searchTerm = event.target.value;
+    
+    if (searchTerm.trim() === '') {
+      // Réinitialiser à la liste complète
+      setFilteredBeneficiaires(beneficiaires);
       return;
     }
-
-    setLoading(true);
-    setError(null);
-    setPatients([]);
-
+    
     try {
-      const response = await patientsAPI.search(searchTerm, {}, 10);
-
-      if (response.success && response.patients) {
-        setPatients(response.patients);
-        if (response.patients.length === 0) {
-          setError('Aucun patient trouvé');
-        }
+      setLoading(true);
+      const searchResults = await beneficiairesAPI.searchAdvanced(searchTerm);
+      
+      if (searchResults.success && Array.isArray(searchResults.beneficiaires)) {
+        setFilteredBeneficiaires(searchResults.beneficiaires);
       } else {
-        setError(response.message || 'Erreur lors de la recherche');
+        setFilteredBeneficiaires([]);
       }
-    } catch (err) {
-      console.error('Erreur recherche:', err);
-      setError('Erreur de connexion au serveur');
+    } catch (error) {
+      console.error('Erreur recherche:', error);
+      setFilteredBeneficiaires([]);
     } finally {
       setLoading(false);
     }
-  }, [searchTerm]);
+  }
+};
 
- const handleSelectPatient = useCallback(async (patient) => {
+  const handleSelectPatient = async (patient) => {
     if (!patient || !patient.id) {
-        setError('Patient invalide');
-        return;
+      setError('Patient invalide');
+      return;
     }
     
     setSelectedPatient(patient);
@@ -764,9 +686,9 @@ function BiometrieEnrolement() {
     await loadPatientDetails(patient.id);
     
     setActiveStep(1);
-}, [loadPatientDetails]);
+  };
 
-  const handleFileUpload = useCallback(async (event) => {
+  const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -775,7 +697,7 @@ function BiometrieEnrolement() {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) { // 5MB max
+    if (file.size > MAX_FILE_SIZE) {
       setError('L\'image ne doit pas dépasser 5MB');
       return;
     }
@@ -804,9 +726,9 @@ function BiometrieEnrolement() {
       setError('Erreur lors du téléchargement de la photo');
       setLoading(false);
     }
-  }, [savePhotoToAPI]);
+  };
 
-  const captureEmpreinte = useCallback(async (doigt) => {
+  const captureEmpreinte = async (doigt) => {
     if (scanningFinger) {
       setError('Une capture est déjà en cours');
       return;
@@ -815,12 +737,11 @@ function BiometrieEnrolement() {
     const result = await scanFingerprintAPI(doigt);
     
     if (!result.success) {
-      // L'erreur est déjà définie dans scanFingerprintAPI
       console.warn(`Capture échouée pour ${doigt}:`, result.error);
     }
-  }, [scanningFinger, scanFingerprintAPI]);
+  };
 
-  const retryFingerCapture = useCallback(async (doigt) => {
+  const retryFingerCapture = async (doigt) => {
     setEmpreintes(prev => {
       const newEmpreintes = { ...prev };
       delete newEmpreintes[doigt];
@@ -828,21 +749,19 @@ function BiometrieEnrolement() {
     });
     
     await captureEmpreinte(doigt);
-  }, [captureEmpreinte]);
+  };
 
-  const saveSignature = useCallback(async () => {
+  const saveSignature = async () => {
     if (!signatureRef.current) {
       setError('Canvas de signature non disponible');
       return;
     }
 
-    // Créer un canvas pour capturer la signature
     const canvas = document.createElement('canvas');
     canvas.width = 800;
     canvas.height = 300;
     const context = canvas.getContext('2d');
     
-    // Récupérer le canvas de signature
     const signatureCanvas = signatureRef.current;
     const signatureContext = signatureCanvas.getContext('2d');
     
@@ -863,7 +782,6 @@ function BiometrieEnrolement() {
     }
 
     try {
-      // Dessiner la signature sur le nouveau canvas avec fond blanc
       context.fillStyle = 'white';
       context.fillRect(0, 0, canvas.width, canvas.height);
       context.drawImage(signatureCanvas, 0, 0);
@@ -878,24 +796,25 @@ function BiometrieEnrolement() {
       console.error('Erreur enregistrement signature:', error);
       setError('Erreur lors de l\'enregistrement de la signature');
     }
-  }, [saveSignatureToAPI]);
+  };
 
-  const clearSignature = useCallback(() => {
+  const clearSignature = () => {
     if (signatureRef.current) {
       const canvas = signatureRef.current;
       const context = canvas.getContext('2d');
       context.clearRect(0, 0, canvas.width, canvas.height);
       setSignature(null);
     }
-  }, []);
+  };
 
-  const handleValidate = useCallback(async () => {
+  const handleValidate = async () => {
     setLoading(true);
     setError(null);
 
-       if (!selectedPatient || !selectedPatient.id) {
-        setError('Aucun patient sélectionné');
-        return;
+    if (!selectedPatient || !selectedPatient.id) {
+      setError('Aucun patient sélectionné');
+      setLoading(false);
+      return;
     }
 
     try {
@@ -911,16 +830,19 @@ function BiometrieEnrolement() {
 
       if (!photo) {
         setError('Photo d\'identité requise');
+        setLoading(false);
         return;
       }
 
       if (!hasRequiredFingers || validFingers < 2) {
         setError('Au moins 2 empreintes de qualité (pouces gauche et droit) sont requises');
+        setLoading(false);
         return;
       }
 
       if (!signature) {
         setError('Signature requise');
+        setLoading(false);
         return;
       }
 
@@ -941,14 +863,14 @@ function BiometrieEnrolement() {
       };
 
       // Finaliser l'enrôlement
-      const finalizeResponse = await biometrieAPI.finalizeEnrollment(enrollmentData);
+      const finalizeResponse = await beneficiairesAPI.finalizeEnrollment(enrollmentData);
 
       if (finalizeResponse.success) {
         setSuccess('Enrôlement biométrique finalisé avec succès !');
         setActiveStep(4);
         
         // Générer le certificat
-        await biometrieAPI.generateCertificate(selectedPatient.id);
+        await beneficiairesAPI.generateCertificate(selectedPatient.id);
         
         // Recharger l'historique
         await loadEnrollmentHistory();
@@ -961,16 +883,14 @@ function BiometrieEnrolement() {
     } finally {
       setLoading(false);
     }
-  }, [photo, empreintes, signature, selectedPatient, loadEnrollmentHistory]);
+  };
 
-  const handleReset = useCallback(() => {
-    // Arrêter le flux vidéo
+  const handleReset = () => {
     if (videoStream) {
       videoStream.getTracks().forEach(track => track.stop());
       setVideoStream(null);
     }
     
-    // Réinitialiser les états
     setActiveStep(0);
     setSelectedPatient(null);
     setPhoto(null);
@@ -983,7 +903,6 @@ function BiometrieEnrolement() {
     setScanningFinger(null);
     setScanProgress(0);
     
-    // Réinitialiser les refs
     if (signatureRef.current) {
       const canvas = signatureRef.current;
       const context = canvas.getContext('2d');
@@ -997,18 +916,18 @@ function BiometrieEnrolement() {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-  }, [videoStream]);
+  };
 
-  const handleDownloadCertificate = useCallback(async () => {
+  const handleDownloadCertificate = async () => {
     try {
       if (!selectedPatient || !selectedPatient.id) {
         setError('Aucun patient sélectionné');
         return;
-    }
+      }
 
-      const response = await biometrieAPI.generateCertificate(selectedPatient.id);
+      const response = await beneficiairesAPI.generateCertificate(selectedPatient.id);
       if (response.success && response.certificateUrl) {
-        // Pour la simulation, créer un certificat PDF simulé
+        // Créer un certificat PDF simulé
         const certificateContent = `
           CERTIFICAT D'ENRÔLEMENT BIOMÉTRIQUE
           
@@ -1025,11 +944,9 @@ function BiometrieEnrolement() {
           Ce certificat atteste que le patient a bien été enrôlé dans le système biométrique.
         `;
         
-        // Créer un blob avec le contenu
         const blob = new Blob([certificateContent], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         
-        // Créer un lien temporaire pour le téléchargement
         const link = document.createElement('a');
         link.href = url;
         link.download = `certificat_biometrique_${selectedPatient.id}_${new Date().toISOString().split('T')[0]}.txt`;
@@ -1037,7 +954,6 @@ function BiometrieEnrolement() {
         link.click();
         document.body.removeChild(link);
         
-        // Libérer l'URL
         URL.revokeObjectURL(url);
       } else {
         setError('Certificat non disponible');
@@ -1046,9 +962,9 @@ function BiometrieEnrolement() {
       console.error('Erreur téléchargement certificat:', error);
       setError('Erreur lors de la génération du certificat');
     }
-  }, [selectedPatient, photo, empreintes, signature]);
+  };
 
-  const handleViewBiometricData = useCallback(async (type, finger = null) => {
+  const handleViewBiometricData = async (type, finger = null) => {
     try {
       let data;
       
@@ -1076,7 +992,7 @@ function BiometrieEnrolement() {
       console.error('Erreur affichage données:', error);
       setError('Erreur lors de l\'affichage des données');
     }
-  }, [photo, signature, empreintes]);
+  };
 
   // =============== RENDER FUNCTIONS ===============
   const renderPatientSearch = () => (
@@ -1220,164 +1136,164 @@ function BiometrieEnrolement() {
 
     return (
       <Box sx={{ py: 2 }}>
-      <Typography variant="h5" gutterBottom color="primary" fontWeight={600}>
-        <CameraIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-        Capture Photo d'Identité
-      </Typography>
+        <Typography variant="h5" gutterBottom color="primary" fontWeight={600}>
+          <CameraIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+          Capture Photo d'Identité
+        </Typography>
 
-      {selectedPatient && (
-        <Card sx={{ mb: 3, bgcolor: 'background.default' }}>
-          <CardContent>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item>
-                <Avatar sx={{ width: 60, height: 60, bgcolor: 'primary.main' }}>
-                  {selectedPatient.nom?.charAt(0)}{selectedPatient.prenom?.charAt(0)}
-                </Avatar>
+        {selectedPatient && (
+          <Card sx={{ mb: 3, bgcolor: 'background.default' }}>
+            <CardContent>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item>
+                  <Avatar sx={{ width: 60, height: 60, bgcolor: 'primary.main' }}>
+                    {selectedPatient.nom?.charAt(0)}{selectedPatient.prenom?.charAt(0)}
+                  </Avatar>
+                </Grid>
+                <Grid item xs>
+                  <Typography variant="h6">
+                    {selectedPatient.nom} {selectedPatient.prenom}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    ID: {selectedPatient.id} • {selectedPatient.telephone}
+                  </Typography>
+                </Grid>
+                <Grid item>
+                  <StatusBadge status={photo ? 'complete' : 'incomplete'}>
+                    {photo ? '✓ Photo capturée' : '✗ Photo requise'}
+                  </StatusBadge>
+                </Grid>
               </Grid>
-              <Grid item xs>
-                <Typography variant="h6">
-                  {selectedPatient.nom} {selectedPatient.prenom}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  ID: {selectedPatient.id} • {selectedPatient.telephone}
-                </Typography>
-              </Grid>
-              <Grid item>
-                <StatusBadge status={photo ? 'complete' : 'incomplete'}>
-                  {photo ? '✓ Photo capturée' : '✗ Photo requise'}
-                </StatusBadge>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        )}
 
-      <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 3 }}>
-        <Tab icon={<CameraIcon />} label="Webcam" />
-        <Tab icon={<PhotoLibraryIcon />} label="Upload fichier" />
-      </Tabs>
+        <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 3 }}>
+          <Tab icon={<CameraIcon />} label="Webcam" />
+          <Tab icon={<PhotoLibraryIcon />} label="Upload fichier" />
+        </Tabs>
 
-      {activeTab === 0 ? (
-        <Grid container spacing={4}>
-          <Grid item xs={12} md={7}>
-            <WebcamContainer>
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-              <canvas
-                ref={canvasRef}
-                style={{ display: 'none' }}
-              />
-              <CaptureButton
-                variant="contained"
-                startIcon={<CameraIcon />}
-                onClick={capturePhoto}
-                disabled={loading}
-              >
-                {loading ? 'Capture en cours...' : 'Prendre la photo'}
-              </CaptureButton>
-              
-              <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
-                <Tooltip title="Indications photo">
-                  <Alert severity="info" sx={{ maxWidth: 300 }}>
-                    Assurez-vous que le visage est bien visible et éclairé
-                  </Alert>
-                </Tooltip>
-              </Box>
-            </WebcamContainer>
-          </Grid>
-          
-          <Grid item xs={12} md={5}>
-            <StepCard active={true}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {photo ? 'Photo capturée' : 'Aperçu'}
-                </Typography>
+        {activeTab === 0 ? (
+          <Grid container spacing={4}>
+            <Grid item xs={12} md={7}>
+              <WebcamContainer>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+                <canvas
+                  ref={canvasRef}
+                  style={{ display: 'none' }}
+                />
+                <CaptureButton
+                  variant="contained"
+                  startIcon={<CameraIcon />}
+                  onClick={capturePhoto}
+                  disabled={loading}
+                >
+                  {loading ? 'Capture en cours...' : 'Prendre la photo'}
+                </CaptureButton>
                 
-                {photo ? (
-                  <Box
-                    component="img"
-                    src={photo}
-                    alt="Photo patient"
-                    sx={{
-                      width: '100%',
-                      borderRadius: 2,
-                      border: '2px solid',
-                      borderColor: 'success.main',
-                      boxShadow: 3
-                    }}
-                  />
-                ) : (
-                  <Box
-                    sx={{
-                      width: '100%',
-                      height: 300,
-                      bgcolor: 'grey.100',
-                      borderRadius: 2,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexDirection: 'column',
-                      gap: 2
-                    }}
-                  >
-                    <CameraIcon sx={{ fontSize: 64, color: 'grey.400' }} />
-                    <Typography color="text.secondary" align="center">
-                      Aperçu de la photo<br />apparaîtra ici
-                    </Typography>
-                  </Box>
-                )}
-              </CardContent>
-            </StepCard>
+                <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
+                  <Tooltip title="Indications photo">
+                    <Alert severity="info" sx={{ maxWidth: 300 }}>
+                      Assurez-vous que le visage est bien visible et éclairé
+                    </Alert>
+                  </Tooltip>
+                </Box>
+              </WebcamContainer>
+            </Grid>
+            
+            <Grid item xs={12} md={5}>
+              <StepCard active={true}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    {photo ? 'Photo capturée' : 'Aperçu'}
+                  </Typography>
+                  
+                  {photo ? (
+                    <Box
+                      component="img"
+                      src={photo}
+                      alt="Photo patient"
+                      sx={{
+                        width: '100%',
+                        borderRadius: 2,
+                        border: '2px solid',
+                        borderColor: 'success.main',
+                        boxShadow: 3
+                      }}
+                    />
+                  ) : (
+                    <Box
+                      sx={{
+                        width: '100%',
+                        height: 300,
+                        bgcolor: 'grey.100',
+                        borderRadius: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'column',
+                        gap: 2
+                      }}
+                    >
+                      <CameraIcon sx={{ fontSize: 64, color: 'grey.400' }} />
+                      <Typography color="text.secondary" align="center">
+                        Aperçu de la photo<br />apparaîtra ici
+                      </Typography>
+                    </Box>
+                  )}
+                </CardContent>
+              </StepCard>
+            </Grid>
           </Grid>
-        </Grid>
-      ) : (
-        <Box sx={{ textAlign: 'center', py: 4 }}>
-          <input
-            type="file"
-            accept="image/*"
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            style={{ display: 'none' }}
-          />
+        ) : (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <input
+              type="file"
+              accept="image/*"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              style={{ display: 'none' }}
+            />
+            <Button
+              variant="contained"
+              startIcon={<CloudUploadIcon />}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              size="large"
+            >
+              {loading ? 'Chargement...' : 'Choisir un fichier image'}
+            </Button>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              Formats acceptés: JPG, PNG, GIF • Taille max: 5MB
+            </Typography>
+          </Box>
+        )}
+
+        <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => setActiveStep(0)}
+            disabled={loading}
+          >
+            Retour recherche
+          </Button>
           <Button
             variant="contained"
-            startIcon={<CloudUploadIcon />}
-            onClick={() => fileInputRef.current?.click()}
-            disabled={loading}
-            size="large"
+            endIcon={<FingerprintIcon />}
+            onClick={() => setActiveStep(2)}
+            disabled={!photo || loading}
+            sx={{ flexGrow: 1 }}
           >
-            {loading ? 'Chargement...' : 'Choisir un fichier image'}
+            Continuer vers empreintes
           </Button>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-            Formats acceptés: JPG, PNG, GIF • Taille max: 5MB
-          </Typography>
         </Box>
-      )}
-
-      <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => setActiveStep(0)}
-          disabled={loading}
-        >
-          Retour recherche
-        </Button>
-        <Button
-          variant="contained"
-          endIcon={<FingerprintIcon />}
-          onClick={() => setActiveStep(2)}
-          disabled={!photo || loading}
-          sx={{ flexGrow: 1 }}
-        >
-          Continuer vers empreintes
-        </Button>
       </Box>
-    </Box>
     );
   };
 
@@ -1685,7 +1601,6 @@ function BiometrieEnrolement() {
                     ctx.lineCap = 'round';
                     ctx.lineJoin = 'round';
                     
-                    // Activer le dessin
                     canvas.isDrawing = true;
                   }}
                   onMouseMove={(e) => {

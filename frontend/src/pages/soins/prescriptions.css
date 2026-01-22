@@ -692,3 +692,18 @@
   font-style: italic;
   margin-bottom: 10px;
 }
+
+.medecin-consultation-row {
+      background-color: #f0f9ff !important;
+      border-left: 4px solid #1890ff !important;
+    }
+    .medecin-consultation-row:hover {
+      background-color: #e6f7ff !important;
+    }
+    .acte-manuel-row {
+      background-color: #fff7e6 !important;
+      border-left: 4px solid #fa8c16 !important;
+    }
+    .acte-manuel-row:hover {
+      background-color: #ffe7ba !important;
+    }

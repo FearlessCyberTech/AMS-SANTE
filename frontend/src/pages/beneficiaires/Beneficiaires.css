@@ -4291,3 +4291,211 @@ input[name="NUM_CAR"]:disabled {
   text-align: center;
   margin-top: 10px;
 }
+
+/* Styles pour la carte dans la modal */
+.preview-custom-front, .preview-custom-back {
+  width: 100%;
+  height: 500px;
+  border-radius: 20px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.preview-custom-front {
+  background: linear-gradient(135deg, #1a2980 0%, #26d0ce 100%);
+}
+
+.preview-custom-back {
+  background: linear-gradient(135deg, #1a2980 0%, #26d0ce 100%);
+}
+
+.preview-custom-content {
+  position: relative;
+  height: 100%;
+  padding: 30px;
+  color: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-custom-header {
+  margin-bottom: 20px;
+}
+
+.preview-custom-title-main {
+  font-size: 32px;
+  font-weight: 900;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.preview-custom-title-sub {
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+  text-transform: uppercase;
+  margin-top: 5px;
+}
+
+.preview-custom-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.preview-custom-empty-space {
+  height: 200px;
+}
+
+.preview-custom-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.preview-custom-name-section {
+  text-align: left;
+}
+
+.preview-custom-name {
+  font-size: 24px;
+  font-weight: 900;
+  color: white;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.preview-custom-recto {
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.preview-custom-qrcode-section {
+  text-align: right;
+}
+
+.preview-custom-qrcode-container {
+  display: inline-block;
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+}
+
+.preview-custom-qrcode {
+  width: 150px;
+  height: 150px;
+}
+
+.preview-custom-qrcode-label {
+  margin-top: 8px;
+  color: #333;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.qrcode-loading {
+  width: 150px;
+  height: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  border-radius: 10px;
+}
+
+.qrcode-fallback {
+  width: 150px;
+  height: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #333;
+  font-weight: bold;
+  text-align: center;
+  padding: 10px;
+}
+
+.preview-custom-back-content {
+  height: 100%;
+  padding: 30px;
+  color: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-custom-back-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.preview-custom-back-logo img {
+  width: 60px;
+  height: auto;
+}
+
+.preview-custom-back-title h1 {
+  font-size: 32px;
+  font-weight: 900;
+  color: white;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.preview-custom-back-subtitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+  text-transform: uppercase;
+}
+
+.preview-custom-back-subtitle2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.preview-custom-back-address {
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+  margin-bottom: 20px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.preview-custom-back-support {
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+  text-align: center;
+  margin-top: 10px;
+  margin-bottom: 30px;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 15px;
+  border-radius: 10px;
+}
+
+.preview-custom-back-notice {
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+  margin-top: auto;
+  color: white;
+  padding: 20px;
+  border-top: 3px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}

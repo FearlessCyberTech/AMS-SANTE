@@ -1,57 +1,35 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { message, Modal, Spin, Card, Row, Col, Form, Input, Select, DatePicker, 
+         Button, Steps, Tag, Descriptions, Divider, Upload, Checkbox, Slider, 
+         Tooltip, Badge, Tabs, Progress, Alert, Collapse, Statistic, Radio, 
+         Table, Space, Typography, Empty, Popconfirm } from 'antd';
+import { 
+  SearchOutlined, UserOutlined, MedicineBoxOutlined, FileTextOutlined,
+  DollarOutlined, PrinterOutlined, CameraOutlined, ArrowLeftOutlined,
+  ArrowRightOutlined, CheckCircleOutlined, SyncOutlined, CloseCircleOutlined,
+  PlusOutlined, 
+  FileDoneOutlined,
+  IdcardOutlined, BarcodeOutlined, TagsOutlined, ReloadOutlined,
+  HistoryOutlined,
+  EyeOutlined,
+  DownloadOutlined
+} from '@ant-design/icons';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { useTranslation } from 'react-i18next';
 import api, { centresAPI, beneficiairesAPI, prestatairesAPI, consultationsAPI } from '../../services/api';
-import './Consultations.css';
-
-// Icônes
-import {
-  FaUserMd,
-  FaUserInjured,
-  FaFileMedical,
-  FaMoneyBillWave,
-  FaPrint,
-  FaCamera,
-  FaSearch,
-  FaArrowLeft,
-  FaArrowRight,
-  FaCheck,
-  FaPlus,
-  FaEuroSign,
-  FaStethoscope,
-  FaNotesMedical,
-  FaClipboardCheck,
-  FaFileInvoiceDollar,
-  FaCalendarAlt,
-  FaWeight,
-  FaRulerVertical,
-  FaThermometerHalf,
-  FaHeartbeat,
-  FaTint,
-  FaIdCard,
-  FaBarcode,
-  FaUserTag,
-  FaSyncAlt,
-  FaTimes,
-  FaExclamationTriangle,
-  FaList,
-  FaHospital,
-  FaBuilding,
-  FaPhone,
-  FaEnvelope,
-  FaMapMarkerAlt,
-  FaUsers,
-  FaInfoCircle,
-  FaFilter,
-  FaUserPlus,
-  FaBriefcaseMedical
-} from 'react-icons/fa';
+// Import de moment pour le formatage des dates
+import moment from 'moment';
 
 // Logo AMS
 import AMSLogo from '../../assets/AMS-logo.png';
+
+const { Step } = Steps;
+const { TextArea } = Input;
+const { Option } = Select;
+const { Panel } = Collapse;
+const { Text } = Typography;
+const { TabPane } = Tabs;
 
 // Informations Courtier d'Assurances
 const COURTIER_ASSURANCES = {
@@ -110,36 +88,42 @@ const BarcodeScanner = ({ onScanSuccess, onClose }) => {
   };
 
   return (
-    <div className="scanner-modal-overlay">
-      <div className="scanner-modal">
-        <div className="scanner-header">
-          <h3>
-            <div className="scanner-icon">
-              <FaCamera />
-            </div>
-            {t('consultations.scanner.title', 'Scanner le code-barres du patient')}
-          </h3>
-          <button onClick={stopScanner} className="close-button">
-            <FaTimes />
-          </button>
-        </div>
-        <div id={qrcodeRegionId} className="scanner-container" />
-        <div className="scanner-instructions">
-          <p>• {t('consultations.scanner.instruction1', 'Placez le code-barres dans le cadre')}</p>
-          <p>• {t('consultations.scanner.instruction2', 'La lecture est automatique')}</p>
-          <p>• {t('consultations.scanner.instruction3', 'Éclairage suffisant recommandé')}</p>
-        </div>
-      </div>
-    </div>
+    <Modal
+      title={
+        <Space>
+          <CameraOutlined />
+          {t('consultations.scanner.title', 'Scanner le code-barres du patient')}
+        </Space>
+      }
+      open={true}
+      onCancel={stopScanner}
+      footer={null}
+      width={600}
+    >
+      <div id={qrcodeRegionId} style={{ width: '100%', height: '300px', marginBottom: '20px' }} />
+      <Alert
+        message="Instructions de scan"
+        description={
+          <ul style={{ margin: 0, paddingLeft: '20px' }}>
+            <li>Placez le code-barres dans le cadre</li>
+            <li>La lecture est automatique</li>
+            <li>Éclairage suffisant recommandé</li>
+          </ul>
+        }
+        type="info"
+        showIcon
+      />
+    </Modal>
   );
 };
 
 const Consultations = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [form] = Form.useForm();
   
   // ============= ÉTATS PRINCIPAUX =============
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [searchType, setSearchType] = useState('identifiant');
@@ -194,6 +178,13 @@ const Consultations = () => {
   const [searchAssureValue, setSearchAssureValue] = useState('');
   const [showAssureSearch, setShowAssureSearch] = useState(false);
 
+  // ============= ÉTATS POUR L'HISTORIQUE =============
+  const [historiqueConsultations, setHistoriqueConsultations] = useState([]);
+  const [loadingHistorique, setLoadingHistorique] = useState(false);
+  const [selectedHistorique, setSelectedHistorique] = useState(null);
+  const [modalHistoriqueVisible, setModalHistoriqueVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState('nouvelle');
+
   // ============= REF POUR DEBOUNCE =============
   const searchTimeoutRef = useRef(null);
 
@@ -219,6 +210,8 @@ const Consultations = () => {
   useEffect(() => {
     if (selectedPatient) {
       loadTypePaiement(selectedPatient.id);
+      // Charger l'historique des consultations du patient
+      loadHistoriqueConsultations(selectedPatient.id);
       
       // Récupérer le statut ACE du patient
       const patientStatutACE = selectedPatient.statut_ace || selectedPatient.STATUT_ACE;
@@ -276,7 +269,7 @@ const Consultations = () => {
       
     } catch (error) {
       console.error('❌ Erreur lors du changement de centre:', error);
-      toast.error(t('consultations.errors.centreChange', 'Erreur lors du changement de centre'));
+      message.error(t('consultations.errors.centreChange', 'Erreur lors du changement de centre'));
     }
   };
 
@@ -313,16 +306,16 @@ const Consultations = () => {
         setPrestataires(formattedPrestataires);
         
         if (formattedPrestataires.length === 0) {
-          toast.warning(t('consultations.warnings.noActiveDoctors', 'Aucun médecin actif disponible.'));
+          message.warning(t('consultations.warnings.noActiveDoctors', 'Aucun médecin actif disponible.'));
         }
       } else {
         console.error('❌ Erreur API prestatairesAPI.getAll:', response?.message);
         setPrestataires([]);
-        toast.error(response?.message || t('consultations.errors.loadingDoctors', 'Erreur lors du chargement des médecins'));
+        message.error(response?.message || t('consultations.errors.loadingDoctors', 'Erreur lors du chargement des médecins'));
       }
     } catch (error) {
       console.error('❌ Erreur chargement médecins:', error);
-      toast.error(t('consultations.errors.networkDoctors', 'Erreur réseau lors du chargement des médecins'));
+      message.error(t('consultations.errors.networkDoctors', 'Erreur réseau lors du chargement des médecins'));
       setPrestataires([]);
     }
   };
@@ -389,21 +382,21 @@ const Consultations = () => {
           const currentPrestataire = formattedPrestataires.find(p => p.id === parseInt(selectedPrestataire));
           if (!currentPrestataire) {
             setSelectedPrestataire('');
-            toast.info(t('consultations.info.doctorReset', 'Le médecin sélectionné a été réinitialisé car il n\'est pas affecté à ce centre'));
+            message.info(t('consultations.info.doctorReset', 'Le médecin sélectionné a été réinitialisé car il n\'est pas affecté à ce centre'));
           }
         }
         
         if (formattedPrestataires.length === 0) {
-          toast.warning(t('consultations.warnings.noDoctorsForCentre', 'Aucun médecin actif disponible pour ce centre.'));
+          message.warning(t('consultations.warnings.noDoctorsForCentre', 'Aucun médecin actif disponible pour ce centre.'));
         }
       } else {
         console.error('❌ Erreur API centresAPI.getPrestatairesByCentre:', response?.message);
         setPrestataires([]);
-        toast.error(response?.message || t('consultations.errors.loadingDoctors', 'Erreur lors du chargement des médecins'));
+        message.error(response?.message || t('consultations.errors.loadingDoctors', 'Erreur lors du chargement des médecins'));
       }
     } catch (error) {
       console.error('❌ Erreur chargement médecins par centre:', error);
-      toast.error(t('consultations.errors.networkDoctors', 'Erreur réseau lors du chargement des médecins'));
+      message.error(t('consultations.errors.networkDoctors', 'Erreur réseau lors du chargement des médecins'));
       setPrestataires([]);
     }
   };
@@ -420,11 +413,11 @@ const Consultations = () => {
         setTypesConsultation(transformedTypes);
       } else {
         setTypesConsultation([]);
-        toast.error(t('consultations.errors.noConsultationTypes', 'Aucun type de consultation disponible'));
+        message.error(t('consultations.errors.noConsultationTypes', 'Aucun type de consultation disponible'));
       }
     } catch (error) {
       console.error('Erreur chargement types:', error);
-      toast.error(t('consultations.errors.loadingTypes', 'Erreur lors du chargement des types de consultation'));
+      message.error(t('consultations.errors.loadingTypes', 'Erreur lors du chargement des types de consultation'));
       setTypesConsultation([]);
     }
   };
@@ -452,17 +445,17 @@ const Consultations = () => {
         
         if (formattedCentres.length === 0) {
           console.warn('Aucun centre de santé disponible');
-          toast.info(t('consultations.info.noCentres', 'Aucun centre de santé disponible'));
+          message.info(t('consultations.info.noCentres', 'Aucun centre de santé disponible'));
         }
       } else {
         console.error('Format de réponse inattendu ou échec:', response);
         setCentresSante([]);
-        toast.error(t('consultations.errors.loadingCentres', 'Erreur lors du chargement des centres de santé'));
+        message.error(t('consultations.errors.loadingCentres', 'Erreur lors du chargement des centres de santé'));
       }
     } catch (error) {
       console.error('Erreur chargement centres santé:', error);
       setCentresSante([]);
-      toast.error(t('consultations.errors.networkCentres', 'Erreur réseau lors du chargement des centres de santé'));
+      message.error(t('consultations.errors.networkCentres', 'Erreur réseau lors du chargement des centres de santé'));
     } finally {
       setLoadingCentres(false);
     }
@@ -531,6 +524,156 @@ const Consultations = () => {
     }
   };
 
+// ============= FONCTIONS POUR L'HISTORIQUE =============
+const loadHistoriqueConsultations = async (patientId) => {
+  if (!patientId) return;
+  
+  setLoadingHistorique(true);
+  try {
+    // CORRECTION : utiliser getByPatientId au lieu de getByPatient
+    const response = await consultationsAPI.getByPatientId(patientId);
+    
+    console.log('📋 Réponse API historique:', response);
+    
+    if (response && response.success && response.consultations) {
+      const formattedConsultations = response.consultations.map(consult => ({
+        id: consult.id || consult.COD_CONS,
+        COD_CONS: consult.id || consult.COD_CONS,
+        DATE_CONSULTATION: consult.date_consultation || consult.DATE_CONSULTATION,
+        TYPE_CONSULTATION: consult.type_consultation || consult.TYPE_CONSULTATION,
+        MONTANT_CONSULTATION: consult.montant_consultation || consult.MONTANT_CONSULTATION || 0,
+        STATUT_PAIEMENT: consult.statut_paiement || consult.STATUT_PAIEMENT || 'Non spécifié',
+        NOM_MEDECIN: consult.nom_medecin || consult.NOM_MEDECIN || 'Non spécifié',
+        SPECIALITE_MEDECIN: consult.specialite_medecin || consult.SPECIALITE_MEDECIN || '',
+        OBSERVATIONS: consult.observations || consult.OBSERVATIONS || '',
+        EXAMENS_COMPLEMENTAIRES: consult.examens_complementaires || consult.EXAMENS_COMPLEMENTAIRES || '',
+        TRAITEMENT_PRESCRIT: consult.traitement_prescrit || consult.TRAITEMENT_PRESCRIT || '',
+        TA: consult.ta || consult.TA || '',
+        POIDS: consult.poids || consult.POIDS || '',
+        TAILLE: consult.taille || consult.TAILLE || '',
+        TEMPERATURE: consult.temperature || consult.TEMPERATURE || '',
+        POULS: consult.pouls || consult.POULS || '',
+        GLYCEMIE: consult.glycemie || consult.GLYCEMIE || '',
+        CENTRE_NOM: consult.centre_nom || consult.CENTRE_NOM || 'Non spécifié',
+        PROCHAIN_RDV: consult.prochain_rdv || consult.PROCHAIN_RDV || '',
+        MONTANT_PRISE_EN_CHARGE: consult.montant_prise_en_charge || consult.MONTANT_PRISE_EN_CHARGE || 0,
+        RESTE_A_CHARGE: consult.reste_a_charge || consult.RESTE_A_CHARGE || 0,
+        TAUX_PRISE_EN_CHARGE: consult.taux_prise_en_charge || consult.TAUX_PRISE_EN_CHARGE || 0,
+        STATUT_ACE: consult.statut_ace || consult.STATUT_ACE || '',
+        NOM_ASSURE_PRINCIPAL: consult.nom_assure_principal || consult.NOM_ASSURE_PRINCIPAL || ''
+      }));
+      
+      console.log(`✅ ${formattedConsultations.length} consultations chargées pour le patient`);
+      setHistoriqueConsultations(formattedConsultations);
+    } else {
+      console.warn('⚠️ Aucune consultation trouvée ou réponse inattendue:', response);
+      setHistoriqueConsultations([]);
+      if (response && !response.success) {
+        message.warning(response.message || t('consultations.warnings.noHistory', 'Aucun historique de consultation disponible'));
+      }
+    }
+  } catch (error) {
+    console.error('❌ Erreur chargement historique consultations:', error);
+    setHistoriqueConsultations([]);
+    message.error(t('consultations.errors.loadingHistory', 'Erreur lors du chargement de l\'historique'));
+  } finally {
+    setLoadingHistorique(false);
+  }
+};
+
+  const handleViewHistorique = (consultation) => {
+    setSelectedHistorique(consultation);
+    setModalHistoriqueVisible(true);
+  };
+
+  const handlePrintHistorique = (consultation) => {
+    const feuilleData = generateFeuilleDataForHistorique(consultation);
+    
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) {
+      message.error(t('consultations.errors.popupBlocked', 'Veuillez autoriser les popups pour l\'impression'));
+      return;
+    }
+
+    const htmlContent = `<!DOCTYPE html><html><head><title>FICHE DE SOINS - Consultation ${consultation.id}</title><meta charset="UTF-8"><style>${printStyles}</style></head><body>${printContent(feuilleData, t)}<script>window.onload=function(){setTimeout(()=>window.print(),500);window.onafterprint=function(){setTimeout(()=>window.close(),500);};}</script></body></html>`;
+    
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
+  const generateFeuilleDataForHistorique = (consultation) => {
+    const consultationDate = consultation.DATE_CONSULTATION ? 
+      new Date(consultation.DATE_CONSULTATION) : new Date();
+    
+    const patientInfo = {
+      id: selectedPatient?.id || 'N/A',
+      identifiant: selectedPatient?.identifiant_national || selectedPatient?.IDENTIFIANT_NATIONAL || 'N/A',
+      nom: `${selectedPatient?.nom} ${selectedPatient?.prenom}` || 'N/A',
+      age: selectedPatient?.age || 'N/A',
+      sexe: selectedPatient?.sexe || 'N/A',
+      telephone: selectedPatient?.telephone_mobile || selectedPatient?.telephone || selectedPatient?.TELEPHONE_MOBILE || 'N/A',
+      assurePrincipal: consultation.NOM_ASSURE_PRINCIPAL || assurePrincipal || 'N/A',
+      statutACE: consultation.STATUT_ACE || statutACE || selectedPatient?.statut_ace || selectedPatient?.STATUT_ACE || 'N/A',
+      employeur: getEmployeurFromPatient() || 'N/A'
+    };
+    
+    return {
+      entete: {
+        logoUrl: AMSLogo,
+        titre: "FICHE DE CONSULTATION",
+        sousTitre: "AMS-CONSULTATIONS MÉDICALES",
+        centreNom: consultation.CENTRE_NOM || selectedCentre?.nom || selectedCentre?.NOM_CENTRE || 'Centre de santé',
+        centreTelephone: selectedCentre?.TELEPHONE || 'Téléphone non disponible',
+        centreEmail: selectedCentre?.EMAIL || 'Email non disponible',
+        dateHeure: consultationDate.toLocaleString('fr-FR', { 
+          day: '2-digit', 
+          month: '2-digit', 
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+        numero: consultation.id ? `CONS-${consultation.id.toString().padStart(8, '0')}` : 'CONS-00000000',
+        dateCreation: consultationDate.toLocaleDateString('fr-FR'),
+        courtier: COURTIER_ASSURANCES
+      },
+      patient: {
+        nomComplet: selectedPatient ? `${selectedPatient.nom} ${selectedPatient.prenom}` : '___________________________________',
+        age: selectedPatient?.age || '____',
+        dateNaissance: selectedPatient?.date_naissance ? new Date(selectedPatient.date_naissance).toLocaleDateString('fr-FR') : '__/__/____',
+        sexe: selectedPatient?.sexe === 'M' ? 'M' : (selectedPatient?.sexe === 'F' ? 'F' : '_'),
+        identifiant: selectedPatient?.identifiant_national || selectedPatient?.IDENTIFIANT_NATIONAL || '_________________',
+        telephone: selectedPatient?.telephone_mobile || selectedPatient?.telephone || selectedPatient?.TELEPHONE_MOBILE || '_________________',
+        assurePrincipal: consultation.NOM_ASSURE_PRINCIPAL || assurePrincipal || '_________________',
+        etablissement: getEmployeurFromPatient(),
+        statutACE: consultation.STATUT_ACE || statutACE || '__________',
+        idAssurePrincipal: selectedPatient?.id_assure_principal || '__________',
+        patientInfo: patientInfo
+      },
+      consultation: {
+        date: consultationDate.toLocaleDateString('fr-FR'),
+        heure: consultationDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        medecin: consultation.NOM_MEDECIN || '_____________________________',
+        specialite: consultation.SPECIALITE_MEDECIN || '_____________________________',
+        type: consultation.TYPE_CONSULTATION || '_________________________',
+        motif: 'Consultation médicale',
+        diagnostic: consultation.OBSERVATIONS || '___________________________________'
+      },
+      financier: {
+        montantTotal: consultation.MONTANT_CONSULTATION || 0,
+        tauxCouverture: consultation.TAUX_PRISE_EN_CHARGE || 0,
+        montantPrisEnCharge: consultation.MONTANT_PRISE_EN_CHARGE || 0,
+        resteCharge: consultation.RESTE_A_CHARGE || 0,
+        statutPaiement: consultation.STATUT_PAIEMENT || 'À payer',
+        typePaiement: consultation.STATUT_PAIEMENT || '___________________'
+      },
+      signatures: {
+        prestataire: consultation.NOM_MEDECIN || '________________________',
+        patient: selectedPatient ? `${selectedPatient.nom} ${selectedPatient.prenom}` : '________________________',
+        dateSignature: consultationDate.toLocaleDateString('fr-FR')
+      }
+    };
+  };
+
   // ============= FONCTIONS POUR ASSURÉS PRINCIPAUX =============
   const searchAssuresPrincipaux = async (searchTerm) => {
     if (!searchTerm || searchTerm.length < 2) {
@@ -581,7 +724,7 @@ const Consultations = () => {
     setAssurePrincipal(nomComplet);
     setAssuresPrincipaux([]);
     setShowAssureSearch(false);
-    toast.success(t('consultations.success.primaryInsuredSelected', 'Assuré principal sélectionné: {{name}}', { name: nomComplet }));
+    message.success(t('consultations.success.primaryInsuredSelected', 'Assuré principal sélectionné: {{name}}', { name: nomComplet }));
   };
 
   // ============= GESTION DU STATUT ACE =============
@@ -632,7 +775,7 @@ const Consultations = () => {
       
       if (assureData) {
         setAssurePrincipal(assureData.nom);
-        toast.success(t('consultations.success.primaryInsuredAutoLoaded', 'Assuré principal chargé automatiquement'));
+        message.success(t('consultations.success.primaryInsuredAutoLoaded', 'Assuré principal chargé automatiquement'));
       }
     } catch (error) {
       console.error('Erreur chargement assuré principal:', error);
@@ -702,15 +845,15 @@ const Consultations = () => {
         
         setPatients(enhancedPatients);
         if (enhancedPatients.length === 0) {
-          toast.info(t('consultations.info.noPatientsFound', 'Aucun patient trouvé'));
+          message.info(t('consultations.info.noPatientsFound', 'Aucun patient trouvé'));
         }
       } else {
         setPatients([]);
-        toast.error(response?.message || t('consultations.errors.searchFailed', 'Erreur lors de la recherche'));
+        message.error(response?.message || t('consultations.errors.searchFailed', 'Erreur lors de la recherche'));
       }
     } catch (error) {
       console.error('Erreur recherche patient:', error);
-      toast.error(t('consultations.errors.searchPatient', 'Erreur lors de la recherche du patient'));
+      message.error(t('consultations.errors.searchPatient', 'Erreur lors de la recherche du patient'));
       setPatients([]);
     } finally {
       setLoading(false);
@@ -735,8 +878,8 @@ const Consultations = () => {
 
   const handleSelectPatient = (patient) => {
     setSelectedPatient(patient);
-    toast.success(t('consultations.success.patientSelected', 'Patient sélectionné: {{name}}', { name: `${patient.nom} ${patient.prenom}` }));
-    setTimeout(() => setCurrentStep(2), 500);
+    message.success(t('consultations.success.patientSelected', 'Patient sélectionné: {{name}}', { name: `${patient.nom} ${patient.prenom}` }));
+    setTimeout(() => setCurrentStep(1), 500);
   };
 
   // ============= ÉTAPE 2: PARAMÉTRAGE =============
@@ -803,36 +946,36 @@ const Consultations = () => {
   // ============= ÉTAPE 4: VALIDATION =============
   const handleValidate = async () => {
     if (!selectedPatient) {
-      toast.error(t('consultations.errors.noPatientSelected', 'Veuillez sélectionner un patient'));
+      message.error(t('consultations.errors.noPatientSelected', 'Veuillez sélectionner un patient'));
       return;
     }
     
     if (!selectedPrestataire) {
-      toast.error(t('consultations.errors.noDoctorSelected', 'Veuillez sélectionner un médecin'));
+      message.error(t('consultations.errors.noDoctorSelected', 'Veuillez sélectionner un médecin'));
       return;
     }
     
     const prestataireId = parseInt(selectedPrestataire);
     if (isNaN(prestataireId)) {
-      toast.error(t('consultations.errors.invalidDoctorId', 'ID de médecin invalide'));
+      message.error(t('consultations.errors.invalidDoctorId', 'ID de médecin invalide'));
       return;
     }
     
     const prestataire = prestataires.find(p => p.id === prestataireId);
     if (!prestataire) {
-      toast.error(t('consultations.errors.doctorNotFound', 'Médecin non trouvé dans la liste des prestataires actifs'));
+      message.error(t('consultations.errors.doctorNotFound', 'Médecin non trouvé dans la liste des prestataires actifs'));
       return;
     }
     
     console.log('✅ ID du médecin à envoyer:', prestataireId, 'Nom:', prestataire.nom_complet, 'Spécialité:', prestataire.specialite || prestataire.SPECIALITE);    
     if (!selectedCentreId) {
-      toast.error(t('consultations.errors.noCentreSelected', 'Veuillez sélectionner un centre de santé'));
+      message.error(t('consultations.errors.noCentreSelected', 'Veuillez sélectionner un centre de santé'));
       return;
     }
     
     const centreId = parseInt(selectedCentreId);
     if (isNaN(centreId)) {
-      toast.error(t('consultations.errors.invalidCentreId', 'ID de centre de santé invalide'));
+      message.error(t('consultations.errors.invalidCentreId', 'ID de centre de santé invalide'));
       return;
     }
 
@@ -841,7 +984,7 @@ const Consultations = () => {
     );
     
     if (!centreExists && centresSante.length > 0) {
-      toast.error(t('consultations.errors.centreNotInList', 'Le centre sélectionné n\'est pas valide'));
+      message.error(t('consultations.errors.centreNotInList', 'Le centre sélectionné n\'est pas valide'));
       return;
     }
     
@@ -849,16 +992,16 @@ const Consultations = () => {
       const recoveredStatutACE = selectedPatient?.statut_ace || selectedPatient?.STATUT_ACE;
       
       if (!recoveredStatutACE) {
-        toast.error(t('consultations.errors.aceStatusNotFound', 'Le statut ACE n\'a pas pu être récupéré depuis les informations du bénéficiaire. Veuillez vérifier les données du patient.'));
+        message.error(t('consultations.errors.aceStatusNotFound', 'Le statut ACE n\'a pas pu être récupéré depuis les informations du bénéficiaire. Veuillez vérifier les données du patient.'));
         return;
       }
       
       setStatutACE(recoveredStatutACE);
-      toast.info(t('consultations.info.aceStatusRecovered', 'Statut ACE récupéré automatiquement: {{statut}}', { statut: recoveredStatutACE }));
+      message.info(t('consultations.info.aceStatusRecovered', 'Statut ACE récupéré automatiquement: {{statut}}', { statut: recoveredStatutACE }));
     }
 
     if (statutACE !== 'Principal' && !assurePrincipal) {
-      toast.error(t('consultations.errors.noPrimaryInsured', 'Veuillez sélectionner un assuré principal'));
+      message.error(t('consultations.errors.noPrimaryInsured', 'Veuillez sélectionner un assuré principal'));
       return;
     }
 
@@ -887,83 +1030,92 @@ const Consultations = () => {
       appointment: dateRendezVous ? t('consultations.confirmation.appointment', `Rendez-vous: {{date}}`, { date: new Date(dateRendezVous).toLocaleDateString('fr-FR') }) : ''
     });
 
-    if (!window.confirm(confirmMessage.replace(/\n\n\n/g, '\n\n'))) return;
+    Modal.confirm({
+      title: 'Confirmation de validation',
+      content: confirmMessage.replace(/\n\n\n/g, '\n\n'),
+      okText: 'Confirmer',
+      okType: 'primary',
+      cancelText: 'Annuler',
+      onOk: async () => {
+        setLoading(true);
+        try {
+          const now = new Date();
+          const dateFormatted = now.toISOString().slice(0, 19).replace('T', ' ');
+          const prochainRdvFormatted = dateRendezVous 
+            ? new Date(dateRendezVous).toISOString().split('T')[0]
+            : null;
 
-    setLoading(true);
-    try {
-      const now = new Date();
-      const dateFormatted = now.toISOString().slice(0, 19).replace('T', ' ');
-      const prochainRdvFormatted = dateRendezVous 
-        ? new Date(dateRendezVous).toISOString().split('T')[0]
-        : null;
+          let statutPaiement = t('consultations.payment.toPay', 'À payer');
+          if (gratuite) {
+            statutPaiement = t('consultations.payment.free', 'Gratuit');
+          } else if (tiersPayant && pourcentageCouverture > 0) {
+            statutPaiement = t('consultations.payment.tiers', 'Tiers Payant');
+          }
 
-      let statutPaiement = t('consultations.payment.toPay', 'À payer');
-      if (gratuite) {
-        statutPaiement = t('consultations.payment.free', 'Gratuit');
-      } else if (tiersPayant && pourcentageCouverture > 0) {
-        statutPaiement = t('consultations.payment.tiers', 'Tiers Payant');
+          const consultationData = {
+            COD_BEN: selectedPatient.id,
+            COD_CEN: centreId,
+            COD_PRE: prestataireId,
+            DATE_CONSULTATION: dateFormatted,
+            TYPE_CONSULTATION: selectedType || 'Consultation générale',
+            MOTIF_CONSULTATION: t('consultations.default.motif', 'Consultation médicale'),
+            OBSERVATIONS: observations,
+            DIAGNOSTIC: t('consultations.default.diagnostic', 'À déterminer'),
+            TA: ta,
+            POIDS: poids ? parseFloat(poids) : null,
+            TAILLE: taille ? parseFloat(taille) : null,
+            TEMPERATURE: temperature ? parseFloat(temperature) : null,
+            POULS: pouls ? parseInt(pouls) : null,
+            FREQUENCE_RESPIRATOIRE: freqResp ? parseInt(freqResp) : null,
+            GLYCEMIE: glycemie ? parseFloat(glycemie) : null,
+            EXAMENS_COMPLEMENTAIRES: examens,
+            TRAITEMENT_PRESCRIT: traitements,
+            PROCHAIN_RDV: prochainRdvFormatted,
+            MONTANT_CONSULTATION: montantTotal,
+            STATUT_PAIEMENT: statutPaiement,
+            NOM_MEDECIN: prestataire.nom_complet || `${prestataire.prenom || prestataire.PRENOM_PRESTATAIRE || ''} ${prestataire.nom || prestataire.NOM_PRESTATAIRE || ''}`.trim(),
+            SPECIALITE_MEDECIN: prestataire.specialite || prestataire.SPECIALITE || '',
+            URGENT: false,
+            HOSPITALISATION: false,
+            MONTANT_PRISE_EN_CHARGE: montantPrisEnCharge,
+            RESTE_A_CHARGE: resteCharge,
+            TAUX_PRISE_EN_CHARGE: tiersPayant ? pourcentageCouverture : 0,
+            ACCIDENT_TIERS: accidentTiers,
+            DATE_ACCIDENT: dateAccident,
+            CODE_AFFECTION: codeAffection,
+            STATUT_ACE: statutACE,
+            ID_ASSURE_PRINCIPAL: statutACE === 'Principal' ? selectedPatient.id : idAssurePrincipal,
+            NOM_ASSURE_PRINCIPAL: statutACE === 'Principal' ? `${selectedPatient.nom} ${selectedPatient.prenom}` : assurePrincipal
+          };
+
+          console.log('✅ Données envoyées pour création:', consultationData);
+          console.log('📋 Détails du médecin:', {
+            id: prestataireId,
+            nom: prestataire.nom_complet || prestataire.nom,
+            spécialité: prestataire.specialite,
+            code_centre: prestataire.cod_cen
+          });
+
+          const response = await consultationsAPI.create(consultationData);
+          
+          if (response.success) {
+            setConsultationId(response.consultationId || response.id || response.COD_CONS);
+            message.success(t('consultations.success.consultationSaved', 'Consultation enregistrée avec succès!'));
+            // Recharger l'historique après création
+            loadHistoriqueConsultations(selectedPatient.id);
+            setCurrentStep(4);
+          } else {
+            message.error(response.message || t('consultations.errors.saveConsultation', 'Erreur lors de l\'enregistrement'));
+          }
+        } catch (error) {
+          console.error('❌ Erreur validation:', error);
+          console.error('Détails de l\'erreur:', error.response?.data || error.message);
+          message.error(t('consultations.errors.saveError', 'Erreur lors de l\'enregistrement: ') + error.message);
+        } finally {
+          setLoading(false);
+        }
       }
-
-      const consultationData = {
-        COD_BEN: selectedPatient.id,
-        COD_CEN: centreId,
-        COD_PRE: prestataireId,
-        DATE_CONSULTATION: dateFormatted,
-        TYPE_CONSULTATION: selectedType || 'Consultation générale',
-        MOTIF_CONSULTATION: t('consultations.default.motif', 'Consultation médicale'),
-        OBSERVATIONS: observations,
-        DIAGNOSTIC: t('consultations.default.diagnostic', 'À déterminer'),
-        TA: ta,
-        POIDS: poids ? parseFloat(poids) : null,
-        TAILLE: taille ? parseFloat(taille) : null,
-        TEMPERATURE: temperature ? parseFloat(temperature) : null,
-        POULS: pouls ? parseInt(pouls) : null,
-        FREQUENCE_RESPIRATOIRE: freqResp ? parseInt(freqResp) : null,
-        GLYCEMIE: glycemie ? parseFloat(glycemie) : null,
-        EXAMENS_COMPLEMENTAIRES: examens,
-        TRAITEMENT_PRESCRIT: traitements,
-        PROCHAIN_RDV: prochainRdvFormatted,
-        MONTANT_CONSULTATION: montantTotal,
-        STATUT_PAIEMENT: statutPaiement,
-        NOM_MEDECIN: prestataire.nom_complet || `${prestataire.prenom || prestataire.PRENOM_PRESTATAIRE || ''} ${prestataire.nom || prestataire.NOM_PRESTATAIRE || ''}`.trim(),
-        SPECIALITE_MEDECIN: prestataire.specialite || prestataire.SPECIALITE || '',
-        URGENT: false,
-        HOSPITALISATION: false,
-        MONTANT_PRISE_EN_CHARGE: montantPrisEnCharge,
-        RESTE_A_CHARGE: resteCharge,
-        TAUX_PRISE_EN_CHARGE: tiersPayant ? pourcentageCouverture : 0,
-        ACCIDENT_TIERS: accidentTiers,
-        DATE_ACCIDENT: dateAccident,
-        CODE_AFFECTION: codeAffection,
-        STATUT_ACE: statutACE,
-        ID_ASSURE_PRINCIPAL: statutACE === 'Principal' ? selectedPatient.id : idAssurePrincipal,
-        NOM_ASSURE_PRINCIPAL: statutACE === 'Principal' ? `${selectedPatient.nom} ${selectedPatient.prenom}` : assurePrincipal
-      };
-
-      console.log('✅ Données envoyées pour création:', consultationData);
-      console.log('📋 Détails du médecin:', {
-        id: prestataireId,
-        nom: prestataire.nom_complet || prestataire.nom,
-        spécialité: prestataire.specialite,
-        code_centre: prestataire.cod_cen
-      });
-
-      const response = await consultationsAPI.create(consultationData);
-      
-      if (response.success) {
-        setConsultationId(response.consultationId || response.id || response.COD_CONS);
-        toast.success(t('consultations.success.consultationSaved', 'Consultation enregistrée avec succès!'));
-        setCurrentStep(5);
-      } else {
-        toast.error(response.message || t('consultations.errors.saveConsultation', 'Erreur lors de l\'enregistrement'));
-      }
-    } catch (error) {
-      console.error('❌ Erreur validation:', error);
-      console.error('Détails de l\'erreur:', error.response?.data || error.message);
-      toast.error(t('consultations.errors.saveError', 'Erreur lors de l\'enregistrement: ') + error.message);
-    } finally {
-      setLoading(false);
-    }
+    });
   };
   
   // ============= FONCTIONS UTILITAIRES =============
@@ -978,7 +1130,7 @@ const Consultations = () => {
   };
 
   const handleNewConsultation = () => {
-    setCurrentStep(1);
+    setCurrentStep(0);
     setSearchValue('');
     setPatients([]);
     setSelectedPatient(null);
@@ -1019,7 +1171,10 @@ const Consultations = () => {
     setShowAssureSearch(false);
     setCustomAmount(false);
     setMontantEditable(0);
-    toast.info(t('consultations.info.newConsultationReady', 'Nouvelle consultation prête'));
+    setHistoriqueConsultations([]);
+    setSelectedHistorique(null);
+    setActiveTab('nouvelle');
+    message.info(t('consultations.info.newConsultationReady', 'Nouvelle consultation prête'));
   };
 
   const handlePrint = () => {
@@ -1028,7 +1183,7 @@ const Consultations = () => {
     
     const printWindow = window.open('', '_blank', 'width=900,height=700');
     if (!printWindow) {
-      toast.error(t('consultations.errors.popupBlocked', 'Veuillez autoriser les popups pour l\'impression'));
+      message.error(t('consultations.errors.popupBlocked', 'Veuillez autoriser les popups pour l\'impression'));
       return;
     }
 
@@ -1115,620 +1270,1160 @@ const Consultations = () => {
     };
   };
 
-  // ============= COMPOSANT D'EN-TÊTE =============
-  const HeaderSection = () => (
-    <div className="header-section">
-      <div className="header-content">
-        <button onClick={() => navigate('/dashboard')} className="back-button">
-          <FaArrowLeft /> {t('common.back', 'Retour')}
-        </button>
-        
-        <div className="title-section">
-          <h1 className="main-title">
-            <div className="title-icon">
-              <FaBriefcaseMedical />
-            </div>
-            {t('consultations.title', 'GESTION DES CONSULTATIONS')}
-          </h1>
-          <p className="title-subtitle">
-            <FaFilter /> {t('consultations.subtitle', 'Sélectionnez un centre de santé pour filtrer les médecins disponibles')}
-          </p>
-        </div>
-
-        <div className="steps-indicator">
-          <div className="steps-line">
-            {[1, 2, 3, 4, 5].map((step) => (
-              <div 
-                key={step} 
-                className={`step-circle ${currentStep >= step ? 'active' : ''}`}
-              >
-                {step}
-              </div>
-            ))}
-          </div>
-          <div className="steps-labels">
-            <span className={currentStep >= 1 ? 'active' : ''}>
-              <FaUserInjured /> {t('consultations.steps.patient', 'Patient')}
-            </span>
-            <span className={currentStep >= 2 ? 'active' : ''}>
-              <FaFileMedical /> {t('consultations.steps.settings', 'Paramétrage')}
-            </span>
-            <span className={currentStep >= 3 ? 'active' : ''}>
-              <FaNotesMedical /> {t('consultations.steps.medical', 'Médical')}
-            </span>
-            <span className={currentStep >= 4 ? 'active' : ''}>
-              <FaClipboardCheck /> {t('consultations.steps.validation', 'Validation')}
-            </span>
-            <span className={currentStep >= 5 ? 'active' : ''}>
-              <FaFileInvoiceDollar /> {t('consultations.steps.print', 'Impression')}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // ============= ÉTAPE 3: INFORMATIONS MÉDICALES =============
-  const MedicalInfoStep = () => {
-    return (
-      <div className="step-container">
-        <h2 className="step-title">
-          <div className="step-icon">
-            <FaNotesMedical />
-          </div>
-          {t('consultations.steps.medicalInfo', '3. INFORMATIONS MÉDICALES')}
-        </h2>
-        <p className="step-description">
-          {t('consultations.descriptions.medicalInfo', 'Ces informations seront enregistrées et imprimées sur la feuille de prise en charge.')}
-        </p>
-        
-        {statutACE && (
-          <div className="section bordered">
-            <h3 className="section-header">
-              <FaUserTag /> {t('consultations.sections.aceStatus', 'STATUT ACE')}
-            </h3>
-            
-            <div className="form-group">
-              <label className="form-label">
-                <FaUserTag /> {t('consultations.labels.aceStatus', 'Statut ACE')}
-              </label>
-              <div className="ace-status-display">
-                <input
-                  type="text"
-                  value={statutACE}
-                  readOnly
-                  className="form-input readonly"
-                />
-                <p className="form-hint info">
-                  <FaInfoCircle /> {t('consultations.info.aceStatusAuto', 'Statut ACE récupéré automatiquement depuis les informations du bénéficiaire')}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="section bordered">
-          <h3 className="section-header">
-            <FaUserTag /> {t('consultations.sections.primaryInsured', 'INFORMATION SUR L\'ASSURÉ PRINCIPAL')}
-          </h3>
-          
-          {statutACE === 'Principal' ? (
-            <div className="info-box success">
-              <p className="info-text">
-                <FaCheck /> {t('consultations.info.primaryInsuredIsPatient', 'Le patient est l\'assuré principal.')}
-              </p>
-              <p><strong>{selectedPatient?.nom} {selectedPatient?.prenom}</strong></p>
-              <p className="form-hint">
-                {t('consultations.info.primaryInsuredAutoFilled', 'Le champ Assuré Principal sera automatiquement rempli avec le nom du patient.')}
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="form-group">
-                <label className="form-label">
-                  <FaUsers /> {t('consultations.labels.primaryInsuredName', 'Assuré Principal')}
-                  <span className="required"> *</span>
-                  {selectedPatient?.id_assure_principal && (
-                    <button 
-                      type="button" 
-                      className="refresh-button-small"
-                      onClick={loadAssurePrincipalFromPatient}
-                      title={t('consultations.buttons.reloadPrimaryInsured', 'Recharger l\'assuré principal depuis la base')}
-                    >
-                      <FaSyncAlt />
-                    </button>
-                  )}
-                </label>
-                
-                {!showAssureSearch ? (
-                  <div className="assure-search-container">
-                    <div className="assure-input-group">
-                      <input
-                        type="text"
-                        value={assurePrincipal}
-                        readOnly
-                        className="form-input"
-                        placeholder={t('consultations.placeholders.selectPrimaryInsured', 'Cliquez pour rechercher un assuré principal')}
-                        onClick={() => setShowAssureSearch(true)}
-                      />
-                      <button 
-                        type="button" 
-                        className="search-assure-button"
-                        onClick={() => setShowAssureSearch(true)}
+  // ============= STEPS CONFIGURATION =============
+  const steps = [
+    {
+      title: 'Identification Patient',
+      icon: <UserOutlined />,
+      content: (
+        <Card
+          title={
+            <Space>
+              <UserOutlined />
+              <span>Identification du Patient</span>
+            </Space>
+          }
+          extra={
+            <Button
+              type="primary"
+              icon={<ArrowRightOutlined />}
+              onClick={() => selectedPatient && setCurrentStep(1)}
+              disabled={!selectedPatient}
+            >
+              Continuer
+            </Button>
+          }
+        >
+          <Row gutter={[16, 16]}>
+            <Col span={24}>
+              <Card size="small">
+                <Radio.Group
+                  value={searchType}
+                  onChange={(e) => setSearchType(e.target.value)}
+                  buttonStyle="solid"
+                  style={{ width: '100%' }}
+                >
+                  <Row gutter={[8, 8]}>
+                    <Col span={6}>
+                      <Radio.Button value="identifiant" style={{ width: '100%', textAlign: 'center' }}>
+                        <IdcardOutlined /> Identifiant
+                      </Radio.Button>
+                    </Col>
+                    <Col span={6}>
+                      <Radio.Button value="carte" style={{ width: '100%', textAlign: 'center' }}>
+                        <IdcardOutlined /> Carte
+                      </Radio.Button>
+                    </Col>
+                    <Col span={6}>
+                      <Radio.Button value="nom" style={{ width: '100%', textAlign: 'center' }}>
+                        <UserOutlined /> Nom
+                      </Radio.Button>
+                    </Col>
+                    <Col span={6}>
+                      <Radio.Button 
+                        value="scanner" 
+                        style={{ width: '100%', textAlign: 'center' }}
+                        onClick={() => setShowScanner(true)}
                       >
-                        <FaSearch />
-                      </button>
-                    </div>
-                    <p className="form-hint">
-                      {selectedPatient?.id_assure_principal 
-                        ? t('consultations.hints.primaryInsuredAutoAvailable', 'Un assuré principal est lié à ce patient. Cliquez sur ⟳ pour le charger.')
-                        : t('consultations.hints.primaryInsuredRequired', 'Champ obligatoire pour les bénéficiaires à charge')}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="assure-search-active">
-                    <div className="assure-input-group">
-                      <input
-                        type="text"
-                        value={searchAssureValue}
-                        onChange={(e) => handleSearchAssureChange(e.target.value)}
-                        placeholder={t('consultations.placeholders.searchPrimaryInsured', 'Rechercher un assuré principal (nom, prénom, identifiant)')}
-                        className="form-input"
-                        autoFocus
-                      />
-                      <button 
-                        type="button" 
-                        className="cancel-assure-button"
-                        onClick={() => {
-                          setShowAssureSearch(false);
-                          setSearchAssureValue('');
-                          setAssuresPrincipaux([]);
+                        <BarcodeOutlined /> Scanner
+                      </Radio.Button>
+                    </Col>
+                  </Row>
+                </Radio.Group>
+              </Card>
+            </Col>
+
+            <Col span={24}>
+              <Card size="small">
+                <Space.Compact style={{ width: '100%' }}>
+                  <Input
+                    placeholder={
+                      searchType === 'identifiant' ? 'Ex: CM12345678' :
+                      searchType === 'carte' ? 'Numéro de carte' :
+                      'Nom ou prénom du patient'
+                    }
+                    value={searchValue}
+                    onChange={(e) => handleSearchInputChange(e.target.value)}
+                    prefix={<SearchOutlined />}
+                    size="large"
+                  />
+                  <Button
+                    type="primary"
+                    icon={<SearchOutlined />}
+                    onClick={() => handleSearchPatient()}
+                    loading={loading}
+                    disabled={searchValue.trim().length < 2}
+                    size="large"
+                  >
+                    Rechercher
+                  </Button>
+                </Space.Compact>
+              </Card>
+            </Col>
+
+            {patients.length > 0 && (
+              <Col span={24}>
+                <Card
+                  title={`Patients trouvés (${patients.length})`}
+                  size="small"
+                >
+                  <Table
+                    dataSource={patients}
+                    columns={[
+                      {
+                        title: 'Nom',
+                        dataIndex: 'nom',
+                        key: 'nom',
+                        render: (text, record) => `${record.nom} ${record.prenom}`
+                      },
+                      {
+                        title: 'Identifiant',
+                        dataIndex: 'identifiant_national',
+                        key: 'identifiant_national'
+                      },
+                      {
+                        title: 'Âge',
+                        dataIndex: 'age',
+                        key: 'age',
+                        render: (age) => `${age} ans`
+                      },
+                      {
+                        title: 'Sexe',
+                        dataIndex: 'sexe',
+                        key: 'sexe',
+                        render: (sexe) => sexe === 'M' ? 'Masculin' : 'Féminin'
+                      },
+                      {
+                        title: 'Statut ACE',
+                        dataIndex: 'statut_ace',
+                        key: 'statut_ace'
+                      },
+                      {
+                        title: 'Actions',
+                        key: 'actions',
+                        render: (_, record) => (
+                          <Button
+                            type="primary"
+                            icon={<CheckCircleOutlined />}
+                            onClick={() => handleSelectPatient(record)}
+                          >
+                            Sélectionner
+                          </Button>
+                        )
+                      }
+                    ]}
+                    pagination={{ pageSize: 5 }}
+                    size="small"
+                  />
+                </Card>
+              </Col>
+            )}
+
+            {selectedPatient && (
+              <Col span={24}>
+                <Card
+                  type="inner"
+                  title="Patient sélectionné"
+                  extra={
+                    <Tag color="green">
+                      <CheckCircleOutlined /> Sélectionné
+                    </Tag>
+                  }
+                >
+                  <Tabs defaultActiveKey="informations" onChange={setActiveTab} activeKey={activeTab}>
+                    <TabPane tab="Informations" key="informations">
+                      <Descriptions size="small" column={2}>
+                        <Descriptions.Item label="Nom complet">
+                          <strong>{selectedPatient.nom} {selectedPatient.prenom}</strong>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Identifiant">
+                          {selectedPatient.identifiant_national}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Âge">
+                          {selectedPatient.age} ans
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Sexe">
+                          {selectedPatient.sexe === 'M' ? 'Masculin' : 'Féminin'}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Statut ACE">
+                          <Tag color="blue">{selectedPatient.statut_ace || 'Non spécifié'}</Tag>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Employeur">
+                          {selectedPatient.employeur || 'Non spécifié'}
+                        </Descriptions.Item>
+                      </Descriptions>
+                    </TabPane>
+                    <TabPane 
+                      tab={
+                        <span>
+                          <HistoryOutlined />
+                          Historique des consultations ({historiqueConsultations.length})
+                        </span>
+                      } 
+                      key="historique"
+                    >
+                      <Table
+                        dataSource={historiqueConsultations}
+                        loading={loadingHistorique}
+                        columns={[
+                          {
+                            title: 'Date',
+                            dataIndex: 'DATE_CONSULTATION',
+                            key: 'DATE_CONSULTATION',
+                            render: (date) => moment(date).format('DD/MM/YYYY HH:mm')
+                          },
+                          {
+                            title: 'Médecin',
+                            dataIndex: 'NOM_MEDECIN',
+                            key: 'NOM_MEDECIN'
+                          },
+                          {
+                            title: 'Type',
+                            dataIndex: 'TYPE_CONSULTATION',
+                            key: 'TYPE_CONSULTATION'
+                          },
+                          {
+                            title: 'Montant',
+                            dataIndex: 'MONTANT_CONSULTATION',
+                            key: 'MONTANT_CONSULTATION',
+                            render: (montant) => `${parseFloat(montant || 0).toLocaleString()} FCFA`
+                          },
+                          {
+                            title: 'Statut Paiement',
+                            dataIndex: 'STATUT_PAIEMENT',
+                            key: 'STATUT_PAIEMENT',
+                            render: (statut) => {
+                              let color = 'default';
+                              if (statut === 'Gratuit') color = 'green';
+                              else if (statut === 'Tiers Payant') color = 'blue';
+                              else if (statut === 'À payer') color = 'orange';
+                              else if (statut === 'Payé') color = 'green';
+                              return <Tag color={color}>{statut}</Tag>;
+                            }
+                          },
+                          {
+                            title: 'Actions',
+                            key: 'actions',
+                            render: (_, record) => (
+                              <Space>
+                                <Button
+                                  size="small"
+                                  icon={<EyeOutlined />}
+                                  onClick={() => handleViewHistorique(record)}
+                                >
+                                  Détails
+                                </Button>
+                                <Button
+                                  size="small"
+                                  icon={<PrinterOutlined />}
+                                  onClick={() => handlePrintHistorique(record)}
+                                >
+                                  Imprimer
+                                </Button>
+                              </Space>
+                            )
+                          }
+                        ]}
+                        pagination={{ pageSize: 5 }}
+                        size="small"
+                        locale={{
+                          emptyText: (
+                            <Empty
+                              description="Aucune consultation trouvée"
+                              image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            />
+                          )
                         }}
-                      >
-                        <FaTimes />
-                      </button>
-                    </div>
-                    
-                    {assuresPrincipaux.length > 0 && (
-                      <div className="assures-list">
-                        <div className="assures-list-header">
-                          <span>{t('consultations.search.primaryInsuredsFound', 'Assurés principaux trouvés:')} ({assuresPrincipaux.length})</span>
-                        </div>
-                        <div className="assures-list-content">
-                          {assuresPrincipaux.map((assure, index) => (
-                            <div 
-                              key={`assure-${assure.id || index}`}
-                              className="assure-item"
-                              onClick={() => handleSelectAssurePrincipal(assure)}
-                            >
-                              <div className="assure-info">
-                                <p className="assure-name">
-                                  <FaUserTag /> {assure.NOM_BEN} {assure.PRE_BEN}
-                                </p>
-                                <p className="assure-details">
-                                  <FaIdCard /> {t('consultations.patient.id', 'ID')}: {assure.IDENTIFIANT_NATIONAL} | 
-                                  <FaPhone /> {t('consultations.patient.phone', 'Tél')}: {assure.TELEPHONE_MOBILE || assure.TELEPHONE || 'Non renseigné'}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                      />
+                      <div style={{ marginTop: 16, textAlign: 'center' }}>
+                        <Button
+                          icon={<ReloadOutlined />}
+                          onClick={() => loadHistoriqueConsultations(selectedPatient.id)}
+                          loading={loadingHistorique}
+                        >
+                          Actualiser l'historique
+                        </Button>
                       </div>
-                    )}
-                    
-                    {searchAssureValue.length >= 2 && assuresPrincipaux.length === 0 && (
-                      <div className="no-results">
-                        <p>{t('consultations.info.noPrimaryInsuredsFound', 'Aucun assuré principal trouvé. Essayez avec d\'autres termes.')}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                {assurePrincipal && !showAssureSearch && (
-                  <div className="selected-assure-info">
-                    <p className="success-message">
-                      <FaCheck /> {t('consultations.success.primaryInsuredSelectedShort', 'Assuré principal sélectionné:')}
-                    </p>
-                    <p><strong>{assurePrincipal}</strong></p>
-                    <button 
-                      type="button" 
-                      className="change-assure-button"
-                      onClick={() => setShowAssureSearch(true)}
+                    </TabPane>
+                  </Tabs>
+                </Card>
+              </Col>
+            )}
+          </Row>
+        </Card>
+      )
+    },
+    {
+      title: 'Paramétrage',
+      icon: <FileTextOutlined />,
+      content: (
+        <Card
+          title={
+            <Space>
+              <FileTextOutlined />
+              <span>Paramétrage de la Consultation</span>
+            </Space>
+          }
+          extra={
+            <Space>
+              <Button onClick={() => setCurrentStep(0)}>
+                <ArrowLeftOutlined /> Retour
+              </Button>
+              <Button
+                type="primary"
+                icon={<ArrowRightOutlined />}
+                onClick={() => setCurrentStep(2)}
+                disabled={!selectedPrestataire || !selectedCentreId}
+              >
+                Continuer
+              </Button>
+            </Space>
+          }
+        >
+          <Row gutter={[16, 16]}>
+            <Col span={12}>
+              <Card size="small" title="Configuration">
+                <Form layout="vertical">
+                  <Form.Item label="Centre de santé">
+                    <Select
+                      value={selectedCentreId}
+                      onChange={handleCentreChange}
+                      loading={loadingCentres}
+                      placeholder="Sélectionnez un centre"
+                      style={{ width: '100%' }}
                     >
-                      <FaSyncAlt /> {t('consultations.buttons.changePrimaryInsured', 'Changer l\'assuré principal')}
-                    </button>
-                  </div>
-                )}
-              </div>
-              
-              {selectedPatient?.id_assure_principal && (
-                <div className="info-box info">
-                  <p className="info-text">
-                    {t('consultations.info.primaryInsuredLinked', 'Ce patient est lié à un assuré principal dans la base de données.')}
-                  </p>
-                  <p>
-                    <strong>{t('consultations.patient.primaryInsuredId', 'ID Assuré Principal')}:</strong> {selectedPatient.id_assure_principal}
-                  </p>
-                </div>
-              )}
+                      <Option value="">Tous les centres</Option>
+                      {centresSante.map(centre => (
+                        <Option key={centre.id} value={centre.id}>
+                          {centre.nom}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+
+                  <Form.Item label="Médecin">
+                    <Select
+                      value={selectedPrestataire}
+                      onChange={setSelectedPrestataire}
+                      disabled={!selectedCentreId}
+                      placeholder="Sélectionnez un médecin"
+                      style={{ width: '100%' }}
+                    >
+                      {prestataires.map(prestataire => (
+                        <Option key={prestataire.id} value={prestataire.id}>
+                          {prestataire.nom_complet} - {prestataire.specialite}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+
+                  <Form.Item label="Type de consultation">
+                    <Select
+                      value={selectedType}
+                      onChange={handleTypeChange}
+                      placeholder="Sélectionnez un type"
+                      style={{ width: '100%' }}
+                    >
+                      {typesConsultation.map(type => (
+                        <Option key={type.LIB_TYP_CONS} value={type.LIB_TYP_CONS}>
+                          {type.LIB_TYP_CONS} - {(type.MONTANT || 0).toLocaleString()} FCFA
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+
+                  <Form.Item>
+                    <Checkbox
+                      checked={gratuite}
+                      onChange={(e) => handleGratuiteChange(e.target.checked)}
+                    >
+                      Consultation gratuite
+                    </Checkbox>
+                  </Form.Item>
+
+                  <Form.Item label="Montant de la consultation (FCFA)">
+                    <Input
+                      type="number"
+                      value={montantEditable}
+                      onChange={(e) => handleMontantChange(e.target.value)}
+                      disabled={gratuite}
+                      addonAfter="FCFA"
+                      style={{ width: '100%' }}
+                    />
+                  </Form.Item>
+                </Form>
+              </Card>
+            </Col>
+
+            <Col span={12}>
+              <Card size="small" title="Résumé">
+                <Descriptions column={1} size="small">
+                  <Descriptions.Item label="Patient">
+                    <strong>{selectedPatient?.nom} {selectedPatient?.prenom}</strong>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Statut ACE">
+                    <Tag color="blue">{statutACE || selectedPatient?.statut_ace}</Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Centre de santé">
+                    {selectedCentre?.nom || 'Non sélectionné'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Médecin">
+                    {selectedPrestataire ? 
+                      prestataires.find(p => p.id === parseInt(selectedPrestataire))?.nom_complet : 
+                      'Non sélectionné'
+                    }
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Type de consultation">
+                    {selectedType || 'Non sélectionné'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Montant">
+                    <Tag color={gratuite ? 'green' : 'blue'}>
+                      {gratuite ? 'GRATUIT' : `${montantTotal.toLocaleString()} FCFA`}
+                    </Tag>
+                  </Descriptions.Item>
+                </Descriptions>
+              </Card>
+            </Col>
+          </Row>
+        </Card>
+      )
+    },
+    {
+      title: 'Informations Médicales',
+      icon: <MedicineBoxOutlined />,
+      content: (
+        <Card
+          title={
+            <Space>
+              <MedicineBoxOutlined />
+              <span>Informations Médicales</span>
+            </Space>
+          }
+          extra={
+            <Space>
+              <Button onClick={() => setCurrentStep(1)}>
+                <ArrowLeftOutlined /> Retour
+              </Button>
+              <Button
+                type="primary"
+                icon={<ArrowRightOutlined />}
+                onClick={() => setCurrentStep(3)}
+              >
+                Continuer
+              </Button>
+            </Space>
+          }
+        >
+          <Row gutter={[16, 16]}>
+            <Col span={24}>
+              <Collapse defaultActiveKey={['1']}>
+                <Panel header="Statut ACE et Assuré Principal" key="1">
+                  <Row gutter={[16, 16]}>
+                    <Col span={12}>
+                      <Form.Item label="Statut ACE">
+                        <Input
+                          value={statutACE}
+                          readOnly
+                          prefix={<TagsOutlined />}
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item label="Assuré Principal">
+                        {statutACE === 'Principal' ? (
+                          <Input
+                            value={`${selectedPatient?.nom} ${selectedPatient?.prenom} (Lui-même)`}
+                            readOnly
+                          />
+                        ) : (
+                          <Space.Compact style={{ width: '100%' }}>
+                            <Input
+                              value={assurePrincipal}
+                              readOnly
+                              placeholder="Rechercher un assuré principal"
+                              onClick={() => setShowAssureSearch(true)}
+                            />
+                            <Button
+                              type="primary"
+                              icon={<SearchOutlined />}
+                              onClick={() => setShowAssureSearch(true)}
+                            />
+                          </Space.Compact>
+                        )}
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                </Panel>
+
+                <Panel header="Signes Vitaux" key="2">
+                  <Row gutter={[16, 16]}>
+                    <Col span={8}>
+                      <Form.Item label="Tension artérielle (TA)">
+                        <Input
+                          value={ta}
+                          onChange={(e) => setTa(e.target.value)}
+                          placeholder="Ex: 120/80"
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                      <Form.Item label="Poids (kg)">
+                        <Input
+                          type="number"
+                          value={poids}
+                          onChange={(e) => setPoids(e.target.value)}
+                          placeholder="Ex: 70"
+                          addonAfter="kg"
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                      <Form.Item label="Taille (cm)">
+                        <Input
+                          type="number"
+                          value={taille}
+                          onChange={(e) => setTaille(e.target.value)}
+                          placeholder="Ex: 175"
+                          addonAfter="cm"
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                      <Form.Item label="Température (°C)">
+                        <Input
+                          type="number"
+                          value={temperature}
+                          onChange={(e) => setTemperature(e.target.value)}
+                          placeholder="Ex: 37.5"
+                          addonAfter="°C"
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                      <Form.Item label="Pouls (bpm)">
+                        <Input
+                          type="number"
+                          value={pouls}
+                          onChange={(e) => setPouls(e.target.value)}
+                          placeholder="Ex: 72"
+                          addonAfter="bpm"
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                      <Form.Item label="Glycémie (g/L)">
+                        <Input
+                          type="number"
+                          value={glycemie}
+                          onChange={(e) => setGlycemie(e.target.value)}
+                          placeholder="Ex: 1.0"
+                          addonAfter="g/L"
+                        />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                </Panel>
+
+                <Panel header="Prescription Médicale" key="3">
+                  <Form layout="vertical">
+                    <Form.Item label="Observations médicales">
+                      <TextArea
+                        value={observations}
+                        onChange={(e) => setObservations(e.target.value)}
+                        rows={3}
+                        placeholder="Saisir les observations médicales"
+                      />
+                    </Form.Item>
+                    <Form.Item label="Examens complémentaires">
+                      <TextArea
+                        value={examens}
+                        onChange={(e) => setExamens(e.target.value)}
+                        rows={2}
+                        placeholder="Liste des examens complémentaires"
+                      />
+                    </Form.Item>
+                    <Form.Item label="Traitement prescrit">
+                      <TextArea
+                        value={traitements}
+                        onChange={(e) => setTraitements(e.target.value)}
+                        rows={2}
+                        placeholder="Médicaments et posologie"
+                      />
+                    </Form.Item>
+                    <Form.Item label="Recommandations">
+                      <TextArea
+                        value={recommandations}
+                        onChange={(e) => setRecommandations(e.target.value)}
+                        rows={2}
+                        placeholder="Recommandations pour le patient"
+                      />
+                    </Form.Item>
+                  </Form>
+                </Panel>
+
+                <Panel header="Informations Complémentaires" key="4">
+                  <Row gutter={[16, 16]}>
+                    <Col span={12}>
+                      <Form.Item label="Code affection">
+                        <Input
+                          value={codeAffection}
+                          onChange={(e) => setCodeAffection(e.target.value)}
+                          placeholder="Saisir le code affection"
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item label="Prochain rendez-vous">
+                        <DatePicker
+                          value={dateRendezVous ? moment(dateRendezVous) : null}
+                          onChange={(date) => setDateRendezVous(date ? date.format('YYYY-MM-DD') : '')}
+                          style={{ width: '100%' }}
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={24}>
+                      <Form.Item>
+                        <Checkbox
+                          checked={accidentTiers}
+                          onChange={(e) => setAccidentTiers(e.target.checked)}
+                        >
+                          Accident causé par un tiers
+                        </Checkbox>
+                      </Form.Item>
+                      {accidentTiers && (
+                        <Form.Item label="Date de l'accident">
+                          <DatePicker
+                            value={dateAccident ? moment(dateAccident) : null}
+                            onChange={(date) => setDateAccident(date ? date.format('YYYY-MM-DD') : '')}
+                            style={{ width: '100%' }}
+                          />
+                        </Form.Item>
+                      )}
+                    </Col>
+                  </Row>
+                </Panel>
+              </Collapse>
+            </Col>
+          </Row>
+        </Card>
+      )
+    },
+    {
+      title: 'Décompte Financier',
+      icon: <DollarOutlined />,
+      content: (
+        <Card
+          title={
+            <Space>
+              <DollarOutlined />
+              <span>Décompte Financier et Validation</span>
+            </Space>
+          }
+          extra={
+            <Space>
+              <Button onClick={() => setCurrentStep(2)}>
+                <ArrowLeftOutlined /> Retour
+              </Button>
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                onClick={handleValidate}
+                loading={loading}
+                disabled={!selectedCentreId || !statutACE || (statutACE !== 'Principal' && !assurePrincipal)}
+              >
+                Valider
+              </Button>
+            </Space>
+          }
+        >
+          <Row gutter={[16, 16]}>
+            <Col span={12}>
+              <Card size="small" title="Configuration du paiement">
+                <Form layout="vertical">
+                  <Form.Item>
+                    <Checkbox
+                      checked={tiersPayant}
+                      onChange={(e) => setTiersPayant(e.target.checked)}
+                      disabled={gratuite}
+                    >
+                      Tiers Payant
+                    </Checkbox>
+                  </Form.Item>
+
+                  {tiersPayant && !gratuite && (
+                    <Form.Item label={`Pourcentage de couverture: ${pourcentageCouverture}%`}>
+                      <Slider
+                        min={0}
+                        max={100}
+                        value={pourcentageCouverture}
+                        onChange={setPourcentageCouverture}
+                        disabled={gratuite}
+                      />
+                    </Form.Item>
+                  )}
+
+                  <Divider />
+
+                  <Form.Item label="Détails du patient">
+                    <Descriptions column={1} size="small">
+                      <Descriptions.Item label="Nom">
+                        {selectedPatient?.nom} {selectedPatient?.prenom}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Statut ACE">
+                        <Tag color="blue">{statutACE}</Tag>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Assuré principal">
+                        {statutACE === 'Principal' ? 
+                          `${selectedPatient?.nom} ${selectedPatient?.prenom} (Lui-même)` : 
+                          assurePrincipal || 'Non spécifié'
+                        }
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Centre de santé">
+                        {selectedCentre?.nom}
+                      </Descriptions.Item>
+                    </Descriptions>
+                  </Form.Item>
+                </Form>
+              </Card>
+            </Col>
+
+            <Col span={12}>
+              <Card size="small" title="Résumé financier">
+                <Row gutter={[16, 16]}>
+                  <Col span={24}>
+                    <Statistic
+                      title="Montant total consultation"
+                      value={montantTotal}
+                      precision={0}
+                      prefix={<DollarOutlined />}
+                      suffix="FCFA"
+                      valueStyle={{ color: '#3f8600' }}
+                    />
+                  </Col>
+
+                  {tiersPayant && !gratuite && pourcentageCouverture > 0 && (
+                    <Col span={24}>
+                      <Statistic
+                        title={`Prise en charge (${pourcentageCouverture}%)`}
+                        value={montantPrisEnCharge}
+                        precision={0}
+                        prefix={<DollarOutlined />}
+                        suffix="FCFA"
+                        valueStyle={{ color: '#1890ff' }}
+                      />
+                    </Col>
+                  )}
+
+                  {gratuite && (
+                    <Col span={24}>
+                      <Alert
+                        message="Consultation gratuite"
+                        type="success"
+                        showIcon
+                      />
+                    </Col>
+                  )}
+
+                  <Col span={24}>
+                    <Card
+                      type="inner"
+                      title="RESTE À CHARGE PATIENT"
+                      style={{ background: '#f6ffed' }}
+                    >
+                      <Statistic
+                        value={resteCharge}
+                        precision={0}
+                        prefix={<DollarOutlined />}
+                        suffix="FCFA"
+                        valueStyle={{ 
+                          fontSize: '24px',
+                          color: resteCharge > 0 ? '#cf1322' : '#52c41a'
+                        }}
+                      />
+                    </Card>
+                  </Col>
+                </Row>
+
+                <Divider />
+
+                <Alert
+                  message="Avertissement"
+                  description="La validation est IRREVERSIBLE. La consultation sera enregistrée et facturable."
+                  type="warning"
+                  showIcon
+                />
+              </Card>
+            </Col>
+          </Row>
+        </Card>
+      )
+    },
+    {
+      title: 'Fiche de Soins',
+      icon: <FileDoneOutlined />,
+      content: (
+        <Card
+          title={
+            <Space>
+              <FileDoneOutlined />
+              <span>Fiche de Soins</span>
+            </Space>
+          }
+          extra={
+            <Button
+              type="primary"
+              icon={<PrinterOutlined />}
+              onClick={handlePrint}
+            >
+              Imprimer
+            </Button>
+          }
+        >
+          <Row justify="center" gutter={[16, 16]}>
+            <Col span={24}>
+              <Alert
+                message="Consultation enregistrée avec succès!"
+                description={`Numéro de consultation: ${consultationId}`}
+                type="success"
+                showIcon
+                style={{ marginBottom: '20px' }}
+              />
+            </Col>
+
+            <Col span={24}>
+              <Card size="small">
+                <Descriptions title="Détails de la consultation" column={2} bordered>
+                  <Descriptions.Item label="Patient" span={2}>
+                    <strong>{selectedPatient?.nom} {selectedPatient?.prenom}</strong>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Statut ACE">
+                    <Tag color="blue">{statutACE}</Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Assuré principal">
+                    {statutACE === 'Principal' ? 
+                      `${selectedPatient?.nom} ${selectedPatient?.prenom}` : 
+                      assurePrincipal
+                    }
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Centre de santé">
+                    {selectedCentre?.nom}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Médecin">
+                    {prestataires.find(p => p.id === parseInt(selectedPrestataire))?.nom_complet}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Type de consultation">
+                    {selectedType}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Montant total">
+                    <Tag color="blue">{montantTotal.toLocaleString()} FCFA</Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Statut paiement">
+                    <Tag color={gratuite ? 'green' : tiersPayant ? 'orange' : 'red'}>
+                      {gratuite ? 'Gratuit' : tiersPayant ? 'Tiers Payant' : 'À payer'}
+                    </Tag>
+                  </Descriptions.Item>
+                </Descriptions>
+              </Card>
+            </Col>
+
+            <Col span={24}>
+              <Space>
+                <Button
+                  type="primary"
+                  icon={<PrinterOutlined />}
+                  onClick={handlePrint}
+                  size="large"
+                >
+                  Imprimer la fiche de soins
+                </Button>
+                <Button
+                  icon={<PlusOutlined />}
+                  onClick={handleNewConsultation}
+                  size="large"
+                >
+                  Nouvelle consultation
+                </Button>
+                <Button
+                  icon={<HistoryOutlined />}
+                  onClick={() => {
+                    setCurrentStep(0);
+                    setActiveTab('historique');
+                  }}
+                  size="large"
+                >
+                  Voir l'historique
+                </Button>
+              </Space>
+            </Col>
+
+            <Col span={24}>
+              <Alert
+                message="Information"
+                description="La fiche de soins s'ouvrira dans un nouvel onglet pour impression."
+                type="info"
+                showIcon
+              />
+            </Col>
+          </Row>
+        </Card>
+      )
+    }
+  ];
+
+  // ============= MODAL POUR DÉTAILS HISTORIQUE =============
+  const HistoriqueDetailModal = () => {
+    if (!selectedHistorique) return null;
+    
+    return (
+      <Modal
+        title={`Détails de la consultation - ${moment(selectedHistorique.DATE_CONSULTATION).format('DD/MM/YYYY HH:mm')}`}
+        open={modalHistoriqueVisible}
+        onCancel={() => setModalHistoriqueVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setModalHistoriqueVisible(false)}>
+            Fermer
+          </Button>,
+          <Button 
+            key="print" 
+            type="primary" 
+            icon={<PrinterOutlined />}
+            onClick={() => {
+              handlePrintHistorique(selectedHistorique);
+              setModalHistoriqueVisible(false);
+            }}
+          >
+            Imprimer
+          </Button>
+        ]}
+        width={800}
+      >
+        <Card size="small">
+          <Descriptions title="Informations générales" column={1} bordered>
+            <Descriptions.Item label="Date">
+              {moment(selectedHistorique.DATE_CONSULTATION).format('DD/MM/YYYY HH:mm')}
+            </Descriptions.Item>
+            <Descriptions.Item label="Médecin">
+              {selectedHistorique.NOM_MEDECIN}
+            </Descriptions.Item>
+            <Descriptions.Item label="Spécialité">
+              {selectedHistorique.SPECIALITE_MEDECIN || 'Non spécifiée'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Type">
+              {selectedHistorique.TYPE_CONSULTATION}
+            </Descriptions.Item>
+            <Descriptions.Item label="Centre">
+              {selectedHistorique.CENTRE_NOM}
+            </Descriptions.Item>
+          </Descriptions>
+
+          <Divider />
+
+          <Descriptions title="Informations médicales" column={1} bordered>
+            <Descriptions.Item label="Observations">
+              {selectedHistorique.OBSERVATIONS || 'Aucune observation'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Examens complémentaires">
+              {selectedHistorique.EXAMENS_COMPLEMENTAIRES || 'Aucun examen'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Traitement prescrit">
+              {selectedHistorique.TRAITEMENT_PRESCRIT || 'Aucun traitement'}
+            </Descriptions.Item>
+          </Descriptions>
+
+          <Divider />
+
+          <Descriptions title="Signes vitaux" column={2} bordered>
+            <Descriptions.Item label="TA">
+              {selectedHistorique.TA || 'Non mesuré'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Poids">
+              {selectedHistorique.POIDS ? `${selectedHistorique.POIDS} kg` : 'Non mesuré'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Taille">
+              {selectedHistorique.TAILLE ? `${selectedHistorique.TAILLE} cm` : 'Non mesuré'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Température">
+              {selectedHistorique.TEMPERATURE ? `${selectedHistorique.TEMPERATURE} °C` : 'Non mesuré'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Pouls">
+              {selectedHistorique.POULS ? `${selectedHistorique.POULS} bpm` : 'Non mesuré'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Glycémie">
+              {selectedHistorique.GLYCEMIE ? `${selectedHistorique.GLYCEMIE} g/L` : 'Non mesuré'}
+            </Descriptions.Item>
+          </Descriptions>
+
+          <Divider />
+
+          <Descriptions title="Informations financières" column={2} bordered>
+            <Descriptions.Item label="Montant consultation">
+              <Tag color="blue">{parseFloat(selectedHistorique.MONTANT_CONSULTATION || 0).toLocaleString()} FCFA</Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="Statut paiement">
+              <Tag color={
+                selectedHistorique.STATUT_PAIEMENT === 'Gratuit' ? 'green' :
+                selectedHistorique.STATUT_PAIEMENT === 'Tiers Payant' ? 'blue' :
+                selectedHistorique.STATUT_PAIEMENT === 'Payé' ? 'green' : 'orange'
+              }>
+                {selectedHistorique.STATUT_PAIEMENT}
+              </Tag>
+            </Descriptions.Item>
+            {selectedHistorique.TAUX_PRISE_EN_CHARGE > 0 && (
+              <>
+                <Descriptions.Item label="Taux prise en charge">
+                  {selectedHistorique.TAUX_PRISE_EN_CHARGE}%
+                </Descriptions.Item>
+                <Descriptions.Item label="Montant pris en charge">
+                  {parseFloat(selectedHistorique.MONTANT_PRISE_EN_CHARGE || 0).toLocaleString()} FCFA
+                </Descriptions.Item>
+              </>
+            )}
+            <Descriptions.Item label="Reste à charge">
+              <Tag color={selectedHistorique.RESTE_A_CHARGE > 0 ? 'red' : 'green'}>
+                {parseFloat(selectedHistorique.RESTE_A_CHARGE || 0).toLocaleString()} FCFA
+              </Tag>
+            </Descriptions.Item>
+          </Descriptions>
+
+          <Divider />
+
+          <Descriptions title="Informations ACE" column={2} bordered>
+            <Descriptions.Item label="Statut ACE">
+              <Tag color="blue">{selectedHistorique.STATUT_ACE || statutACE}</Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="Assuré principal">
+              {selectedHistorique.NOM_ASSURE_PRINCIPAL || assurePrincipal}
+            </Descriptions.Item>
+          </Descriptions>
+
+          {selectedHistorique.PROCHAIN_RDV && (
+            <>
+              <Divider />
+              <Alert
+                message={`Prochain rendez-vous: ${moment(selectedHistorique.PROCHAIN_RDV).format('DD/MM/YYYY')}`}
+                type="info"
+                showIcon
+              />
             </>
           )}
-        </div>
-        
-        <div className="section bordered">
-          <h3 className="section-header">
-            <FaFileMedical /> {t('consultations.sections.medicalPrescription', 'A COMPLETER PAR LE MEDECIN PRESCRIPTEUR')}
-          </h3>
-          
-          <div className="medical-prescription-grid">
-            <div className="form-group">
-              <label className="form-label">
-                <FaList /> {t('consultations.labels.affectionCode', 'Code Affection')}
-              </label>
-              <input
-                type="text"
-                value={codeAffection}
-                onChange={(e) => setCodeAffection(e.target.value)}
-                placeholder={t('consultations.placeholders.affectionCode', 'Saisir le code affection (optionnel)')}
-                className="form-input"
-              />
-            </div>
-            
-            <div className="form-group">
-              <label className="checkbox-label">
-                <input 
-                  type="checkbox" 
-                  checked={accidentTiers} 
-                  onChange={(e) => setAccidentTiers(e.target.checked)} 
-                  className="checkbox-input" 
-                />
-                <span>{t('consultations.labels.accidentTiers', 'Accident causé par un tiers')}</span>
-              </label>
-              
-              {accidentTiers && (
-                <div className="form-group" style={{ marginTop: '10px' }}>
-                  <label className="form-label">
-                    {t('consultations.labels.accidentDate', 'Date de l\'accident')}
-                  </label>
-                  <input
-                    type="date"
-                    value={dateAccident}
-                    onChange={(e) => setDateAccident(e.target.value)}
-                    className="form-input"
-                    max={new Date().toISOString().split('T')[0]}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="section bordered">
-          <h3 className="section-header">
-            <FaCalendarAlt /> {t('consultations.labels.nextAppointment', 'Date du prochain rendez-vous (optionnel)')}
-          </h3>
-          <div className="form-group">
-            <input
-              type="date"
-              value={dateRendezVous}
-              onChange={(e) => setDateRendezVous(e.target.value)}
-              className="form-input"
-              min={new Date().toISOString().split('T')[0]}
-            />
-          </div>
-        </div>
-
-        <div className="section bordered">
-          <h3 className="section-header">
-            <FaHeartbeat /> {t('consultations.sections.vitalSigns', 'SIGNES VITAUX')}
-          </h3>
-          <div className="vitals-grid">
-            <div className="form-group">
-              <label className="form-label">
-                {t('consultations.labels.bloodPressure', 'Tension artérielle (TA)')}
-              </label>
-              <input 
-                type="text" 
-                value={ta} 
-                onChange={(e) => setTa(e.target.value)} 
-                placeholder={t('consultations.placeholders.bloodPressure', 'Ex: 120/80')} 
-                className="form-input" 
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                <FaWeight /> {t('consultations.labels.weight', 'Poids (kg)')}
-              </label>
-              <input 
-                type="number" 
-                value={poids} 
-                onChange={(e) => setPoids(e.target.value)} 
-                placeholder={t('consultations.placeholders.weight', 'Ex: 70')} 
-                className="form-input" 
-                min="0" 
-                step="0.1" 
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                <FaRulerVertical /> {t('consultations.labels.height', 'Taille (cm)')}
-              </label>
-              <input 
-                type="number" 
-                value={taille} 
-                onChange={(e) => setTaille(e.target.value)} 
-                placeholder={t('consultations.placeholders.height', 'Ex: 175')} 
-                className="form-input" 
-                min="0" 
-                step="0.1" 
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                <FaThermometerHalf /> {t('consultations.labels.temperature', 'Température (°C)')}
-              </label>
-              <input 
-                type="number" 
-                value={temperature} 
-                onChange={(e) => setTemperature(e.target.value)} 
-                placeholder={t('consultations.placeholders.temperature', 'Ex: 37.5')} 
-                className="form-input" 
-                min="0" 
-                step="0.1" 
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                <FaHeartbeat /> {t('consultations.labels.pulse', 'Pouls (bpm)')}
-              </label>
-              <input 
-                type="number" 
-                value={pouls} 
-                onChange={(e) => setPouls(e.target.value)} 
-                placeholder={t('consultations.placeholders.pulse', 'Ex: 72')} 
-                className="form-input" 
-                min="0" 
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-               {t('consultations.labels.respiratoryRate', 'Fréquence respiratoire')}
-              </label>
-              <input 
-                type="number" 
-                value={freqResp} 
-                onChange={(e) => setFreqResp(e.target.value)} 
-                placeholder={t('consultations.placeholders.respiratoryRate', 'Ex: 16')} 
-                className="form-input" 
-                min="0" 
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                <FaTint /> {t('consultations.labels.glycemia', 'Glycémie (g/L)')}
-              </label>
-              <input 
-                type="number" 
-                value={glycemie} 
-                onChange={(e) => setGlycemie(e.target.value)} 
-                placeholder={t('consultations.placeholders.glycemia', 'Ex: 1.0')} 
-                className="form-input" 
-                min="0" 
-                step="0.1" 
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="medical-info-grid">
-          <div className="medical-section">
-            <div className="form-group">
-              <label className="form-label">
-                {t('consultations.labels.observations', 'Observations médicales')}
-              </label>
-              <textarea 
-                value={observations} 
-                onChange={(e) => setObservations(e.target.value)} 
-                placeholder={t('consultations.placeholders.observations', 'Saisir les observations médicales (optionnel)')} 
-                className="medical-textarea" 
-                rows={4} 
-              />
-              <p className="form-hint">
-                {t('consultations.hints.maxLines', '(Ces observations seront utilisées comme diagnostic sur la feuille de soins)')}
-              </p>
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                {t('consultations.labels.complementaryExams', 'Examens complémentaires prescrits')}
-              </label>
-              <textarea 
-                value={examens} 
-                onChange={(e) => setExamens(e.target.value)} 
-                placeholder={t('consultations.placeholders.complementaryExams', 'Liste des examens complémentaires (optionnel)')} 
-                className="medical-textarea" 
-                rows={3} 
-              />
-              <p className="form-hint">
-                {t('consultations.hints.maxLines', '(Limitez à 2-3 lignes maximum)')}
-              </p>
-            </div>
-          </div>
-          <div className="medical-section">
-            <div className="form-group">
-              <label className="form-label">
-                {t('consultations.labels.treatment', 'Traitement prescrit')}
-              </label>
-              <textarea 
-                value={traitements} 
-                onChange={(e) => setTraitements(e.target.value)} 
-                placeholder={t('consultations.placeholders.treatment', 'Médicaments et posologie (optionnel)')} 
-                className="medical-textarea" 
-                rows={3} 
-              />
-              <p className="form-hint">
-                {t('consultations.hints.maxLines', '(Limitez à 2-3 lignes maximum)')}
-              </p>
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                {t('consultations.labels.recommendations', 'Recommandations et conseils')}
-              </label>
-              <textarea 
-                value={recommandations} 
-                onChange={(e) => setRecommandations(e.target.value)} 
-                placeholder={t('consultations.placeholders.recommendations', 'Recommandations pour le patient (optionnel)')} 
-                className="medical-textarea" 
-                rows={3} 
-              />
-              <p className="form-hint">
-                {t('consultations.hints.maxLines', '(Limitez à 2-3 lignes maximum)')}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="navigation-buttons">
-          <button onClick={() => setCurrentStep(2)} className="secondary-button">
-            <FaArrowLeft /> {t('common.back', 'Retour')} {t('consultations.navigation.toSettings', 'au paramétrage')}
-          </button>
-          <button onClick={() => setCurrentStep(4)} className="primary-button">
-            {t('consultations.navigation.continueToValidation', 'Continuer vers validation')} <FaArrowRight />
-          </button>
-        </div>
-      </div>
+        </Card>
+      </Modal>
     );
   };
 
-  // ============= ÉTAPE 1: IDENTIFICATION PATIENT =============
-  const Step1PatientIdentification = () => (
-    <div className="step-container">
-      <h2 className="step-title">
-        <div className="step-icon">
-          <FaUserInjured />
-        </div>
-        {t('consultations.steps.patientIdentification', '1. IDENTIFICATION DU PATIENT')}
-      </h2>
-      
-      <div className="search-section">
-        <div className="search-type-selector">
-          <button 
-            onClick={() => { 
-              setSearchType('identifiant'); 
-              setShowScanner(false); 
-              setSearchValue('');
-              setPatients([]);
-            }} 
-            className={`search-type-btn ${searchType === 'identifiant' ? 'active' : ''}`}
-          >
-            <div className="btn-icon">
-              <FaIdCard />
-            </div>
-            {t('consultations.search.nationalId', 'Identifiant national')}
-          </button>
-          <button 
-            onClick={() => { 
-              setSearchType('carte'); 
-              setShowScanner(false);
-              setSearchValue('');
-              setPatients([]);
-            }} 
-            className={`search-type-btn ${searchType === 'carte' ? 'active' : ''}`}
-          >
-            <div className="btn-icon">
-              <FaIdCard />
-            </div>
-            {t('consultations.search.insuranceCard', 'Carte d\'assuré')}
-          </button>
-          <button 
-            onClick={() => { 
-              setSearchType('nom'); 
-              setShowScanner(false);
-              setSearchValue('');
-              setPatients([]);
-            }} 
-            className={`search-type-btn ${searchType === 'nom' ? 'active' : ''}`}
-          >
-            <div className="btn-icon">
-              <FaUserInjured />
-            </div>
-            {t('consultations.search.name', 'Nom')}
-          </button>
-          <button 
-            onClick={() => { 
-              setSearchType('scanner'); 
-              setShowScanner(true); 
-            }} 
-            className={`search-type-btn ${searchType === 'scanner' ? 'active' : ''}`}
-          >
-            <div className="btn-icon">
-              <FaBarcode />
-            </div>
-            {t('consultations.search.scanBarcode', 'Scanner code-barres')}
-          </button>
-        </div>
+  // ============= MODAL POUR RECHERCHE ASSURÉ PRINCIPAL =============
+  const AssureSearchModal = () => (
+    <Modal
+      title="Rechercher un assuré principal"
+      open={showAssureSearch}
+      onCancel={() => {
+        setShowAssureSearch(false);
+        setSearchAssureValue('');
+        setAssuresPrincipaux([]);
+      }}
+      footer={null}
+      width={800}
+    >
+      <Space.Compact style={{ width: '100%', marginBottom: '20px' }}>
+        <Input
+          placeholder="Rechercher un assuré principal (nom, prénom, identifiant)"
+          value={searchAssureValue}
+          onChange={(e) => handleSearchAssureChange(e.target.value)}
+          prefix={<SearchOutlined />}
+        />
+        <Button
+          icon={<CloseCircleOutlined />}
+          onClick={() => {
+            setShowAssureSearch(false);
+            setSearchAssureValue('');
+            setAssuresPrincipaux([]);
+          }}
+        />
+      </Space.Compact>
 
-        <div className="search-input-group">
-          {!showScanner ? (
-            <>
-              <div className="form-group">
-                <label className="form-label">
-                  {searchType === 'identifiant' ? (
-                    <>
-                      <FaIdCard /> {t('consultations.search.nationalId', 'Identifiant national')}
-                    </>
-                  ) : searchType === 'carte' ? (
-                    <>
-                      <FaIdCard /> {t('consultations.search.insuranceCard', 'Numéro de carte')}
-                    </>
-                  ) : (
-                    <>
-                      <FaUserInjured /> {t('consultations.search.patientName', 'Nom du patient')}
-                    </>
-                  )}
-                </label>
-                <input
-                  type="text"
-                  value={searchValue}
-                  onChange={(e) => handleSearchInputChange(e.target.value)}
-                  placeholder={
-                    searchType === 'identifiant' ? t('consultations.placeholders.nationalId', 'Ex: CM12345678') : 
-                    searchType === 'carte' ? t('consultations.placeholders.cardNumber', 'Numéro de carte - min. 2 caractères') : 
-                    t('consultations.placeholders.name', 'Nom ou prénom - min. 2 caractères')
-                  }
-                  className="form-input"
-                  autoFocus
-                />
-                <p className="form-hint">
-                  {t('consultations.search.debounceHint', 'La recherche se déclenche automatiquement après la saisie')}
-                </p>
-              </div>
-              <button 
-                onClick={() => handleSearchPatient()} 
-                disabled={loading || searchValue.trim().length < 2} 
-                className="search-button"
-              >
-                {loading ? (
-                  <>
-                    <div className="loading-spinner"></div>
-                    {t('consultations.search.searching', 'Recherche en cours...')}
-                  </>
-                ) : (
-                  <>
-                    <FaSearch /> {t('common.search', 'Rechercher')}
-                  </>
-                )}
-              </button>
-            </>
-          ) : (
-            <div className="scanner-placeholder">
-              <p>{t('consultations.scanner.scanPrompt', 'Veuillez scanner le code-barres de la carte du patient.')}</p>
-              <button onClick={() => setShowScanner(false)} className="secondary-button">
-                <FaTimes /> {t('common.cancel', 'Annuler')} {t('consultations.scanner.scan', 'le scan')}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+      {assuresPrincipaux.length > 0 ? (
+        <Table
+          dataSource={assuresPrincipaux}
+          columns={[
+            {
+              title: 'Nom',
+              dataIndex: 'NOM_BEN',
+              key: 'NOM_BEN',
+              render: (text, record) => `${record.NOM_BEN} ${record.PRE_BEN}`
+            },
+            {
+              title: 'Identifiant',
+              dataIndex: 'IDENTIFIANT_NATIONAL',
+              key: 'IDENTIFIANT_NATIONAL'
+            },
+            {
+              title: 'Téléphone',
+              dataIndex: 'TELEPHONE_MOBILE',
+              key: 'TELEPHONE_MOBILE'
+            },
+            {
+              title: 'Actions',
+              key: 'actions',
+              render: (_, record) => (
+                <Button
+                  type="primary"
+                  size="small"
+                  onClick={() => handleSelectAssurePrincipal(record)}
+                >
+                  Sélectionner
+                </Button>
+              )
+            }
+          ]}
+          pagination={{ pageSize: 5 }}
+          size="small"
+        />
+      ) : searchAssureValue.length >= 2 ? (
+        <Empty description="Aucun assuré principal trouvé" />
+      ) : (
+        <Alert
+          message="Astuce"
+          description="Saisissez au moins 2 caractères pour lancer la recherche"
+          type="info"
+          showIcon
+        />
+      )}
+    </Modal>
+  );
+
+  // ============= RENDU PRINCIPAL =============
+  return (
+    <div style={{ padding: '20px' }}>
+      <Card 
+        title={
+          <Space>
+            <MedicineBoxOutlined />
+            <span>Gestion des Consultations</span>
+          </Space>
+        }
+        extra={
+          <Button
+            icon={<ArrowLeftOutlined />}
+            onClick={() => navigate('/dashboard')}
+          >
+            Retour
+          </Button>
+        }
+        style={{ marginBottom: '20px' }}
+      >
+        <Steps current={currentStep} style={{ marginBottom: '40px' }}>
+          {steps.map((item, index) => (
+            <Step 
+              key={index} 
+              title={item.title} 
+              icon={item.icon}
+              disabled={index > currentStep && !selectedPatient}
+            />
+          ))}
+        </Steps>
+
+        <div>{steps[currentStep].content}</div>
+      </Card>
 
       {showScanner && (
         <BarcodeScanner
@@ -1737,646 +2432,13 @@ const Consultations = () => {
         />
       )}
 
-      {patients.length > 0 && (
-        <div className="patients-list-section">
-          <h3 className="section-subtitle">
-            {t('consultations.search.patientsFound', 'Patients trouvés:')} ({patients.length})
-          </h3>
-          <div className="patients-list">
-            {patients.map((patient, index) => (
-              <div 
-                key={`patient-${patient.id || index}`} 
-                className={`patient-card ${selectedPatient?.id === patient.id ? 'selected' : ''}`} 
-                onClick={() => handleSelectPatient(patient)}
-              >
-                <div className="patient-info">
-                  <div className="patient-info-content">
-                    <p className="patient-name">
-                      <FaUserInjured /> {patient.nom} {patient.prenom}
-                    </p>
-                    <p className="patient-details">
-                      <FaIdCard /> {t('consultations.patient.id', 'ID')}: {patient.identifiant_national} | 
-                      {t('consultations.patient.age', 'Âge')}: {patient.age} {t('consultations.patient.years', 'ans')} | 
-                      {t('consultations.patient.gender', 'Sexe')}: {patient.sexe === 'M' ? t('common.male', 'M') : t('common.female', 'F')}
-                    </p>
-                    <p className="patient-details">
-                      <FaPhone /> {t('consultations.patient.phone', 'Tél')}: {patient.telephone_mobile || patient.telephone || 'Non renseigné'}
-                    </p>
-                    
-                    {patient.employeur && (
-                      <p className="patient-details">
-                        <FaBuilding /> <strong>{t('consultations.patient.employeur', 'Employeur')}:</strong> {patient.employeur}
-                      </p>
-                    )}
-                    
-                    {patient.statut_ace && (
-                      <p className="patient-details">
-                        <FaUserTag /> <strong>{t('consultations.patient.aceStatus', 'Statut ACE')}:</strong> {patient.statut_ace}
-                      </p>
-                    )}
-                    
-                    {patient.matricule && (
-                      <p className="patient-details">
-                        <strong>{t('consultations.patient.matricule', 'Matricule')}:</strong> {patient.matricule}
-                      </p>
-                    )}
-                    {patient.fonction && (
-                      <p className="patient-details">
-                        <strong>{t('consultations.patient.function', 'Fonction')}:</strong> {patient.fonction}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {selectedPatient && (
-        <div className="selected-patient-card">
-          <p className="success-message">
-            <FaCheck /> {t('consultations.success.patientSelectedShort', 'Patient sélectionné:')}
-          </p>
-          <p><strong>{selectedPatient.nom} {selectedPatient.prenom}</strong></p>
-          <p>
-            <FaIdCard /> {t('consultations.patient.id', 'ID')}: {selectedPatient.identifiant_national} | 
-            {t('consultations.patient.age', 'Âge')}: {selectedPatient.age} {t('consultations.patient.years', 'ans')}
-          </p>
-          
-          {selectedPatient.employeur && (
-            <p><FaBuilding /> <strong>{t('consultations.patient.employer', 'Employeur')}:</strong> {selectedPatient.employeur}</p>
-          )}
-          
-          {selectedPatient.statut_ace && (
-            <p><FaUserTag /> <strong>{t('consultations.patient.aceStatus', 'Statut ACE')}:</strong> {selectedPatient.statut_ace}</p>
-          )}
-          
-          <button onClick={() => setCurrentStep(2)} className="continue-button">
-            {t('consultations.navigation.continue', 'Continuer')} <FaArrowRight />
-          </button>
-        </div>
-      )}
-    </div>
-  );
-
-  // ============= ÉTAPE 2: PARAMÉTRAGE CONSULTATION =============
-  const Step2ConsultationSettings = () => {
-    return (
-      <div className="step-container">
-        <h2 className="step-title">
-          <div className="step-icon">
-            <FaFileMedical />
-          </div>
-          {t('consultations.steps.consultationSettings', '2. PARAMÉTRAGE DE LA CONSULTATION')}
-        </h2>
-        <div className="configuration-grid">
-          <div className="form-section">
-            <div className="form-group">
-              <label className="form-label">
-                <FaHospital /> {t('consultations.labels.healthCenter', 'Centre de santé')} 
-                <button type="button" onClick={loadCentresSante} className="refresh-button" title={t('common.refresh', 'Rafraîchir')}>
-                  <FaSyncAlt />
-                </button>
-              </label>
-              <select 
-                value={selectedCentreId} 
-                onChange={(e) => handleCentreChange(e.target.value)}
-                className="form-select"
-                disabled={loadingCentres}
-              >
-                <option value="">{t('consultations.placeholders.selectCentre', 'Sélectionnez un centre de santé')}</option>
-                {loadingCentres ? (
-                  <option value="" disabled>{t('consultations.loading.centres', 'Chargement des centres...')}</option>
-                ) : (
-                  centresSante.map((centre, index) => {
-                    const nom = centre.nom || `Centre ${centre.COD_CEN || centre.id}`;
-                    const type = centre.type ? `(${centre.type})` : '';
-                    
-                    return (
-                      <option key={`centre-${centre.COD_CEN || centre.id || index}`} value={centre.COD_CEN || centre.id}>
-                        {nom} {type}
-                      </option>
-                    );
-                  })
-                )}
-              </select>
-              <p className="form-hint">
-                {loadingCentres ? 
-                  t('consultations.loading.centresInProgress', 'Chargement des centres en cours...') : 
-                  centresSante.length === 0 ? 
-                  t('consultations.hints.noCentres', 'Aucun centre de santé actif disponible. Cliquez sur ⟳ pour rafraîchir.') : 
-                  selectedCentreId ? 
-                  t('consultations.hints.doctorsFiltered', 'Seuls les médecins de ce centre sont affichés') :
-                  t('consultations.hints.centresAvailable', '{{count}} centre(s) actif(s) disponible(s)', { count: centresSante.length })}
-              </p>
-            </div>
-
-            {selectedCentre && (
-              <div className="centre-details-card">
-                <h4 className="card-subtitle">
-                  <FaHospital /> {t('consultations.details.centreDetails', 'Détails du centre sélectionné')}
-                </h4>
-                <div className="details-grid">
-                  <p><strong>{t('consultations.labels.name', 'Nom')}:</strong> {selectedCentre.nom}</p>
-                  {selectedCentre.adresse && (
-                    <p><FaMapMarkerAlt /> <strong>{t('consultations.labels.address', 'Adresse')}:</strong> {selectedCentre.adresse}</p>
-                  )}
-                  {selectedCentre.TELEPHONE && (
-                    <p><FaPhone /> <strong>{t('consultations.labels.phone', 'Téléphone')}:</strong> {selectedCentre.TELEPHONE}</p>
-                  )}
-                  {selectedCentre.EMAIL && (
-                    <p><FaEnvelope /> <strong>{t('consultations.labels.email', 'Email')}:</strong> {selectedCentre.EMAIL}</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="form-group">
-              <label className="form-label">
-                <FaUserMd /> {t('consultations.labels.doctor', 'MEDECIN')}
-                <button 
-                  type="button" 
-                  onClick={() => selectedCentreId ? loadPrestatairesByCentre(parseInt(selectedCentreId)) : loadPrestataires()} 
-                  className="refresh-button" 
-                  title={t('common.refresh', 'Rafraîchir')}
-                >
-                  <FaSyncAlt />
-                </button>
-              </label>
-              <select 
-                value={selectedPrestataire} 
-                onChange={(e) => setSelectedPrestataire(e.target.value)} 
-                className="form-select"
-                disabled={!selectedCentreId}
-              >
-                <option value="">{t('consultations.placeholders.selectDoctor', 'Sélectionnez un médecin')}</option>
-                {prestataires.length > 0 ? (
-                  prestataires.map((prestataire, index) => {
-                    const nomComplet = prestataire.nom_complet || 
-                                      `${prestataire.PRENOM_PRESTATAIRE || prestataire.prenom || ''} ${prestataire.NOM_PRESTATAIRE || prestataire.nom || ''}`.trim();
-                    
-                    const specialite = prestataire.SPECIALITE || prestataire.specialite || '';
-                    
-                    return (
-                      <option 
-                        key={`prestataire-${prestataire.id || prestataire.COD_PRE || index}`} 
-                        value={prestataire.id || prestataire.COD_PRE}
-                      >
-                        {nomComplet} {specialite ? ` - ${specialite}` : ''}
-                      </option>
-                    );
-                  })
-                ) : (
-                  <option value="" disabled>
-                    {selectedCentreId 
-                      ? t('consultations.info.noDoctorsForCentre', 'Aucun médecin actif disponible pour ce centre')
-                      : t('consultations.info.selectCentreFirst', 'Veuillez d\'abord sélectionner un centre')}
-                  </option>
-                )}
-              </select>
-              <p className="form-hint">
-                {selectedCentreId ? (
-                  prestataires.length > 0 
-                    ? t('consultations.hints.filteredDoctors', '{{count}} médecin(s) affilié(s) à ce centre', { 
-                        count: prestataires.length 
-                      })
-                    : t('consultations.hints.noDoctorsInCentre', 'Aucun médecin trouvé pour ce centre')
-                ) : (
-                  t('consultations.hints.selectCentreFirst', 'Veuillez d\'abord sélectionner un centre')
-                )}
-              </p>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">
-                <FaStethoscope /> {t('consultations.labels.consultationType', 'Type de consultation')}
-              </label>
-              <select value={selectedType} onChange={(e) => handleTypeChange(e.target.value)} className="form-select">
-                <option value="">{t('consultations.placeholders.selectType', 'Sélectionnez un type')}</option>
-                {typesConsultation.map((type, index) => (
-                  <option key={`type-${type.COD_TYP_CONS || type.LIB_TYP_CONS || index}`} value={type.LIB_TYP_CONS}>
-                    {type.LIB_TYP_CONS} - {(type.MONTANT || 0).toLocaleString()} FCFA
-                  </option>
-                ))}
-              </select>
-              <p className="form-hint">
-                {t('consultations.hints.consultationTypeOptional', 'Optionnel - pour les consultations standard')}
-              </p>
-            </div>
-            <div className="checkbox-group">
-              <label className="checkbox-label">
-                <input 
-                  type="checkbox" 
-                  checked={gratuite} 
-                  onChange={(e) => handleGratuiteChange(e.target.checked)} 
-                  className="checkbox-input" 
-                />
-                <span className="checkbox-text">
-                  <FaEuroSign /> {t('consultations.labels.freeConsultation', 'Consultation gratuite (montant à 0)')}
-                </span>
-              </label>
-            </div>
-          </div>
-          <div className="summary-section">
-            <div className="summary-card">
-              <h3 className="summary-title">
-                <FaClipboardCheck /> {t('consultations.summary.title', 'Résumé')}
-              </h3>
-              {selectedPatient && (
-                <div className="summary-item">
-                  <p><strong><FaUserInjured /> {t('consultations.patient.patient', 'Patient')}:</strong> {selectedPatient.nom} {selectedPatient.prenom}</p>
-                  <p><strong>{t('consultations.patient.age', 'Âge')}:</strong> {selectedPatient.age} {t('consultations.patient.years', 'ans')}</p>
-                  <p><strong>{t('consultations.patient.aceStatus', 'Statut ACE')}:</strong> {statutACE || selectedPatient.statut_ace || 'Non spécifié'}</p>
-                  
-                  {selectedPatient.employeur && (
-                    <p><FaBuilding /> <strong>{t('consultations.patient.employer', 'Employeur')}:</strong> {selectedPatient.employeur}</p>
-                  )}
-                </div>
-              )}
-              {selectedPrestataire && (
-                <div className="summary-item">
-                  <p><strong><FaUserMd /> {t('consultations.labels.doctor', 'Médecin')}:</strong> {prestataires.find(p => p.id === parseInt(selectedPrestataire))?.nom_complet}</p>
-                  <p><strong>{t('consultations.labels.specialty', 'Spécialité')}:</strong> {prestataires.find(p => p.id === parseInt(selectedPrestataire))?.specialite}</p>
-                </div>
-              )}
-              {selectedCentre && (
-                <div className="summary-item">
-                  <p><strong><FaHospital /> {t('consultations.labels.healthCenter', 'Centre de santé')}:</strong> {selectedCentre.nom}</p>
-                  {selectedCentre.TELEPHONE && (
-                    <p><FaPhone /> <strong>{t('consultations.labels.phone', 'Téléphone')}:</strong> {selectedCentre.TELEPHONE}</p>
-                  )}
-                </div>
-              )}
-              
-              {selectedType && (
-                <div className="summary-item">
-                  <p><strong><FaStethoscope /> {t('consultations.labels.type', 'Type')}:</strong> {selectedType}</p>
-                  <div className="summary-amount-details">
-                    <p>
-                      <strong><FaEuroSign /> {t('consultations.labels.rate', 'Tarif')}:</strong> 
-                      {(montantEditable || 0).toLocaleString()} FCFA
-                      {customAmount && <span className="custom-badge">{t('consultations.labels.custom', 'Personnalisé')}</span>}
-                    </p>
-                    {customAmount && montant !== montantEditable && (
-                      <>
-                        <p className="original-amount">
-                          {t('consultations.labels.originalAmount', 'Tarif d\'origine:')} 
-                          {(montant || 0).toLocaleString()} FCFA
-                        </p>
-                        <p className={`difference ${montantEditable > montant ? 'increase' : 'decrease'}`}>
-                          {montantEditable > montant ? '+' : '-'}
-                          {Math.abs(montantEditable - montant).toLocaleString()} FCFA
-                          ({((Math.abs(montantEditable - montant) / montant) * 100).toFixed(1)}%)
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {typePaiement && (
-                <div className="summary-item">
-                  <p><strong><FaMoneyBillWave /> {t('consultations.labels.paymentType', 'Type de paiement')}:</strong> {typePaiement.LIB_PAI}</p>
-                  <p><strong>{t('consultations.labels.coverageRate', 'Taux couverture')}:</strong> {typePaiement.TAUX_COUVERTURE}%</p>
-                </div>
-              )}
-
-              {selectedType && (
-                <div className="form-group">
-                  <label className="form-label">
-                    <FaMoneyBillWave /> {t('consultations.labels.consultationAmount', 'Montant de la consultation (FCFA)')}
-                  </label>
-                  <div className="amount-input-group">
-                    <input
-                      type="number"
-                      value={montantEditable}
-                      onChange={(e) => handleMontantChange(e.target.value)}
-                      className="form-input"
-                      min="0"
-                      step="100"
-                      disabled={gratuite}
-                    />
-                    <div className="amount-actions">
-                      <button
-                        type="button"
-                        className={`amount-button ${customAmount ? 'active' : ''}`}
-                        onClick={() => {
-                          if (customAmount) {
-                            const typeData = typesConsultation.find(t => t.LIB_TYP_CONS === selectedType);
-                            if (typeData) {
-                              handleMontantChange(typeData.MONTANT);
-                            }
-                          }
-                        }}
-                        title={t('consultations.buttons.resetAmount', 'Rétablir le montant d\'origine')}
-                        disabled={gratuite}
-                      >
-                        <FaSyncAlt />
-                      </button>
-                    </div>
-                  </div>
-                  <p className="form-hint">
-                    {customAmount ? 
-                      t('consultations.hints.customAmountActive', 'Montant personnalisé. Cliquez sur ⟳ pour rétablir le tarif standard.') : 
-                      t('consultations.hints.amountEditable', 'Vous pouvez modifier ce montant si nécessaire.')}
-                  </p>
-                  
-                  {customAmount && !gratuite && (
-                    <div className="amount-difference">
-                      <p className={`difference ${montantEditable > montant ? 'increase' : 'decrease'}`}>
-                        {montantEditable > montant ? '▲' : '▼'} 
-                        {t('consultations.info.amountDifference', 'Différence:')} 
-                        {Math.abs(montantEditable - montant).toLocaleString()} FCFA
-                        {montantEditable > montant ? 
-                          t('consultations.info.amountIncrease', ' (augmentation)') : 
-                          t('consultations.info.amountDecrease', ' (réduction)')}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {gratuite && (
-                <div className="warning-box">
-                  <p className="warning-text">
-                    <FaEuroSign /> {t('consultations.warnings.freeConsultation', 'Consultation gratuite activée')}
-                  </p>
-                </div>
-              )}
-            </div>
-            <div className="navigation-buttons">
-              <button onClick={() => setCurrentStep(1)} className="secondary-button">
-                <FaArrowLeft /> {t('common.back', 'Retour')}
-              </button>
-              <button onClick={() => setCurrentStep(3)} disabled={!selectedPrestataire || !selectedCentreId} className="primary-button">
-                {t('consultations.navigation.continueToMedical', 'Continuer vers informations médicales')} <FaArrowRight />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ============= ÉTAPE 4: DÉCOMPTE FINANCIER =============
-  const Step4FinancialBreakdown = () => (
-    <div className="step-container">
-      <h2 className="step-title">
-        <div className="step-icon">
-          <FaClipboardCheck />
-        </div>
-        {t('consultations.steps.financialBreakdown', '4. DÉCOMPTE FINANCIER ET VALIDATION')}
-      </h2>
-      <div className="decompte-grid">
-        <div className="decompte-form-section">
-          <div className="form-group">
-            <label className="checkbox-label">
-              <input 
-                type="checkbox" 
-                checked={tiersPayant} 
-                onChange={(e) => { 
-                  if (gratuite) { 
-                    toast.warning(t('consultations.warnings.noTiersForFree', 'La consultation gratuite ne peut pas avoir de tiers payant')); 
-                    return; 
-                  } 
-                  setTiersPayant(e.target.checked); 
-                }} 
-                className="checkbox-input" 
-                disabled={gratuite} 
-              />
-              <span><FaMoneyBillWave /> {t('consultations.labels.tiersPayant', 'Tiers Payant')}</span>
-            </label>
-            {tiersPayant && !gratuite && (
-              <div className="coverage-slider">
-                <label className="form-label">
-                  {t('consultations.labels.coveragePercentage', 'Pourcentage de couverture')}
-                </label>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="100" 
-                  value={pourcentageCouverture} 
-                  onChange={(e) => setPourcentageCouverture(parseInt(e.target.value))} 
-                  className="slider-input" 
-                />
-                <div className="slider-labels">
-                  <span>0%</span>
-                  <span className="current-percentage">{pourcentageCouverture}%</span>
-                  <span>100%</span>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="patient-details-card">
-            <h3 className="card-title">
-              <FaUserInjured /> {t('consultations.sections.patientDetails', 'Détails du patient')}
-            </h3>
-            <p><strong>{t('consultations.patient.name', 'Nom')}:</strong> {selectedPatient?.nom} {selectedPatient?.prenom}</p>
-            <p><strong>{t('consultations.patient.id', 'Identifiant')}:</strong> {selectedPatient?.identifiant_national}</p>
-            <p><strong>{t('consultations.patient.aceStatus', 'Statut ACE')}:</strong> {statutACE || selectedPatient?.statut_ace || 'Non spécifié'}</p>
-            
-            {selectedPatient?.employeur && (
-              <p><FaBuilding /> <strong>{t('consultations.patient.employer', 'Employeur')}:</strong> {selectedPatient.employeur}</p>
-            )}
-            
-            <div className="assure-principal-info">
-              <h4><FaUserTag /> {t('consultations.labels.primaryInsured', 'Assuré Principal')}:</h4>
-              {statutACE === 'Principal' ? (
-                <p><strong>{selectedPatient?.nom} {selectedPatient?.prenom} (Lui-même)</strong></p>
-              ) : (
-                <p><strong>{assurePrincipal || t('consultations.info.noPrimaryInsuredSelected', 'Non sélectionné')}</strong></p>
-              )}
-            </div>
-            
-            {selectedCentre && (
-              <div className="centre-info">
-                <h4><FaHospital /> {t('consultations.labels.healthCenter', 'Centre de santé')}:</h4>
-                <p><strong>{selectedCentre.nom}</strong></p>
-                {selectedCentre.TELEPHONE && (
-                  <p><FaPhone /> {selectedCentre.TELEPHONE}</p>
-                )}
-                {selectedCentre.EMAIL && (
-                  <p><FaEnvelope /> {selectedCentre.EMAIL}</p>
-                )}
-              </div>
-            )}
-            {typePaiement && (
-              <div className="payment-type-info">
-                <h4><FaMoneyBillWave /> {t('consultations.labels.paymentType', 'Type de paiement')}:</h4>
-                <p><strong>{typePaiement.LIB_PAI}</strong> ({typePaiement.TAUX_COUVERTURE}% {t('consultations.labels.coverage', 'de couverture')})</p>
-              </div>
-            )}
-            {dateRendezVous && (
-              <div className="rendez-vous-summary">
-                <h4><FaCalendarAlt /> {t('consultations.labels.appointment', 'Rendez-vous')}:</h4>
-                <p><strong>{t('consultations.labels.nextAppointment', 'Prochain RDV')}:</strong> {new Date(dateRendezVous).toLocaleDateString('fr-FR')}</p>
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="decompte-summary-section">
-          <div className="financial-summary-card">
-            <h3 className="summary-title center">
-              <FaMoneyBillWave /> {t('consultations.sections.financialBreakdown', 'DÉCOMPTE FINANCIER')}
-            </h3>
-            <div className="financial-details">
-              <div className="financial-row">
-                <span>{t('consultations.financial.totalAmount', 'Montant total consultation')}:</span>
-                <span className="financial-value">{(montantTotal || 0).toLocaleString()} FCFA</span>
-              </div>
-              {tiersPayant && !gratuite && pourcentageCouverture > 0 && (
-                <div className="financial-row">
-                  <span>{t('consultations.financial.coverage', 'Prise en charge')} ({pourcentageCouverture}%):</span>
-                  <span className="financial-discount">-{(montantPrisEnCharge || 0).toLocaleString()} FCFA</span>
-                </div>
-              )}
-              {gratuite && (
-                <div className="financial-row">
-                  <span>{t('consultations.financial.freeConsultation', 'Consultation gratuite')}:</span>
-                  <span className="financial-discount">-{(montantTotal || 0).toLocaleString()} FCFA</span>
-                </div>
-              )}
-              <div className="financial-total">
-                <span>{t('consultations.financial.patientRemaining', 'RESTE À CHARGE PATIENT')}:</span>
-                <span className={`total-amount ${resteCharge > 0 ? 'positive' : 'zero'}`}>
-                  {(resteCharge || 0).toLocaleString()} FCFA
-                </span>
-              </div>
-            </div>
-            <div className="warning-banner">
-              <p className="warning-title">
-                <FaExclamationTriangle /> {t('consultations.warnings.warning', 'AVERTISSEMENT')}
-              </p>
-              <p className="warning-message">
-                {t('consultations.warnings.irreversible', 'La validation est IRREVERSIBLE. La consultation sera enregistrée et facturable.')}
-              </p>
-            </div>
-          </div>
-          <div className="navigation-buttons">
-            <button onClick={() => setCurrentStep(3)} className="secondary-button">
-              <FaArrowLeft /> {t('common.back', 'Retour')} {t('consultations.navigation.toMedicalInfo', 'aux infos médicales')}
-            </button>
-            <button onClick={handleValidate} disabled={loading || !selectedCentreId || !statutACE || (statutACE !== 'Principal' && !assurePrincipal)} className="validate-button">
-              {loading ? (
-                <>
-                  <FaSyncAlt /> {t('consultations.buttons.validating', 'Validation en cours...')}
-                </>
-              ) : (
-                <>
-                  <FaCheck /> {t('consultations.buttons.validateConsultation', 'VALIDER LA CONSULTATION')}
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // ============= ÉTAPE 5: FICHE DE SOINS =============
-  const Step5InsuranceSheet = () => (
-    <div className="step-container">
-      <h2 className="step-title">
-        <div className="step-icon">
-          <FaFileInvoiceDollar />
-        </div>
-        {t('consultations.steps.insuranceSheet', '5. FICHE DE SOINS')}
-      </h2>
-      <div className="success-section">
-        <div className="success-icon"><FaCheck /></div>
-        <p className="success-title">
-          {t('consultations.success.consultationSaved', 'Consultation enregistrée avec succès!')}
-        </p>
-        <div className="success-details">
-          <p>
-            <strong>{t('consultations.labels.consultationNumber', 'N° de consultation')}:</strong> 
-            <span className="highlight">{consultationId}</span>
-          </p>
-          <p>
-            <strong><FaUserInjured /> {t('consultations.patient.patient', 'Patient')}:</strong> 
-            <span className="highlight">{selectedPatient?.nom} {selectedPatient?.prenom}</span>
-          </p>
-          <p>
-            <strong>{t('consultations.patient.aceStatus', 'Statut ACE')}:</strong> 
-            <span className="highlight">{statutACE || selectedPatient?.statut_ace || 'Non spécifié'}</span>
-          </p>
-          
-          {selectedPatient?.employeur && (
-            <p>
-              <FaBuilding /> <strong>{t('consultations.patient.employer', 'Employeur')}:</strong> 
-              <span className="highlight">{selectedPatient.employeur}</span>
-            </p>
-          )}
-          
-          <p>
-            <strong><FaUserTag /> {t('consultations.labels.primaryInsured', 'Assuré Principal')}:</strong> 
-            <span className="highlight">
-              {statutACE === 'Principal' 
-                ? `${selectedPatient?.nom} ${selectedPatient?.prenom} (Lui-même)`
-                : assurePrincipal || t('consultations.info.noPrimaryInsured', 'Non spécifié')}
-            </span>
-          </p>
-          <p>
-            <strong><FaStethoscope /> {t('consultations.labels.consultationType', 'Type de consultation')}:</strong> 
-            <span className="highlight">{selectedType || t('consultations.print.generalConsultation', 'Consultation générale')}</span>
-          </p>
-          <p>
-            <strong><FaHospital /> {t('consultations.labels.healthCenter', 'Centre de santé')}:</strong> 
-            <span className="highlight">{selectedCentre?.nom}</span>
-          </p>
-          {selectedCentre?.TELEPHONE && (
-            <p>
-              <FaPhone /> <strong>{t('consultations.labels.phone', 'Téléphone')}:</strong> 
-              <span className="highlight">{selectedCentre.TELEPHONE}</span>
-            </p>
-          )}
-          <p>
-            <strong><FaEuroSign /> {t('consultations.labels.totalAmount', 'Montant total')}:</strong> 
-            <span className="highlight">{(montantTotal || 0).toLocaleString()} FCFA</span>
-          </p>
-          <p>
-            <strong>{t('consultations.labels.paymentStatus', 'Statut paiement')}:</strong> 
-            <span className={`status ${gratuite ? 'gratuit' : tiersPayant ? 'tiers' : 'apayer'}`}>
-              {gratuite ? t('consultations.payment.free', 'Gratuit') : (tiersPayant ? t('consultations.payment.tiers', 'Tiers Payant') : t('consultations.payment.toPay', 'À payer'))}
-            </span>
-          </p>
-        </div>
-        <div className="action-buttons">
-          <button onClick={handlePrint} className="print-button">
-            <FaPrint /> {t('consultations.buttons.printSheet', 'IMPRIMER LA FICHE DE SOINS')}
-          </button>
-          <button onClick={handleNewConsultation} className="new-button">
-            <FaPlus /> {t('consultations.buttons.newConsultation', 'NOUVELLE CONSULTATION')}
-          </button>
-        </div>
-        <div className="print-preview-note">
-          <p><strong>{t('consultations.print.sheetWillOpen', 'La fiche de soins s\'ouvrira dans un nouvel onglet pour impression.')}</strong></p>
-          <p><em>{t('consultations.print.format', 'Format: 1 page A4 | Vérifiez les paramètres de popup de votre navigateur.')}</em></p>
-        </div>
-      </div>
-    </div>
-  );
-
-  // ============= RENDU PRINCIPAL =============
-  return (
-    <div className="consultations-container">
-      <ToastContainer position="top-right" autoClose={3000} />
-      
-      <HeaderSection />
-
-      <div className="step-transition">
-        {currentStep === 1 && <Step1PatientIdentification />}
-        {currentStep === 2 && <Step2ConsultationSettings />}
-        {currentStep === 3 && <MedicalInfoStep />}
-        {currentStep === 4 && <Step4FinancialBreakdown />}
-        {currentStep === 5 && <Step5InsuranceSheet />}
-      </div>
+      <AssureSearchModal />
+      <HistoriqueDetailModal />
     </div>
   );
 };
 
-// Styles d'impression MODIFIÉS pour agrandir les écritures
+// Styles d'impression (inchangés)
 const printStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   
@@ -2829,7 +2891,7 @@ const printStyles = `
   }
 `;
 
-// Fiche de soins avec écritures agrandies
+// Fiche de soins avec écritures agrandies (inchangée)
 const printContent = (feuilleData, t) => {
   const qrData = {
     document: {

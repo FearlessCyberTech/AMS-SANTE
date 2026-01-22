@@ -4,7 +4,8 @@ const corsMiddleware = (req, res, next) => {
   const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:3000',
-    'http://localhost:8080'
+    'http://192.168.100.20:3000',
+    'http://localhost:8080',
   ];
   
   const origin = req.headers.origin;

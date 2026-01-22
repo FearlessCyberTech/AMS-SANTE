@@ -127,7 +127,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5030';
       
       console.log('Tentative de connexion à:', `${apiUrl}/api/auth/login`);
       

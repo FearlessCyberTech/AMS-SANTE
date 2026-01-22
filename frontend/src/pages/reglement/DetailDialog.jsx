@@ -1,4 +1,4 @@
-// components/DetailDialog.jsx
+// components/DetailDialog.jsx - VERSION CORRIGÉE
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -23,7 +23,9 @@ import {
   ListItemIcon,
   Avatar,
   Stack,
-  Tooltip
+  Tooltip,
+  Snackbar,
+  alpha
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -44,10 +46,141 @@ import {
   Description as DescriptionIcon,
   Payments as PaymentsIcon,
   Business as BusinessIcon,
-  MedicalServices as MedicalServicesIcon
+  MedicalServices as MedicalServicesIcon,
+  CheckCircle as CheckIcon,
+  Warning as WarningIcon,
+  Error as ErrorIcon
 } from '@mui/icons-material';
 import PrintDetails from './PrintDetails';
 import { facturationAPI, financesAPI } from '../../services/api';
+
+// Fonction utilitaire pour valider et formater les données
+const validateData = (data, type = 'transaction') => {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return null;
+  }
+  
+  // Fonction récursive pour nettoyer un objet
+  const cleanObject = (obj, depth = 0) => {
+    if (depth > 3) return '[Objet trop profond]'; // Limite de récursion
+    if (!obj || typeof obj !== 'object') return obj;
+    
+    // Si c'est une date
+    if (obj instanceof Date) return obj;
+    
+    // Si c'est un tableau, nettoyer chaque élément
+    if (Array.isArray(obj)) {
+      return obj.map(item => cleanObject(item, depth + 1));
+    }
+    
+    // Si c'est un objet, nettoyer chaque propriété
+    const cleaned = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        const value = obj[key];
+        
+        // Gérer les types primitifs
+        if (value === null || value === undefined) {
+          cleaned[key] = '';
+        } else if (typeof value === 'string') {
+          cleaned[key] = value;
+        } else if (typeof value === 'number') {
+          cleaned[key] = value;
+        } else if (typeof value === 'boolean') {
+          cleaned[key] = value;
+        } else if (value instanceof Date) {
+          cleaned[key] = value;
+        } else if (Array.isArray(value)) {
+          cleaned[key] = cleanObject(value, depth + 1);
+        } else if (typeof value === 'object') {
+          // Pour les sous-objets, les convertir en string
+          try {
+            // Essayer d'extraire une valeur utile
+            if (value._id || value.id || value.code || value.nom || value.name) {
+              cleaned[key] = value._id || value.id || value.code || value.nom || value.name || '';
+            } else {
+              const str = JSON.stringify(value);
+              cleaned[key] = str.length > 100 ? str.substring(0, 100) + '...' : str;
+            }
+          } catch {
+            cleaned[key] = '[Objet non sérialisable]';
+          }
+        } else {
+          cleaned[key] = String(value);
+        }
+      }
+    }
+    return cleaned;
+  };
+
+  // Fonction pour extraire une valeur en string
+  const extractString = (value, defaultValue = '') => {
+    if (!value && value !== 0) return defaultValue;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (typeof value === 'object') {
+      try {
+        // Essayer d'extraire une valeur significative
+        if (value._id || value.id || value.code || value.nom || value.name || value.label) {
+          return value._id || value.id || value.code || value.nom || value.name || value.label || '';
+        }
+        const str = JSON.stringify(value);
+        return str.length > 50 ? str.substring(0, 50) + '...' : str;
+      } catch {
+        return '[Objet]';
+      }
+    }
+    return String(value || defaultValue);
+  };
+
+  // Nettoyer l'objet de base
+  const cleanedData = cleanObject(data);
+
+  if (type === 'transaction') {
+    return {
+      COD_TRANS: cleanedData.COD_TRANS || cleanedData.id || null,
+      REFERENCE_TRANSACTION: extractString(cleanedData.REFERENCE_TRANSACTION || cleanedData.reference, 'N/A'),
+      BENEFICIAIRE: extractString(cleanedData.BENEFICIAIRE || cleanedData.NOM_BEN || cleanedData.nom_ben, 'N/A'),
+      DATE_INITIATION: cleanedData.DATE_INITIATION || cleanedData.date_initiation,
+      MONTANT: Number(cleanedData.MONTANT || cleanedData.montant || 0),
+      STATUT_TRANSACTION: extractString(cleanedData.STATUT_TRANSACTION || cleanedData.statut, 'N/A'),
+      METHODE_PAIEMENT: extractString(cleanedData.METHODE_PAIEMENT || cleanedData.methode, 'N/A'),
+      TYPE_TRANSACTION: extractString(cleanedData.TYPE_TRANSACTION || cleanedData.type_transaction, 'N/A'),
+      CANAL: extractString(cleanedData.CANAL || cleanedData.canal, 'N/A'),
+      NUMERO_FACTURE: extractString(cleanedData.NUMERO_FACTURE || cleanedData.numero_facture, 'N/A'),
+      NOM_CLIENT: extractString(cleanedData.NOM_CLIENT || cleanedData.nom_client, 'N/A'),
+      MOYEN_PAIEMENT: extractString(cleanedData.MOYEN_PAIEMENT || cleanedData.moyen_paiement, 'N/A'),
+      DESCRIPTION: extractString(cleanedData.DESCRIPTION || cleanedData.description, ''),
+      ...cleanedData
+    };
+  } else if (type === 'facture') {
+    return {
+      id: cleanedData.id || cleanedData.COD_FACTURE || null,
+      numero: extractString(cleanedData.numero || cleanedData.numero_facture, 'N/A'),
+      numero_facture: extractString(cleanedData.numero_facture || cleanedData.numero, 'N/A'),
+      nom_ben: extractString(cleanedData.nom_ben || cleanedData.NOM_BEN, ''),
+      prenom_ben: extractString(cleanedData.prenom_ben || cleanedData.PRE_BEN, ''),
+      date_facture: cleanedData.date_facture || cleanedData.DATE_FACTURE,
+      date_echeance: cleanedData.date_echeance || cleanedData.DATE_ECHEANCE,
+      date_creation: cleanedData.date_creation || cleanedData.created_at,
+      date_modification: cleanedData.date_modification,
+      montant_total: Number(cleanedData.montant_total || cleanedData.MONTANT_TOTAL || 0),
+      montant_paye: Number(cleanedData.montant_paye || cleanedData.MONTANT_PAYE || 0),
+      montant_restant: Number(cleanedData.montant_restant || cleanedData.MONTANT_RESTANT || 0),
+      statut: extractString(cleanedData.statut, 'N/A'),
+      telephone: extractString(cleanedData.telephone || cleanedData.TELEPHONE, ''),
+      NOM_MEDECIN: extractString(cleanedData.NOM_MEDECIN || cleanedData.medecin_nom, ''),
+      NOM_CENTRE: extractString(cleanedData.NOM_CENTRE || cleanedData.centre_nom, ''),
+      MONTANT_ASSURANCE: Number(cleanedData.MONTANT_ASSURANCE || 0),
+      MONTANT_PATIENT: Number(cleanedData.MONTANT_PATIENT || 0),
+      OBSERVATIONS: extractString(cleanedData.OBSERVATIONS || cleanedData.observations, ''),
+      TYPE_FACTURE: extractString(cleanedData.TYPE_FACTURE || cleanedData.type_facture, ''),
+      IDENTIFIANT_NATIONAL: extractString(cleanedData.IDENTIFIANT_NATIONAL, ''),
+      ...cleanedData
+    };
+  }
+  return cleanedData;
+};
 
 const DetailDialog = ({ 
   open, 
@@ -57,22 +190,73 @@ const DetailDialog = ({
   onClose, 
   onDownload,
   statusConfig,
-  paymentMethods
+  paymentMethods,
+  formatCurrency = (amount) => {
+    return new Intl.NumberFormat('fr-FR', {
+      style: 'currency',
+      currency: 'CFA'
+    }).format(amount || 0);
+  },
+  formatDate = (date) => {
+    if (!date) return 'N/A';
+    try {
+      const dateObj = date instanceof Date ? date : new Date(date);
+      if (isNaN(dateObj.getTime())) return 'Date invalide';
+      
+      return dateObj.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return 'N/A';
+    }
+  }
 }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [showPrintView, setShowPrintView] = useState(false);
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState(null);
-  const [data, setData] = useState(initialData);
+  const [data, setData] = useState(initialData ? validateData(initialData, type) : null);
   const [paiements, setPaiements] = useState([]);
   const [loadingPaiements, setLoadingPaiements] = useState(false);
+  const [notification, setNotification] = useState({
+    open: false,
+    message: '',
+    type: 'info'
+  });
+
+  // Afficher une notification
+  const showNotification = (message, type = 'info') => {
+    setNotification({
+      open: true,
+      message: message.toString(),
+      type
+    });
+  };
+
+  // Fermer la notification
+  const handleCloseNotification = () => {
+    setNotification(prev => ({ ...prev, open: false }));
+  };
 
   useEffect(() => {
     if (open && !initialData && id) {
       loadData();
-    } else if (initialData) {
-      setData(initialData);
+    } else if (initialData && open) {
+      const validatedData = validateData(initialData, type);
+      setData(validatedData);
       setLoading(false);
+      
+      // Charger les paiements si c'est une facture
+      if (type === 'facture') {
+        const factureId = validatedData?.id || validatedData?.COD_FACTURE;
+        if (factureId) {
+          loadPaiements(factureId);
+        }
+      }
     }
   }, [open, id, type, initialData]);
 
@@ -90,7 +274,7 @@ const DetailDialog = ({
         });
         
         if (response.success && response.transactions && response.transactions.length > 0) {
-          setData(response.transactions[0]);
+          setData(validateData(response.transactions[0], type));
         } else {
           throw new Error('Transaction non trouvée');
         }
@@ -99,8 +283,14 @@ const DetailDialog = ({
         response = await facturationAPI.getFactureById(id);
         
         if (response.success && response.facture) {
-          setData(response.facture);
-          loadPaiements(response.facture.id || response.facture.ID_FACTURE);
+          const validatedData = validateData(response.facture, type);
+          setData(validatedData);
+          
+          // Charger les paiements associés
+          const factureId = validatedData.id || validatedData.COD_FACTURE;
+          if (factureId) {
+            loadPaiements(factureId);
+          }
         } else {
           throw new Error('Facture non trouvée');
         }
@@ -126,29 +316,6 @@ const DetailDialog = ({
     } catch (error) {
       console.error('❌ Erreur chargement paiements:', error);
       setLoadingPaiements(false);
-    }
-  };
-
-  const formatCurrency = (amount) => {
-    if (!amount && amount !== 0) return 'N/A';
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'CFA'
-    }).format(amount);
-  };
-
-  const formatDate = (date) => {
-    if (!date) return 'N/A';
-    try {
-      return new Date(date).toLocaleDateString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return date;
     }
   };
 
@@ -187,151 +354,89 @@ const DetailDialog = ({
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({
-        title: `${type === 'transaction' ? 'Transaction' : 'Facture'} ${data.REFERENCE_TRANSACTION || data.numero || data.ID_FACTURE}`,
+        title: `${type === 'transaction' ? 'Transaction' : 'Facture'} ${data?.REFERENCE_TRANSACTION || data?.numero || data?.id}`,
         text: `Détails de ${type === 'transaction' ? 'la transaction' : 'la facture'}`,
         url: window.location.href,
       });
     }
   };
 
-// Dans DetailDialog.jsx - VERSION CORRIGÉE
-const handleDownload = async () => {
-  try {
-    showNotification('Téléchargement en cours...', 'info');
-    
-    // Vérifier le type de document
-    if (type === 'transaction') {
-      // Télécharger le reçu de transaction
-      await handleDownloadDocument(
-        data.REFERENCE_TRANSACTION || data.reference, 
-        'transaction'
-      );
-    } else if (type === 'facture') {
-      // Télécharger la quittance PDF
-      await handleDownloadQuittancePDF(data.id || data.COD_FACTURE);
-    } else if (type === 'remboursement') {
-      // Télécharger le reçu de remboursement
-      await handleDownloadDocument(
-        data.REFERENCE || data.COD_DECL, 
-        'remboursement'
-      );
+  const handleDownload = async () => {
+    try {
+      showNotification('Téléchargement en cours...', 'info');
+      
+      // Vérifier le type de document
+      if (type === 'transaction') {
+        // Télécharger le reçu de transaction
+        const reference = data?.REFERENCE_TRANSACTION || data?.reference;
+        if (reference && onDownload) {
+          await onDownload(reference, 'transaction');
+        } else {
+          downloadAsJSON(data, 'transaction');
+        }
+      } else if (type === 'facture') {
+        // Télécharger la quittance PDF
+        const factureId = data?.id || data?.COD_FACTURE;
+        if (factureId) {
+          await handleDownloadQuittancePDF(factureId);
+        } else {
+          downloadAsJSON(data, 'facture');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erreur téléchargement:', error);
+      showNotification('Erreur lors du téléchargement', 'error');
     }
-  } catch (error) {
-    console.error('❌ Erreur téléchargement:', error);
-    showNotification('Erreur lors du téléchargement', 'error');
-  }
-};
+  };
 
-// Nouvelle fonction pour télécharger la quittance PDF
-const handleDownloadQuittancePDF = async (factureId) => {
-  try {
-    const response = await facturationAPI.genererQuittancePDF(factureId);
-    
-    if (response.success) {
-      // Créer et télécharger le fichier PDF
-      const url = window.URL.createObjectURL(response.pdf);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = response.fileName || `quittance_${factureId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+  // Nouvelle fonction pour télécharger la quittance PDF
+  const handleDownloadQuittancePDF = async (factureId) => {
+    try {
+      const response = await facturationAPI.genererQuittancePDF(factureId);
       
-      // Nettoyer l'URL
-      setTimeout(() => window.URL.revokeObjectURL(url), 100);
-      
-      showNotification('✅ Quittance téléchargée avec succès', 'success');
-    } else {
+      if (response.success && response.pdf) {
+        // Créer et télécharger le fichier PDF
+        const blob = response.pdf instanceof Blob ? response.pdf : new Blob([response.pdf], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = response.fileName || `quittance_${factureId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        
+        // Nettoyer l'URL
+        setTimeout(() => window.URL.revokeObjectURL(url), 100);
+        
+        showNotification('✅ Quittance téléchargée avec succès', 'success');
+      } else {
+        // Fallback: Télécharger les données JSON
+        downloadAsJSON(data, 'facture');
+      }
+    } catch (error) {
+      console.error('❌ Erreur téléchargement quittance PDF:', error);
       // Fallback: Télécharger les données JSON
-      await handleDownloadQuittanceFallback(factureId);
+      downloadAsJSON(data, 'facture');
     }
-  } catch (error) {
-    console.error('❌ Erreur téléchargement quittance PDF:', error);
-    // Fallback: Télécharger les données JSON
-    await handleDownloadQuittanceFallback(factureId);
-  }
-};
+  };
 
-// Fallback: Générer un PDF côté client avec jsPDF
-const handleDownloadQuittanceFallback = async (factureId) => {
-  try {
-    // Option 1: Récupérer les données et générer avec jsPDF
-    const response = await facturationAPI.genererQuittance(factureId);
-    
-    if (response.success) {
-      // Générer un PDF simple avec jsPDF
-      await generatePDFFromData(response.quittance || response.data);
-      
-      showNotification('✅ Quittance générée avec succès', 'success');
-    } else {
-      showNotification(response.message || 'Erreur lors de la génération de la quittance', 'error');
-    }
-  } catch (error) {
-    console.error('❌ Erreur fallback quittance:', error);
-    showNotification('Impossible de générer la quittance', 'error');
-  }
-};
-
-// Fonction pour générer un PDF avec jsPDF
-const generatePDFFromData = async (quittanceData) => {
-  try {
-    // Vérifier si jsPDF est disponible
-    const { jsPDF } = window.jspdf;
-    
-    if (!jsPDF) {
-      // Si jsPDF n'est pas disponible, télécharger un JSON
-      downloadAsJSON(quittanceData);
-      return;
-    }
-    
-    // Créer un nouveau document PDF
-    const doc = new jsPDF();
-    
-    // Titre
-    doc.setFontSize(20);
-    doc.text('QUITTANCE', 105, 20, { align: 'center' });
-    
-    // Informations de la facture
-    doc.setFontSize(12);
-    doc.text(`Numéro: ${quittanceData.facture?.numero || 'N/A'}`, 20, 40);
-    doc.text(`Date: ${formatDate(quittanceData.facture?.date_facture)}`, 20, 50);
-    
-    // Informations du patient
-    doc.text(`Patient: ${quittanceData.patient?.nom || ''} ${quittanceData.patient?.prenom || ''}`, 20, 70);
-    
-    // Montant
-    doc.text(`Montant total: ${formatCurrency(quittanceData.facture?.montant_total || 0)}`, 20, 90);
-    doc.text(`Montant payé: ${formatCurrency(quittanceData.facture?.montant_paye || 0)}`, 20, 100);
-    doc.text(`Reste à payer: ${formatCurrency(quittanceData.facture?.montant_restant || 0)}`, 20, 110);
-    
-    // Date de génération
-    doc.setFontSize(10);
-    doc.text(`Généré le: ${formatDate(new Date())}`, 20, 140);
-    
-    // Sauvegarder le PDF
-    doc.save(`quittance_${quittanceData.facture?.numero || 'document'}.pdf`);
-    
-  } catch (error) {
-    console.error('❌ Erreur génération PDF:', error);
-    // Fallback au format JSON
-    downloadAsJSON(quittanceData);
-  }
-};
-
-// Télécharger en JSON
-const downloadAsJSON = (data) => {
-  const dataStr = JSON.stringify(data, null, 2);
-  const blob = new Blob([dataStr], { type: 'application/json' });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `quittance_${data.facture?.numero || 'data'}.json`;
-  link.click();
-  link.remove();
-  setTimeout(() => window.URL.revokeObjectURL(url), 100);
-};
+  // Télécharger en JSON
+  const downloadAsJSON = (data, type) => {
+    const dataStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${type}_${data?.id || data?.COD_TRANS || 'data'}.json`;
+    link.click();
+    link.remove();
+    setTimeout(() => window.URL.revokeObjectURL(url), 100);
+    showNotification('Données téléchargées en JSON', 'info');
+  };
 
   const renderQuickStats = () => {
+    if (!data) return null;
+    
     if (type === 'transaction') {
       return (
         <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
@@ -340,7 +445,7 @@ const downloadAsJSON = (data) => {
               Montant
             </Typography>
             <Typography variant="h6" color="primary" fontWeight="bold">
-              {formatCurrency(data.MONTANT || data.montant)}
+              {formatCurrency(data.MONTANT)}
             </Typography>
           </Paper>
           <Paper sx={{ p: 2, flex: 1, minWidth: 200, textAlign: 'center' }}>
@@ -348,8 +453,8 @@ const downloadAsJSON = (data) => {
               Statut
             </Typography>
             <Chip
-              label={getStatutText(data.STATUT_TRANSACTION || data.statut)}
-              color={getStatutColor(data.STATUT_TRANSACTION || data.statut)}
+              label={getStatutText(data.STATUT_TRANSACTION)}
+              color={getStatutColor(data.STATUT_TRANSACTION)}
               sx={{ mt: 0.5, fontWeight: 'medium' }}
             />
           </Paper>
@@ -358,7 +463,7 @@ const downloadAsJSON = (data) => {
               Date
             </Typography>
             <Typography variant="body2" sx={{ mt: 0.5 }}>
-              {formatDate(data.DATE_INITIATION || data.date_transaction || data.created_at)}
+              {formatDate(data.DATE_INITIATION)}
             </Typography>
           </Paper>
         </Box>
@@ -371,7 +476,7 @@ const downloadAsJSON = (data) => {
               Montant Total
             </Typography>
             <Typography variant="h6" color="primary" fontWeight="bold">
-              {formatCurrency(data.MONTANT_TOTAL || data.montant_total)}
+              {formatCurrency(data.montant_total)}
             </Typography>
           </Paper>
           <Paper sx={{ p: 2, flex: 1, minWidth: 200, textAlign: 'center' }}>
@@ -388,8 +493,8 @@ const downloadAsJSON = (data) => {
             <Typography variant="caption" color="text.secondary">
               Restant à Payer
             </Typography>
-            <Typography variant="h6" color={data.MONTANT_RESTANT > 0 ? 'error' : 'success'} fontWeight="bold">
-              {formatCurrency(data.MONTANT_RESTANT || data.montant_restant || 0)}
+            <Typography variant="h6" color={data.montant_restant > 0 ? 'error' : 'success'} fontWeight="bold">
+              {formatCurrency(data.montant_restant)}
             </Typography>
           </Paper>
         </Box>
@@ -398,191 +503,210 @@ const downloadAsJSON = (data) => {
     return null;
   };
 
-  const renderTransactionDetails = () => (
-    <Paper sx={{ p: 3, borderRadius: 2 }}>
-      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <ReceiptIcon color="primary" />
-        Informations Transaction
-      </Typography>
-      <Divider sx={{ mb: 3 }} />
-      
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Référence Transaction
-            </Typography>
-            <Typography variant="body1" fontWeight="medium">
-              {data.REFERENCE_TRANSACTION || 'N/A'}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Type de Transaction
-            </Typography>
-            <Typography variant="body1">
-              {data.TYPE_TRANSACTION || data.type_transaction || 'N/A'}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Canal
-            </Typography>
-            <Typography variant="body1">
-              {data.CANAL || data.canal || 'N/A'}
-            </Typography>
-          </Box>
-        </Grid>
+  const renderTransactionDetails = () => {
+    if (!data) return null;
+    
+    return (
+      <Paper sx={{ p: 3, borderRadius: 2 }}>
+        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <ReceiptIcon color="primary" />
+          Informations Transaction
+        </Typography>
+        <Divider sx={{ mb: 3 }} />
         
-        <Grid item xs={12} md={6}>
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Numéro Facture Associée
-            </Typography>
-            <Typography variant="body1">
-              {data.NUMERO_FACTURE || data.numero_facture || 'Aucune'}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Client/Bénéficiaire
-            </Typography>
-            <Typography variant="body1">
-              {data.NOM_CLIENT || data.nom_client || data.NOM_BEN || 'N/A'}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Moyen de Paiement
-            </Typography>
-            <Typography variant="body1">
-              {data.MOYEN_PAIEMENT || data.moyen_paiement || 'N/A'}
-            </Typography>
-          </Box>
-        </Grid>
-      </Grid>
-      
-      {data.DESCRIPTION && (
-        <Box sx={{ mt: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-            Description
-          </Typography>
-          <Typography variant="body2">
-            {data.DESCRIPTION}
-          </Typography>
-        </Box>
-      )}
-    </Paper>
-  );
-
-  const renderFactureDetails = () => (
-    <Paper sx={{ p: 3, borderRadius: 2 }}>
-      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <AssignmentIcon color="primary" />
-        Informations Facture
-      </Typography>
-      <Divider sx={{ mb: 3 }} />
-      
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Numéro Facture
-            </Typography>
-            <Typography variant="body1" fontWeight="medium">
-              {data.numero || data.NUMERO_FACTURE || 'N/A'}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Date Facturation
-            </Typography>
-            <Typography variant="body1">
-              {formatDate(data.DATE_FACTURE || data.date_facture)}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Type de Facture
-            </Typography>
-            <Typography variant="body1">
-              {data.TYPE_FACTURE || data.type_facture || 'Consultation'}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Patient/Bénéficiaire
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-              <PersonIcon fontSize="small" />
-              <Typography variant="body1">
-                {data.NOM_BEN} {data.PRE_BEN}
-                {data.IDENTIFIANT_NATIONAL && ` (${data.IDENTIFIANT_NATIONAL})`}
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Référence Transaction
+              </Typography>
+              <Typography variant="body1" fontWeight="medium">
+                {data.REFERENCE_TRANSACTION}
               </Typography>
             </Box>
-          </Box>
+            
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Type de Transaction
+              </Typography>
+              <Typography variant="body1">
+                {data.TYPE_TRANSACTION || 'N/A'}
+              </Typography>
+            </Box>
+            
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Canal
+              </Typography>
+              <Typography variant="body1">
+                {data.CANAL || 'N/A'}
+              </Typography>
+            </Box>
+            
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Méthode de Paiement
+              </Typography>
+              <Typography variant="body1">
+                {data.METHODE_PAIEMENT || 'N/A'}
+              </Typography>
+            </Box>
+          </Grid>
+          
+          <Grid item xs={12} md={6}>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Numéro Facture Associée
+              </Typography>
+              <Typography variant="body1">
+                {data.NUMERO_FACTURE || 'Aucune'}
+              </Typography>
+            </Box>
+            
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Client/Bénéficiaire
+              </Typography>
+              <Typography variant="body1">
+                {data.BENEFICIAIRE}
+              </Typography>
+            </Box>
+            
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Montant
+              </Typography>
+              <Typography variant="body1" fontWeight="bold" color="primary">
+                {formatCurrency(data.MONTANT)}
+              </Typography>
+            </Box>
+          </Grid>
         </Grid>
         
-        <Grid item xs={12} md={6}>
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Médecin/Praticien
+        {data.DESCRIPTION && (
+          <Box sx={{ mt: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+              Description
             </Typography>
-            <Typography variant="body1">
-              {data.NOM_MEDECIN || data.medecin_nom || 'N/A'}
+            <Typography variant="body2">
+              {data.DESCRIPTION}
             </Typography>
           </Box>
+        )}
+      </Paper>
+    );
+  };
+
+  const renderFactureDetails = () => {
+    if (!data) return null;
+    
+    return (
+      <Paper sx={{ p: 3, borderRadius: 2 }}>
+        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <AssignmentIcon color="primary" />
+          Informations Facture
+        </Typography>
+        <Divider sx={{ mb: 3 }} />
+        
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Numéro Facture
+              </Typography>
+              <Typography variant="body1" fontWeight="medium">
+                {data.numero}
+              </Typography>
+            </Box>
+            
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Date Facturation
+              </Typography>
+              <Typography variant="body1">
+                {formatDate(data.date_facture)}
+              </Typography>
+            </Box>
+            
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Date Échéance
+              </Typography>
+              <Typography variant="body1" color={new Date(data.date_echeance) < new Date() ? 'error' : 'inherit'}>
+                {formatDate(data.date_echeance)}
+              </Typography>
+            </Box>
+            
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Type de Facture
+              </Typography>
+              <Typography variant="body1">
+                {data.TYPE_FACTURE || 'Consultation'}
+              </Typography>
+            </Box>
+          </Grid>
           
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Centre de Santé
-            </Typography>
-            <Typography variant="body1">
-              {data.NOM_CENTRE || data.centre_nom || 'N/A'}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Montant Assurance
-            </Typography>
-            <Typography variant="body1" color="info.main">
-              {formatCurrency(data.MONTANT_ASSURANCE || 0)}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Montant Patient
-            </Typography>
-            <Typography variant="body1" color="warning.main">
-              {formatCurrency(data.MONTANT_PATIENT || 0)}
-            </Typography>
-          </Box>
+          <Grid item xs={12} md={6}>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Patient/Bénéficiaire
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                <PersonIcon fontSize="small" />
+                <Typography variant="body1">
+                  {data.nom_ben} {data.prenom_ben}
+                  {data.IDENTIFIANT_NATIONAL && ` (${data.IDENTIFIANT_NATIONAL})`}
+                </Typography>
+              </Box>
+            </Box>
+            
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Montant Total
+              </Typography>
+              <Typography variant="body1" fontWeight="bold" color="primary">
+                {formatCurrency(data.montant_total)}
+              </Typography>
+            </Box>
+            
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Montant Payé
+              </Typography>
+              <Typography variant="body1" color="success.main">
+                {formatCurrency(data.montant_paye)}
+              </Typography>
+            </Box>
+            
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Reste à Payer
+              </Typography>
+              <Typography variant="body1" color={data.montant_restant > 0 ? 'error' : 'success'} fontWeight="bold">
+                {formatCurrency(data.montant_restant)}
+              </Typography>
+            </Box>
+          </Grid>
         </Grid>
-      </Grid>
-      
-      {data.OBSERVATIONS && (
-        <Box sx={{ mt: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-            Observations
-          </Typography>
-          <Typography variant="body2">
-            {data.OBSERVATIONS}
-          </Typography>
-        </Box>
-      )}
-    </Paper>
-  );
+        
+        {data.OBSERVATIONS && (
+          <Box sx={{ mt: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+              Observations
+            </Typography>
+            <Typography variant="body2">
+              {data.OBSERVATIONS}
+            </Typography>
+          </Box>
+        )}
+      </Paper>
+    );
+  };
 
   const renderHistorique = () => {
+    if (!data) return null;
+    
     if (type === 'transaction') {
       return (
         <Paper sx={{ p: 3, borderRadius: 2 }}>
@@ -605,22 +729,28 @@ const downloadAsJSON = (data) => {
             
             <ListItem>
               <ListItemIcon>
-                <CreditCardIcon color="info" />
+                <CheckIcon color="info" />
               </ListItemIcon>
               <ListItemText
-                primary="Date de validation"
-                secondary={data.DATE_VALIDATION ? formatDate(data.DATE_VALIDATION) : 'Non validée'}
+                primary="Statut"
+                secondary={
+                  <Chip
+                    label={getStatutText(data.STATUT_TRANSACTION)}
+                    color={getStatutColor(data.STATUT_TRANSACTION)}
+                    size="small"
+                  />
+                }
               />
             </ListItem>
             
-            {data.DATE_MAJ && (
+            {data.date_modification && (
               <ListItem>
                 <ListItemIcon>
                   <HistoryIcon color="info" />
                 </ListItemIcon>
                 <ListItemText
                   primary="Dernière mise à jour"
-                  secondary={formatDate(data.DATE_MAJ)}
+                  secondary={formatDate(data.date_modification)}
                 />
               </ListItem>
             )}
@@ -643,7 +773,7 @@ const downloadAsJSON = (data) => {
               </ListItemIcon>
               <ListItemText
                 primary="Date de création"
-                secondary={formatDate(data.DATE_CREATION || data.created_at)}
+                secondary={formatDate(data.date_creation)}
               />
             </ListItem>
             
@@ -653,21 +783,32 @@ const downloadAsJSON = (data) => {
               </ListItemIcon>
               <ListItemText
                 primary="Date d'échéance"
-                secondary={data.DATE_ECHEANCE ? formatDate(data.DATE_ECHEANCE) : 'Non définie'}
+                secondary={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography>{formatDate(data.date_echeance)}</Typography>
+                    {new Date(data.date_echeance) < new Date() && (
+                      <Chip label="En retard" color="error" size="small" />
+                    )}
+                  </Box>
+                }
               />
             </ListItem>
             
-            {data.DATE_MODIFICATION && (
-              <ListItem>
-                <ListItemIcon>
-                  <HistoryIcon color="info" />
-                </ListItemIcon>
-                <ListItemText
-                  primary="Dernière modification"
-                  secondary={formatDate(data.DATE_MODIFICATION)}
-                />
-              </ListItem>
-            )}
+            <ListItem>
+              <ListItemIcon>
+                <CheckIcon color="info" />
+              </ListItemIcon>
+              <ListItemText
+                primary="Statut"
+                secondary={
+                  <Chip
+                    label={getStatutText(data.statut)}
+                    color={getStatutColor(data.statut)}
+                    size="small"
+                  />
+                }
+              />
+            </ListItem>
           </List>
         </Paper>
       );
@@ -700,43 +841,51 @@ const downloadAsJSON = (data) => {
         <Divider sx={{ mb: 3 }} />
         
         <List>
-          {paiements.map((paiement, index) => (
-            <ListItem
-              key={paiement.id || index}
-              divider={index < paiements.length - 1}
-            >
-              <ListItemIcon>
-                <PaidIcon color="success" />
-              </ListItemIcon>
-              <ListItemText
-                primary={
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body1" fontWeight="medium">
-                      {formatCurrency(paiement.MONTANT || paiement.montant)}
-                    </Typography>
-                    <Chip
-                      label={paiement.MODE_PAIEMENT || paiement.mode_paiement}
-                      size="small"
-                      color="primary"
-                      variant="outlined"
-                    />
-                  </Box>
-                }
-                secondary={
-                  <>
-                    <Typography variant="body2" color="text.secondary">
-                      Date: {formatDate(paiement.DATE_PAIEMENT || paiement.date_paiement)}
-                    </Typography>
-                    {paiement.REFERENCE && (
-                      <Typography variant="body2" color="text.secondary">
-                        Référence: {paiement.REFERENCE}
+          {paiements.map((paiement, index) => {
+            const validatedPaiement = validateData(paiement, 'transaction');
+            if (!validatedPaiement) return null;
+            
+            return (
+              <ListItem
+                key={validatedPaiement.COD_TRANS || validatedPaiement.id || index}
+                divider={index < paiements.length - 1}
+              >
+                <ListItemIcon>
+                  <PaidIcon color="success" />
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="body1" fontWeight="medium">
+                        {formatCurrency(validatedPaiement.MONTANT)}
                       </Typography>
-                    )}
-                  </>
-                }
-              />
-            </ListItem>
-          ))}
+                      <Chip
+                        label={validatedPaiement.METHODE_PAIEMENT || 'N/A'}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                      />
+                    </Box>
+                  }
+                  secondary={
+                    <>
+                      <Typography variant="body2" color="text.secondary">
+                        Date: {formatDate(validatedPaiement.DATE_INITIATION)}
+                      </Typography>
+                      {validatedPaiement.REFERENCE_TRANSACTION && (
+                        <Typography variant="body2" color="text.secondary">
+                          Référence: {validatedPaiement.REFERENCE_TRANSACTION}
+                        </Typography>
+                      )}
+                      <Typography variant="body2" color="text.secondary">
+                        Statut: {getStatutText(validatedPaiement.STATUT_TRANSACTION)}
+                      </Typography>
+                    </>
+                  }
+                />
+              </ListItem>
+            );
+          })}
         </List>
       </Paper>
     );
@@ -746,7 +895,7 @@ const downloadAsJSON = (data) => {
     <Paper sx={{ p: 3, borderRadius: 2 }}>
       <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <AttachFileIcon color="primary" />
-        Pièces Jointes
+        Documents
       </Typography>
       <Divider sx={{ mb: 3 }} />
       
@@ -760,36 +909,30 @@ const downloadAsJSON = (data) => {
           Télécharger le {type === 'transaction' ? 'reçu' : 'quittance'} (PDF)
         </Button>
         
-        {type === 'facture' && data.FICHIER_JOINT && (
+        <Button
+          variant="outlined"
+          startIcon={<PrintIcon />}
+          onClick={handlePrint}
+          sx={{ justifyContent: 'flex-start' }}
+        >
+          Imprimer les détails
+        </Button>
+        
+        {navigator.share && (
           <Button
             variant="outlined"
-            startIcon={<DescriptionIcon />}
-            onClick={async () => {
-              try {
-                const blob = await facturationAPI.downloadPDF(data.id || data.ID_FACTURE);
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `facture-${data.numero}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-              } catch (error) {
-                console.error('❌ Erreur téléchargement facture:', error);
-                alert('Erreur lors du téléchargement: ' + error.message);
-              }
-            }}
+            startIcon={<ShareIcon />}
+            onClick={handleShare}
             sx={{ justifyContent: 'flex-start' }}
           >
-            Télécharger la facture originale (PDF)
+            Partager les informations
           </Button>
         )}
       </Box>
     </Paper>
   );
 
-  if (showPrintView) {
+  if (showPrintView && data) {
     return (
       <PrintDetails
         type={type}
@@ -800,155 +943,167 @@ const downloadAsJSON = (data) => {
   }
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="lg"
-      fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: 3,
-          maxHeight: '95vh',
-          minHeight: '70vh'
-        }
-      }}
-    >
-      <DialogTitle sx={{ 
-        bgcolor: type === 'transaction' ? 'primary.main' : 'secondary.main',
-        color: 'white',
-        borderBottom: 1, 
-        borderColor: 'divider',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        py: 2,
-        position: 'sticky',
-        top: 0,
-        zIndex: 1
-      }}>
-        <Box>
-          <Typography variant="h5" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {type === 'transaction' ? <ReceiptIcon /> : <AssignmentIcon />}
-            {type === 'transaction' && `Transaction ${data?.REFERENCE_TRANSACTION || id}`}
-            {type === 'facture' && `Facture ${data?.numero || id}`}
-          </Typography>
-          <Typography variant="body2" sx={{ color: 'white', opacity: 0.9 }}>
-            {type === 'transaction' && data?.DATE_INITIATION && `Initée le ${formatDate(data.DATE_INITIATION)}`}
-            {type === 'facture' && data?.DATE_FACTURE && `Créée le ${formatDate(data.DATE_FACTURE)}`}
-          </Typography>
-        </Box>
-        <IconButton onClick={onClose} size="small" sx={{ color: 'white' }}>
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-
-      <Tabs
-        value={activeTab}
-        onChange={(e, newValue) => setActiveTab(newValue)}
-        sx={{ 
-          bgcolor: 'background.paper',
-          borderBottom: 1,
-          borderColor: 'divider',
-          px: 3,
-          position: 'sticky',
-          top: 64,
-          zIndex: 1
+    <>
+      {/* Notification Snackbar */}
+      <Snackbar
+        open={notification.open}
+        autoHideDuration={6000}
+        onClose={handleCloseNotification}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={handleCloseNotification} 
+          severity={notification.type}
+          sx={{ width: '100%' }}
+          elevation={6}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
+      
+      {/* Dialogue principal */}
+      <Dialog
+        open={open}
+        onClose={onClose}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            maxHeight: '95vh',
+            minHeight: '70vh'
+          }
         }}
       >
-        <Tab label="Détails" icon={<ReceiptIcon />} iconPosition="start" />
-        <Tab label="Historique" icon={<HistoryIcon />} iconPosition="start" />
-        {type === 'facture' && <Tab label="Paiements" icon={<PaymentsIcon />} iconPosition="start" />}
-        <Tab label="Documents" icon={<AttachFileIcon />} iconPosition="start" />
-      </Tabs>
+        <DialogTitle sx={{ 
+          bgcolor: type === 'transaction' ? 'primary.main' : 'secondary.main',
+          color: 'white',
+          borderBottom: 1, 
+          borderColor: 'divider',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          py: 2,
+          position: 'sticky',
+          top: 0,
+          zIndex: 1
+        }}>
+          <Box>
+            <Typography variant="h5" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {type === 'transaction' ? <ReceiptIcon /> : <AssignmentIcon />}
+              {type === 'transaction' && `Transaction ${data?.REFERENCE_TRANSACTION || id}`}
+              {type === 'facture' && `Facture ${data?.numero || id}`}
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'white', opacity: 0.9 }}>
+              {type === 'transaction' && data?.DATE_INITIATION && `Initée le ${formatDate(data.DATE_INITIATION)}`}
+              {type === 'facture' && data?.date_facture && `Créée le ${formatDate(data.date_facture)}`}
+            </Typography>
+          </Box>
+          <IconButton onClick={onClose} size="small" sx={{ color: 'white' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
 
-      <DialogContent sx={{ p: 0, overflow: 'auto' }}>
-        <Box sx={{ p: 3 }}>
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
-              <CircularProgress />
-            </Box>
-          ) : error ? (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          ) : !data ? (
-            <Alert severity="warning">
-              Aucune donnée disponible
-            </Alert>
-          ) : (
+        <Tabs
+          value={activeTab}
+          onChange={(e, newValue) => setActiveTab(newValue)}
+          sx={{ 
+            bgcolor: 'background.paper',
+            borderBottom: 1,
+            borderColor: 'divider',
+            px: 3,
+            position: 'sticky',
+            top: 64,
+            zIndex: 1
+          }}
+        >
+          <Tab label="Détails" icon={<ReceiptIcon />} iconPosition="start" />
+          <Tab label="Historique" icon={<HistoryIcon />} iconPosition="start" />
+          {type === 'facture' && <Tab label="Paiements" icon={<PaymentsIcon />} iconPosition="start" />}
+          <Tab label="Documents" icon={<AttachFileIcon />} iconPosition="start" />
+        </Tabs>
+
+        <DialogContent sx={{ p: 0, overflow: 'auto' }}>
+          <Box sx={{ p: 3 }}>
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+                <CircularProgress />
+              </Box>
+            ) : error ? (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            ) : !data ? (
+              <Alert severity="warning">
+                Aucune donnée disponible
+              </Alert>
+            ) : (
+              <>
+                {renderQuickStats()}
+                
+                {activeTab === 0 && (
+                  <>
+                    {type === 'transaction' && renderTransactionDetails()}
+                    {type === 'facture' && renderFactureDetails()}
+                  </>
+                )}
+
+                {activeTab === 1 && (
+                  renderHistorique()
+                )}
+
+                {activeTab === 2 && type === 'facture' && (
+                  renderPaiements()
+                )}
+
+                {activeTab === (type === 'facture' ? 3 : 2) && (
+                  renderAttachments()
+                )}
+              </>
+            )}
+          </Box>
+        </DialogContent>
+
+        <DialogActions sx={{ 
+          bgcolor: 'background.paper', 
+          p: 2, 
+          borderTop: 1, 
+          borderColor: 'divider',
+          position: 'sticky',
+          bottom: 0,
+          zIndex: 1
+        }}>
+          <Button onClick={onClose} variant="outlined">
+            Fermer
+          </Button>
+          
+          <Box sx={{ flex: 1 }} />
+          
+          {data && (
             <>
-              {renderQuickStats()}
+              <Button
+                variant="contained"
+                startIcon={<PrintIcon />}
+                onClick={handlePrint}
+                sx={{ ml: 1 }}
+              >
+                Imprimer
+              </Button>
               
-              {activeTab === 0 && (
-                <>
-                  {type === 'transaction' && renderTransactionDetails()}
-                  {type === 'facture' && renderFactureDetails()}
-                </>
-              )}
-
-              {activeTab === 1 && (
-                renderHistorique()
-              )}
-
-              {activeTab === 2 && type === 'facture' && (
-                renderPaiements()
-              )}
-
-              {activeTab === (type === 'facture' ? 3 : 2) && (
-                renderAttachments()
-              )}
+              <Button
+                variant="contained"
+                startIcon={<DownloadIcon />}
+                onClick={handleDownload}
+                sx={{ ml: 1 }}
+                color={type === 'transaction' ? 'primary' : 'secondary'}
+              >
+                Télécharger
+              </Button>
             </>
           )}
-        </Box>
-      </DialogContent>
-
-      <DialogActions sx={{ 
-        bgcolor: 'background.paper', 
-        p: 2, 
-        borderTop: 1, 
-        borderColor: 'divider',
-        position: 'sticky',
-        bottom: 0,
-        zIndex: 1
-      }}>
-        <Button onClick={onClose} variant="outlined">
-          Fermer
-        </Button>
-        
-        <Box sx={{ flex: 1 }} />
-        
-        {navigator.share && (
-          <Button
-            variant="outlined"
-            startIcon={<ShareIcon />}
-            onClick={handleShare}
-          >
-            Partager
-          </Button>
-        )}
-        
-        <Button
-          variant="contained"
-          startIcon={<PrintIcon />}
-          onClick={handlePrint}
-          sx={{ ml: 1 }}
-          disabled={!data}
-        >
-          Imprimer
-        </Button>
-        
-        <Button
-          variant="contained"
-          startIcon={<DownloadIcon />}
-          onClick={handleDownload}
-          sx={{ ml: 1 }}
-          color={type === 'transaction' ? 'primary' : 'secondary'}
-          disabled={!data}
-        >
-          Télécharger
-        </Button>
-      </DialogActions>
-    </Dialog>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };
 

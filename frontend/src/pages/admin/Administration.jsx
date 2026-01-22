@@ -81,6 +81,9 @@ import {
   CloudDownloadOutlined,
   CloudUploadOutlined,
   RollbackOutlined,
+  ClockCircleOutlined,
+  FolderOutlined,
+  ScheduleOutlined,
 } from '@ant-design/icons';
 import moment from 'moment';
 import 'moment/locale/fr';
@@ -100,20 +103,18 @@ const AdminPage = () => {
     utilisateurs: false,
     roles: false,
     sessions: false,
-    biometrie: false,
     systeme: false,
     profil: false,
-    configurations: false,
     parametres: false,
     logs: false,
     backup: false,
     audit: false,
-    tableData: false,
   });
   
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [initialLoad, setInitialLoad] = useState(false);
+  const [configSubTab, setConfigSubTab] = useState('parametres');
 
   // Données du dashboard
   const [statistiques, setStatistiques] = useState({
@@ -148,6 +149,7 @@ const AdminPage = () => {
     pageSize: 10,
     total: 0,
   });
+  const [sessionsFilters, setSessionsFilters] = useState({});
 
   // Données système
   const [etatSysteme, setEtatSysteme] = useState({
@@ -186,11 +188,24 @@ const AdminPage = () => {
     pageSize: 20,
     total: 0,
   });
+  const [logsFilters, setLogsFilters] = useState({});
 
   // Données backup
   const [backups, setBackups] = useState([]);
   const [backupStatus, setBackupStatus] = useState(null);
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
+  
+  // Paramètres de backup locaux (stockés dans localStorage si l'API n'existe pas)
+  const [backupSettings, setBackupSettings] = useState(() => {
+    const savedSettings = localStorage.getItem('backupSettings');
+    return savedSettings ? JSON.parse(savedSettings) : {
+      auto_backup: true,
+      auto_backup_time: '02:00',
+      backup_retention_days: 30,
+      backup_folder: './backups',
+      compression_enabled: true,
+    };
+  });
 
   // Données audit
   const [auditTrails, setAuditTrails] = useState([]);
@@ -199,6 +214,8 @@ const AdminPage = () => {
     pageSize: 20,
     total: 0,
   });
+  const [auditDetailModal, setAuditDetailModal] = useState(false);
+  const [selectedAudit, setSelectedAudit] = useState(null);
 
   // Modales
   const [userModalVisible, setUserModalVisible] = useState(false);
@@ -208,6 +225,7 @@ const AdminPage = () => {
   const [passwordResetModal, setPasswordResetModal] = useState(false);
   const [userToResetPassword, setUserToResetPassword] = useState(null);
   const [importModalVisible, setImportModalVisible] = useState(false);
+  const [backupSettingsModal, setBackupSettingsModal] = useState(false);
 
   // Formulaires
   const [userForm] = Form.useForm();
@@ -216,6 +234,7 @@ const AdminPage = () => {
   const [profileForm] = Form.useForm();
   const [parametreForm] = Form.useForm();
   const [importForm] = Form.useForm();
+  const [backupSettingsForm] = Form.useForm();
 
   // ==================== CHARGEMENT DES DONNÉES ====================
 
@@ -270,7 +289,7 @@ const AdminPage = () => {
         adminAPI.getDashboard(),
       ]);
       
-      if (statsResponse.success) {
+      if (statsResponse?.success) {
         setStatistiques(statsResponse.statistiques || {
           utilisateurs: { total: 0, actifs: 0, super_admin: 0 },
           roles: { total: 0 },
@@ -278,7 +297,7 @@ const AdminPage = () => {
         });
       }
       
-      if (dashboardResponse.success) {
+      if (dashboardResponse?.success) {
         setDashboardData(dashboardResponse.dashboard || {
           derniers_utilisateurs: [],
           sessions_actives: [],
@@ -310,7 +329,7 @@ const AdminPage = () => {
         ...searchParams,
       });
       
-      if (response.success) {
+      if (response?.success) {
         setUsers(response.utilisateurs || []);
         setUsersPagination({
           current: response.pagination?.page || 1,
@@ -318,7 +337,7 @@ const AdminPage = () => {
           total: response.pagination?.total || 0,
         });
       } else {
-        message.error(response.message || 'Erreur lors du chargement des utilisateurs');
+        message.error(response?.message || 'Erreur lors du chargement des utilisateurs');
         setUsers([]);
       }
     } catch (error) {
@@ -333,7 +352,7 @@ const AdminPage = () => {
   const loadAvailableRoles = async () => {
     try {
       const response = await adminAPI.getRolesDisponibles();
-      if (response.success) {
+      if (response?.success) {
         setAvailableRoles(response.roles || []);
       }
     } catch (error) {
@@ -347,10 +366,10 @@ const AdminPage = () => {
     setLoading(prev => ({ ...prev, roles: true }));
     try {
       const response = await adminAPI.getRoles();
-      if (response.success) {
+      if (response?.success) {
         setRoles(response.roles || []);
       } else {
-        message.error(response.message || 'Erreur lors du chargement des rôles');
+        message.error(response?.message || 'Erreur lors du chargement des rôles');
         setRoles([]);
       }
     } catch (error) {
@@ -365,7 +384,7 @@ const AdminPage = () => {
   const loadRoleTemplates = async () => {
     try {
       const response = await adminAPI.getRoleTemplates();
-      if (response.success) {
+      if (response?.success) {
         setRoleTemplates(response.templates || []);
       }
     } catch (error) {
@@ -373,7 +392,7 @@ const AdminPage = () => {
     }
   };
 
-  const loadSessions = async () => {
+  const loadSessions = async (params = {}) => {
     if (activeTab !== 'sessions') return;
     
     setLoading(prev => ({ ...prev, sessions: true }));
@@ -381,17 +400,39 @@ const AdminPage = () => {
       const response = await adminAPI.getSessions({
         page: sessionsPagination.current,
         limit: sessionsPagination.pageSize,
+        ...sessionsFilters,
+        ...params,
       });
       
-      if (response.success) {
-        setSessions(response.sessions || []);
+      if (response?.success) {
+        const sessionsData = response.sessions || [];
+        const formattedSessions = sessionsData.map(session => ({
+          id: session.id || session.ID_SESSION,
+          session_id: session.session_id,
+          utilisateur: {
+            id: session.utilisateur?.id || session.ID_UTI,
+            nom_complet: session.utilisateur?.nom_complet || session.NOM_UTI_COMPLET,
+            login: session.utilisateur?.login || session.LOG_UTI,
+            email: session.utilisateur?.email || session.EMAIL_UTI,
+          },
+          adresse_ip: session.adresse_ip || session.ADRESSE_IP,
+          user_agent: session.user_agent || session.USER_AGENT,
+          date_debut: session.date_debut || session.DATE_DEBUT || session.created_at,
+          date_fin: session.date_fin || session.DATE_FIN,
+          derniere_activite: session.derniere_activite || session.DERNIERE_ACTIVITE,
+          statut: session.statut || session.STATUT,
+          duration: session.duration,
+          location: session.location,
+        }));
+        
+        setSessions(formattedSessions);
         setSessionsPagination({
           current: response.pagination?.page || 1,
           pageSize: response.pagination?.limit || 10,
           total: response.pagination?.total || 0,
         });
       } else {
-        message.error(response.message || 'Erreur lors du chargement des sessions');
+        message.error(response?.message || 'Erreur lors du chargement des sessions');
         setSessions([]);
       }
     } catch (error) {
@@ -409,7 +450,7 @@ const AdminPage = () => {
     setLoading(prev => ({ ...prev, systeme: true }));
     try {
       const response = await adminAPI.getEtatSysteme();
-      if (response.success) {
+      if (response?.success) {
         setEtatSysteme(response.etat || {
           base_donnees: { connectee: false, version: '', nom: '', heure_serveur: '' },
           performances: { connexions_actives: 0 },
@@ -417,7 +458,7 @@ const AdminPage = () => {
           dernieres_erreurs: [],
         });
       } else {
-        message.error(response.message || 'Erreur lors du chargement de l\'état du système');
+        message.error(response?.message || 'Erreur lors du chargement de l\'état du système');
       }
     } catch (error) {
       message.error('Erreur lors du chargement de l\'état du système');
@@ -433,20 +474,20 @@ const AdminPage = () => {
     setLoading(prev => ({ ...prev, profil: true }));
     try {
       const response = await adminAPI.getMyProfile();
-      if (response.success) {
+      if (response?.success) {
         const profileData = response.profile;
         setProfile(profileData);
         profileForm.setFieldsValue({
-          NOM_UTI: profileData.nom,
-          PRE_UTI: profileData.prenom,
-          EMAIL_UTI: profileData.email,
-          TEL_UTI: profileData.telephone,
-          TEL_MOBILE_UTI: profileData.mobile,
-          LANGUE_UTI: profileData.langue,
-          THEME_UTI: profileData.theme,
+          NOM_UTI: profileData.nom || profileData.NOM_UTI,
+          PRE_UTI: profileData.prenom || profileData.PRE_UTI,
+          EMAIL_UTI: profileData.email || profileData.EMAIL_UTI,
+          TEL_UTI: profileData.telephone || profileData.TEL_UTI,
+          TEL_MOBILE_UTI: profileData.mobile || profileData.TEL_MOBILE_UTI,
+          LANGUE_UTI: profileData.langue || profileData.LANGUE_UTI,
+          THEME_UTI: profileData.theme || profileData.THEME_UTI,
         });
       } else {
-        message.error(response.message || 'Erreur lors du chargement du profil');
+        message.error(response?.message || 'Erreur lors du chargement du profil');
       }
     } catch (error) {
       message.error('Erreur lors du chargement du profil');
@@ -459,7 +500,7 @@ const AdminPage = () => {
   const loadConfigurations = async () => {
     try {
       const response = await adminAPI.getConfigurations();
-      if (response.success) {
+      if (response?.success) {
         setConfigurations(response.configurations || {
           general: [],
           securite: [],
@@ -477,7 +518,7 @@ const AdminPage = () => {
   };
 
   const loadParametres = async () => {
-    if (activeTab !== 'configurations') return;
+    if (activeTab !== 'configurations' || configSubTab !== 'parametres') return;
     
     setLoading(prev => ({ ...prev, parametres: true }));
     try {
@@ -485,10 +526,10 @@ const AdminPage = () => {
         search: parametresSearch,
       });
       
-      if (response.success) {
+      if (response?.success) {
         setParametres(response.parametres || []);
       } else {
-        message.error(response.message || 'Erreur lors du chargement des paramètres');
+        message.error(response?.message || 'Erreur lors du chargement des paramètres');
         setParametres([]);
       }
     } catch (error) {
@@ -500,25 +541,40 @@ const AdminPage = () => {
     }
   };
 
-  const loadLogs = async () => {
-    if (activeTab !== 'configurations') return;
+  const loadLogs = async (params = {}) => {
+    if (activeTab !== 'configurations' || configSubTab !== 'logs') return;
     
     setLoading(prev => ({ ...prev, logs: true }));
     try {
       const response = await adminAPI.getLogs({
         page: logsPagination.current,
         limit: logsPagination.pageSize,
+        ...logsFilters,
+        ...params,
       });
       
-      if (response.success) {
-        setLogs(response.logs || []);
+      if (response?.success) {
+        const logsData = response.logs || [];
+        const formattedLogs = logsData.map((log, index) => ({
+          id: log.id || log.ID_LOG || `log_${Date.now()}_${index}`,
+          timestamp: log.timestamp || log.DATE_LOG,
+          level: log.level || log.NIVEAU,
+          source: log.source || log.SOURCE,
+          module: log.module || log.MODULE,
+          message: log.message || log.MESSAGE,
+          details: log.details,
+          username: log.username || log.UTILISATEUR,
+          ip_address: log.ip_address || log.ADRESSE_IP,
+        }));
+        
+        setLogs(formattedLogs);
         setLogsPagination({
           current: response.pagination?.page || 1,
           pageSize: response.pagination?.limit || 20,
           total: response.pagination?.total || 0,
         });
       } else {
-        message.error(response.message || 'Erreur lors du chargement des logs');
+        message.error(response?.message || 'Erreur lors du chargement des logs');
         setLogs([]);
       }
     } catch (error) {
@@ -531,22 +587,45 @@ const AdminPage = () => {
   };
 
   const loadBackups = async () => {
-    if (activeTab !== 'configurations') return;
+    if (activeTab !== 'configurations' || configSubTab !== 'backup') return;
     
+    setLoading(prev => ({ ...prev, backup: true }));
     try {
       const response = await adminAPI.getBackups();
-      if (response.success) {
-        setBackups(response.backups || []);
+      if (response?.success) {
+        const backupsData = response.backups || [];
+        const formattedBackups = backupsData.map(backup => ({
+          id: backup.id || backup.ID_BACKUP,
+          name: backup.name || backup.NOM,
+          filename: backup.filename || backup.FICHIER,
+          path: backup.path || backup.CHEMIN,
+          created_at: backup.created_at || backup.DATE_CREATION,
+          size: backup.size || backup.TAILLE,
+          type: backup.type || backup.TYPE,
+          status: backup.status || backup.STATUT,
+          created_by: backup.created_by || backup.CREE_PAR,
+          download_url: backup.download_url,
+          is_downloadable: backup.is_downloadable !== false,
+          local_path: backup.local_path,
+        }));
+        
+        setBackups(formattedBackups);
         setBackupStatus(response.status);
+      } else {
+        message.error(response?.message || 'Erreur lors du chargement des backups');
+        setBackups([]);
       }
     } catch (error) {
       console.error('Erreur chargement backups:', error);
+      message.error('Erreur lors du chargement des backups');
       setBackups([]);
+    } finally {
+      setLoading(prev => ({ ...prev, backup: false }));
     }
   };
 
   const loadAuditTrails = async () => {
-    if (activeTab !== 'configurations') return;
+    if (activeTab !== 'configurations' || configSubTab !== 'audit') return;
     
     setLoading(prev => ({ ...prev, audit: true }));
     try {
@@ -555,15 +634,30 @@ const AdminPage = () => {
         limit: auditPagination.pageSize,
       });
       
-      if (response.success) {
-        setAuditTrails(response.audit || []);
+      if (response?.success) {
+        const auditData = response.audit || [];
+        const formattedAudits = auditData.map(audit => ({
+          id: audit.id || audit.ID_AUDIT,
+          timestamp: audit.timestamp || audit.DATE_AUDIT,
+          action: audit.action || audit.TYPE_ACTION,
+          table_name: audit.table_name || audit.TABLE_CONCERNEE,
+          username: audit.username || audit.UTILISATEUR,
+          ip_address: audit.ip_address || audit.ADRESSE_IP,
+          details: audit.details || audit.DESCRIPTION,
+          record_id: audit.record_id || audit.ID_ENREGISTREMENT,
+          user_agent: audit.user_agent,
+          old_values: audit.old_values,
+          new_values: audit.new_values,
+        }));
+        
+        setAuditTrails(formattedAudits);
         setAuditPagination({
           current: response.pagination?.page || 1,
           pageSize: response.pagination?.limit || 20,
           total: response.pagination?.total || 0,
         });
       } else {
-        message.error(response.message || 'Erreur lors du chargement des audits');
+        message.error(response?.message || 'Erreur lors du chargement des audits');
         setAuditTrails([]);
       }
     } catch (error) {
@@ -590,17 +684,27 @@ const AdminPage = () => {
       systeme: loadEtatSysteme,
       'mon-profil': loadProfile,
       configurations: () => {
-        loadParametres();
-        loadLogs();
-        loadBackups();
-        loadAuditTrails();
+        if (configSubTab === 'parametres') loadParametres();
+        if (configSubTab === 'logs') loadLogs();
+        if (configSubTab === 'backup') loadBackups();
+        if (configSubTab === 'audit') loadAuditTrails();
       },
     };
     
     if (loaders[activeTab]) {
       loaders[activeTab]();
     }
-  }, [activeTab, initialLoad]);
+  }, [activeTab, initialLoad, configSubTab]);
+
+  // Recharger quand le sous-onglet change
+  useEffect(() => {
+    if (!initialLoad || activeTab !== 'configurations') return;
+    
+    if (configSubTab === 'parametres') loadParametres();
+    if (configSubTab === 'logs') loadLogs();
+    if (configSubTab === 'backup') loadBackups();
+    if (configSubTab === 'audit') loadAuditTrails();
+  }, [configSubTab]);
 
   // ==================== GESTION DES UTILISATEURS ====================
 
@@ -632,7 +736,7 @@ const AdminPage = () => {
     setSelectedUser(user);
     try {
       const response = await adminAPI.getUtilisateur(user.id);
-      if (response.success) {
+      if (response?.success) {
         const userData = response.utilisateur;
         userForm.setFieldsValue({
           LOG_UTI: userData.login || userData.LOG_UTI,
@@ -667,11 +771,11 @@ const AdminPage = () => {
       onOk: async () => {
         try {
           const response = await adminAPI.deleteUtilisateur(id);
-          if (response.success) {
+          if (response?.success) {
             message.success('Utilisateur désactivé avec succès');
             loadUtilisateurs();
           } else {
-            message.error(response.message || 'Erreur lors de la désactivation');
+            message.error(response?.message || 'Erreur lors de la désactivation');
           }
         } catch (error) {
           console.error('Erreur désactivation:', error);
@@ -695,7 +799,7 @@ const AdminPage = () => {
         confirmPassword: newPassword,
       });
       
-      if (response.success) {
+      if (response?.success) {
         Modal.info({
           title: 'Mot de passe réinitialisé',
           content: (
@@ -722,7 +826,7 @@ const AdminPage = () => {
           },
         });
       } else {
-        message.error(response.message || 'Erreur lors de la réinitialisation');
+        message.error(response?.message || 'Erreur lors de la réinitialisation');
       }
     } catch (error) {
       console.error('Erreur réinitialisation:', error);
@@ -757,17 +861,17 @@ const AdminPage = () => {
       if (selectedUser) {
         // Mise à jour
         const response = await adminAPI.updateUtilisateur(selectedUser.id, userData);
-        if (response.success) {
+        if (response?.success) {
           message.success('Utilisateur mis à jour avec succès');
           setUserModalVisible(false);
           loadUtilisateurs();
         } else {
-          throw new Error(response.message);
+          throw new Error(response?.message || 'Erreur lors de la mise à jour');
         }
       } else {
         // Création
         const response = await adminAPI.createUtilisateur(userData);
-        if (response.success) {
+        if (response?.success) {
           if (response.generatedPassword) {
             Modal.info({
               title: 'Utilisateur créé avec succès',
@@ -801,7 +905,7 @@ const AdminPage = () => {
             loadUtilisateurs();
           }
         } else {
-          throw new Error(response.message);
+          throw new Error(response?.message || 'Erreur lors de la création');
         }
       }
     } catch (error) {
@@ -851,11 +955,11 @@ const AdminPage = () => {
       onOk: async () => {
         try {
           const response = await adminAPI.deleteRole(id);
-          if (response.success) {
+          if (response?.success) {
             message.success('Rôle supprimé avec succès');
             loadRoles();
           } else {
-            message.error(response.message || 'Erreur lors de la suppression');
+            message.error(response?.message || 'Erreur lors de la suppression');
           }
         } catch (error) {
           console.error('Erreur suppression:', error);
@@ -869,23 +973,23 @@ const AdminPage = () => {
     try {
       if (selectedRole) {
         const response = await adminAPI.updateRole(selectedRole.id, values);
-        if (response.success) {
+        if (response?.success) {
           message.success('Rôle mis à jour avec succès');
           setRoleModalVisible(false);
           loadRoles();
         } else {
-          throw new Error(response.message);
+          throw new Error(response?.message || 'Erreur lors de la mise à jour');
         }
       } else {
         const response = await adminAPI.createRole(values);
-        if (response.success) {
+        if (response?.success) {
           message.success(
-            `Rôle créé avec succès. ${response.role.options_assignees} options assignées.`
+            `Rôle créé avec succès. ${response.role?.options_assignees || 0} options assignées.`
           );
           setRoleModalVisible(false);
           loadRoles();
         } else {
-          throw new Error(response.message);
+          throw new Error(response?.message || 'Erreur lors de la création');
         }
       }
     } catch (error) {
@@ -899,10 +1003,11 @@ const AdminPage = () => {
   const showParametreDrawer = (parametre) => {
     setSelectedParametre(parametre);
     parametreForm.setFieldsValue({
+      COD_PAR: parametre.COD_PAR || '',
       LIB_PAR: parametre.LIB_PAR,
       VAL_PAR: parametre.VAL_PAR,
-      TYP_PAR: parametre.TYP_PAR,
-      COD_PAY: parametre.COD_PAY,
+      TYP_PAR: parametre.TYP_PAR || 'STRING',
+      COD_PAY: parametre.COD_PAY || 'CMF',
       DESCRIPTION: parametre.DESCRIPTION || '',
     });
     setParametreDrawerVisible(true);
@@ -910,23 +1015,30 @@ const AdminPage = () => {
 
   const handleParametreSubmit = async (values) => {
     try {
-      if (selectedParametre) {
+      if (!values.COD_PAR) {
+        message.error('Le code du paramètre est requis');
+        return;
+      }
+
+      if (selectedParametre?.COD_PAR) {
+        // Mise à jour
         const response = await adminAPI.updateParametre(selectedParametre.COD_PAR, values);
-        if (response.success) {
+        if (response?.success) {
           message.success('Paramètre mis à jour avec succès');
           setParametreDrawerVisible(false);
           loadParametres();
         } else {
-          throw new Error(response.message);
+          throw new Error(response?.message || 'Erreur lors de la mise à jour');
         }
       } else {
+        // Création
         const response = await adminAPI.createParametre(values);
-        if (response.success) {
+        if (response?.success) {
           message.success('Paramètre créé avec succès');
           setParametreDrawerVisible(false);
           loadParametres();
         } else {
-          throw new Error(response.message);
+          throw new Error(response?.message || 'Erreur lors de la création');
         }
       }
     } catch (error) {
@@ -935,18 +1047,23 @@ const AdminPage = () => {
     }
   };
 
-  const handleDeleteParametre = async (id) => {
+  const handleDeleteParametre = async (codPar) => {
+    if (!codPar) {
+      message.error('ID paramètre invalide');
+      return;
+    }
+
     Modal.confirm({
       title: 'Confirmer la suppression',
       content: 'Êtes-vous sûr de vouloir supprimer ce paramètre ?',
       onOk: async () => {
         try {
-          const response = await adminAPI.deleteParametre(id);
-          if (response.success) {
+          const response = await adminAPI.deleteParametre(codPar);
+          if (response?.success) {
             message.success('Paramètre supprimé avec succès');
             loadParametres();
           } else {
-            message.error(response.message || 'Erreur lors de la suppression');
+            message.error(response?.message || 'Erreur lors de la suppression');
           }
         } catch (error) {
           console.error('Erreur suppression paramètre:', error);
@@ -965,11 +1082,11 @@ const AdminPage = () => {
       onOk: async () => {
         try {
           const response = await adminAPI.terminerSession(id);
-          if (response.success) {
+          if (response?.success) {
             message.success('Session terminée avec succès');
             loadSessions();
           } else {
-            message.error(response.message || 'Erreur lors de la terminaison');
+            message.error(response?.message || 'Erreur lors de la terminaison');
           }
         } catch (error) {
           console.error('Erreur terminaison session:', error);
@@ -984,11 +1101,11 @@ const AdminPage = () => {
   const handleProfileSubmit = async (values) => {
     try {
       const response = await adminAPI.updateMyProfile(values);
-      if (response.success) {
+      if (response?.success) {
         message.success('Profil mis à jour avec succès');
         loadProfile();
       } else {
-        message.error(response.message || 'Erreur lors de la mise à jour');
+        message.error(response?.message || 'Erreur lors de la mise à jour');
       }
     } catch (error) {
       console.error('Erreur mise à jour profil:', error);
@@ -1001,11 +1118,11 @@ const AdminPage = () => {
   const handleCreateBackup = async () => {
     try {
       const response = await adminAPI.createBackup();
-      if (response.success) {
+      if (response?.success) {
         message.success('Backup créé avec succès');
         loadBackups();
       } else {
-        message.error(response.message || 'Erreur lors de la création du backup');
+        message.error(response?.message || 'Erreur lors de la création du backup');
       }
     } catch (error) {
       console.error('Erreur création backup:', error);
@@ -1020,11 +1137,11 @@ const AdminPage = () => {
       onOk: async () => {
         try {
           const response = await adminAPI.restoreBackup(backupId);
-          if (response.success) {
+          if (response?.success) {
             message.success('Backup restauré avec succès');
             loadBackups();
           } else {
-            message.error(response.message || 'Erreur lors de la restauration');
+            message.error(response?.message || 'Erreur lors de la restauration');
           }
         } catch (error) {
           console.error('Erreur restauration:', error);
@@ -1034,13 +1151,91 @@ const AdminPage = () => {
     });
   };
 
+  const handleDownloadBackup = async (backupId) => {
+    try {
+      setLoading(prev => ({ ...prev, backup: true }));
+      const backup = backups.find(b => b.id === backupId);
+      
+      if (!backup) {
+        message.error('Backup non trouvé');
+        return;
+      }
+
+      // Essayer différentes méthodes de téléchargement
+      if (backup.download_url) {
+        window.open(backup.download_url, '_blank');
+        message.success('Téléchargement démarré');
+      } else if (adminAPI.downloadBackup) {
+        // Si l'API a une fonction downloadBackup
+        const response = await adminAPI.downloadBackup(backupId);
+        if (response?.success) {
+          message.success('Téléchargement réussi');
+        } else {
+          message.error(response?.message || 'Erreur lors du téléchargement');
+        }
+      } else {
+        message.error('Aucune méthode de téléchargement disponible');
+      }
+
+    } catch (error) {
+      console.error('Erreur téléchargement backup:', error);
+      message.error('Erreur lors du téléchargement du backup');
+    } finally {
+      setLoading(prev => ({ ...prev, backup: false }));
+    }
+  };
+
+  // CORRECTION: Gestion locale des paramètres de backup
+  const handleSaveBackupSettings = async (values) => {
+    try {
+      // Convertir le moment en string
+      const formattedValues = {
+        ...values,
+        auto_backup_time: values.auto_backup_time ? 
+          values.auto_backup_time.format('HH:mm') : 
+          '02:00'
+      };
+
+      // Sauvegarder dans localStorage
+      localStorage.setItem('backupSettings', JSON.stringify(formattedValues));
+      setBackupSettings(formattedValues);
+      
+      message.success('Paramètres de backup sauvegardés avec succès');
+      setBackupSettingsModal(false);
+      
+    } catch (error) {
+      console.error('Erreur sauvegarde paramètres:', error);
+      message.error('Erreur lors de la sauvegarde des paramètres');
+    }
+  };
+
+  // CORRECTION: Fonction pour activer/désactiver le backup automatique
+  const toggleAutoBackup = async (enabled) => {
+    try {
+      const updatedSettings = {
+        ...backupSettings,
+        auto_backup: enabled
+      };
+      
+      // Sauvegarder dans localStorage
+      localStorage.setItem('backupSettings', JSON.stringify(updatedSettings));
+      setBackupSettings(updatedSettings);
+      
+      message.success(`Backup automatique ${enabled ? 'activé' : 'désactivé'}`);
+      
+    } catch (error) {
+      console.error('Erreur modification backup auto:', error);
+      message.error('Erreur lors de la modification');
+    }
+  };
+
   // ==================== TEST CONNEXION ====================
 
   const testConnexion = async () => {
     try {
       const result = await adminAPI.testConnexion();
       setTestConnexionResult(result);
-      if (result.success) {
+      if (result?.success) {
         message.success('Test de connexion réussi');
       } else {
         message.error('Test de connexion échoué');
@@ -1049,6 +1244,13 @@ const AdminPage = () => {
       console.error('Erreur test connexion:', error);
       message.error('Erreur lors du test de connexion');
     }
+  };
+
+  // ==================== GESTION AUDIT ====================
+
+  const showAuditDetails = (audit) => {
+    setSelectedAudit(audit);
+    setAuditDetailModal(true);
   };
 
   // ==================== COLONNES DES TABLES ====================
@@ -1075,7 +1277,7 @@ const AdminPage = () => {
           />
           <div style={{ marginLeft: 8 }}>
             <div><strong>{text}</strong></div>
-            <div style={{ fontSize: 12, color: '#666' }}>{record.login}</div>
+            <div style={{ fontSize: 12, color: '#666' }}>{record.login || record.LOG_UTI}</div>
           </div>
         </div>
       ),
@@ -1095,7 +1297,7 @@ const AdminPage = () => {
       title: 'Profil',
       dataIndex: 'profil',
       key: 'profil',
-      render: (profil) => <Tag color="blue">{profil}</Tag>,
+      render: (profil) => <Tag color="blue">{profil || 'Utilisateur'}</Tag>,
     },
     {
       title: 'Statut',
@@ -1215,46 +1417,63 @@ const AdminPage = () => {
       title: 'ID Session',
       dataIndex: 'id',
       key: 'id',
+      width: 100,
     },
     {
       title: 'Utilisateur',
       dataIndex: 'utilisateur',
       key: 'utilisateur',
-      render: (user) => {
-        if (!user) return 'Inconnu';
-        return typeof user === 'object' ? user.nom_complet || user.LOG_UTI : user;
+      render: (utilisateur) => {
+        if (!utilisateur || (typeof utilisateur === 'object' && !utilisateur.nom_complet)) {
+          return <Tag color="default">Inconnu</Tag>;
+        }
+        
+        if (typeof utilisateur === 'object') {
+          return (
+            <div>
+              <div><strong>{utilisateur.nom_complet}</strong></div>
+              <div style={{ fontSize: 12, color: '#666' }}>{utilisateur.login}</div>
+            </div>
+          );
+        }
+        return <Text>{utilisateur}</Text>;
       },
     },
     {
       title: 'Adresse IP',
       dataIndex: 'adresse_ip',
       key: 'adresse_ip',
-      render: (ip) => ip || '-',
+      render: (ip) => <Tag color="blue">{ip || '-'}</Tag>,
     },
     {
       title: 'Début',
       dataIndex: 'date_debut',
       key: 'date_debut',
+      width: 150,
       render: (date) => date ? moment(date).format('DD/MM/YYYY HH:mm:ss') : '-',
+      sorter: (a, b) => moment(a.date_debut).unix() - moment(b.date_debut).unix(),
     },
     {
-      title: 'Fin',
-      dataIndex: 'date_fin',
-      key: 'date_fin',
-      render: (date) => date ? moment(date).format('DD/MM/YYYY HH:mm:ss') : '-',
+      title: 'Dernière activité',
+      dataIndex: 'derniere_activite',
+      key: 'derniere_activite',
+      render: (date) => date ? moment(date).fromNow() : '-',
     },
     {
       title: 'Statut',
       dataIndex: 'statut',
       key: 'statut',
       render: (statut) => {
-        const color = statut === 'ACTIVE' ? 'green' : 'red';
-        return <Tag color={color}>{statut || 'INACTIVE'}</Tag>;
+        const status = statut?.toUpperCase() || 'INACTIVE';
+        const color = status === 'ACTIVE' ? 'green' : 
+                     status === 'EXPIRED' ? 'orange' : 'red';
+        return <Tag color={color}>{status}</Tag>;
       },
     },
     {
       title: 'Actions',
       key: 'actions',
+      width: 120,
       render: (_, record) => (
         <Button
           type="link"
@@ -1291,7 +1510,16 @@ const AdminPage = () => {
         } else if (record.TYP_PAR === 'NUMBER') {
           return <Tag color="blue">{value}</Tag>;
         } else if (record.TYP_PAR === 'JSON') {
-          return <Tag color="purple">JSON Object</Tag>;
+          try {
+            const jsonValue = JSON.parse(value);
+            return (
+              <Tooltip title={JSON.stringify(jsonValue, null, 2)}>
+                <Tag color="purple">JSON ({Object.keys(jsonValue).length} clés)</Tag>
+              </Tooltip>
+            );
+          } catch {
+            return <Tag color="purple">JSON Invalide</Tag>;
+          }
         }
         return <Text ellipsis style={{ maxWidth: 200 }}>{value}</Text>;
       },
@@ -1341,6 +1569,7 @@ const AdminPage = () => {
       title: 'Date',
       dataIndex: 'timestamp',
       key: 'timestamp',
+      width: 160,
       render: (date) => date ? moment(date).format('DD/MM/YYYY HH:mm:ss') : '-',
       sorter: (a, b) => moment(a.timestamp).unix() - moment(b.timestamp).unix(),
     },
@@ -1348,12 +1577,14 @@ const AdminPage = () => {
       title: 'Niveau',
       dataIndex: 'level',
       key: 'level',
+      width: 100,
       render: (level) => {
         const colors = {
           ERROR: 'red',
           WARN: 'orange',
           INFO: 'blue',
           DEBUG: 'gray',
+          TRACE: 'gray',
         };
         return <Tag color={colors[level] || 'default'}>{level}</Tag>;
       },
@@ -1362,19 +1593,35 @@ const AdminPage = () => {
       title: 'Source',
       dataIndex: 'source',
       key: 'source',
+      width: 150,
+      render: (text) => <Text ellipsis>{text || '-'}</Text>,
+    },
+    {
+      title: 'Module',
+      dataIndex: 'module',
+      key: 'module',
+      width: 120,
       render: (text) => text || '-',
     },
     {
       title: 'Message',
       dataIndex: 'message',
       key: 'message',
-      render: (text) => <Text ellipsis style={{ maxWidth: 300 }}>{text || '-'}</Text>,
+      render: (text) => <Text ellipsis style={{ maxWidth: 400 }}>{text || '-'}</Text>,
     },
     {
       title: 'Utilisateur',
       dataIndex: 'username',
       key: 'username',
+      width: 120,
       render: (text) => text || '-',
+    },
+    {
+      title: 'IP',
+      dataIndex: 'ip_address',
+      key: 'ip_address',
+      width: 120,
+      render: (text) => <Tag color="blue">{text || '-'}</Tag>,
     },
   ];
 
@@ -1383,12 +1630,14 @@ const AdminPage = () => {
       title: 'Date',
       dataIndex: 'timestamp',
       key: 'timestamp',
+      width: 150,
       render: (date) => date ? moment(date).format('DD/MM/YYYY HH:mm:ss') : '-',
     },
     {
       title: 'Action',
       dataIndex: 'action',
       key: 'action',
+      width: 100,
       render: (action) => {
         const colors = {
           CREATE: 'green',
@@ -1396,6 +1645,9 @@ const AdminPage = () => {
           DELETE: 'red',
           LOGIN: 'cyan',
           LOGOUT: 'gray',
+          READ: 'geekblue',
+          EXPORT: 'orange',
+          IMPORT: 'purple',
         };
         return <Tag color={colors[action] || 'default'}>{action}</Tag>;
       },
@@ -1404,128 +1656,151 @@ const AdminPage = () => {
       title: 'Table',
       dataIndex: 'table_name',
       key: 'table_name',
+      width: 120,
       render: (text) => text || '-',
     },
     {
       title: 'Utilisateur',
       dataIndex: 'username',
       key: 'username',
+      width: 120,
       render: (text) => text || '-',
     },
     {
       title: 'IP',
       dataIndex: 'ip_address',
       key: 'ip_address',
-      render: (text) => text || '-',
+      width: 120,
+      render: (text) => <Tag color="blue">{text || '-'}</Tag>,
     },
     {
       title: 'Détails',
-      dataIndex: 'details',
       key: 'details',
-      render: (details) => (
-        <Tooltip title={JSON.stringify(details, null, 2)}>
-          <Button type="link" icon={<EyeOutlined />} size="small">
-            Voir
-          </Button>
-        </Tooltip>
+      width: 100,
+      render: (_, record) => (
+        <Button 
+          type="link" 
+          icon={<EyeOutlined />} 
+          size="small"
+          onClick={() => showAuditDetails(record)}
+        >
+          Voir
+        </Button>
       ),
     },
   ];
 
   const backupColumns = [
-  {
-    title: 'Nom',
-    dataIndex: 'name',
-    key: 'name',
-    render: (name) => <strong>{name}</strong>,
-  },
-  {
-    title: 'Date création',
-    dataIndex: 'created_at',
-    key: 'created_at',
-    render: (date) => date ? moment(date).format('DD/MM/YYYY HH:mm:ss') : '-',
-  },
-  {
-    title: 'Taille',
-    dataIndex: 'size',
-    key: 'size',
-    render: (size) => {
-      if (!size) return '-';
-      // Si size est en bytes, convertir en MB
-      const sizeMB = size / (1024 * 1024);
-      return `${sizeMB.toFixed(2)} MB`;
+    {
+      title: 'Nom',
+      dataIndex: 'name',
+      key: 'name',
+      render: (name, record) => (
+        <div>
+          <div><strong>{name}</strong></div>
+          <div style={{ fontSize: 12, color: '#666' }}>{record.filename}</div>
+        </div>
+      ),
     },
-  },
-  {
-    title: 'Type',
-    dataIndex: 'type',
-    key: 'type',
-    render: (type) => {
-      const colors = {
-        'FULL': 'blue',
-        'DIFF': 'green',
-        'LOG': 'orange',
-        'INCREMENTAL': 'cyan'
-      };
-      return <Tag color={colors[type] || 'default'}>{type || 'INCONNU'}</Tag>;
+    {
+      title: 'Date création',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date) => date ? moment(date).format('DD/MM/YYYY HH:mm:ss') : '-',
     },
-  },
-  {
-    title: 'Statut',
-    dataIndex: 'status',
-    key: 'status',
-    render: (status) => {
-      const colors = {
-        'SUCCES': 'green',
-        'EN_COURS': 'orange',
-        'ECHEC': 'red',
-        'RESTAURATION_EN_COURS': 'cyan',
-        'RESTAURE': 'blue',
-        'UNKNOWN': 'gray'
-      };
-      const labels = {
-        'SUCCES': 'Terminé',
-        'EN_COURS': 'En cours',
-        'ECHEC': 'Échec',
-        'RESTAURATION_EN_COURS': 'Restauration en cours',
-        'RESTAURE': 'Restauré',
-        'UNKNOWN': 'Inconnu'
-      };
-      return <Tag color={colors[status] || 'default'}>{labels[status] || status || 'Inconnu'}</Tag>;
+    {
+      title: 'Taille',
+      dataIndex: 'size',
+      key: 'size',
+      render: (size) => {
+        if (!size) return '-';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let index = 0;
+        let sizeNum = parseFloat(size);
+        while (sizeNum >= 1024 && index < units.length - 1) {
+          sizeNum /= 1024;
+          index++;
+        }
+        return `${sizeNum.toFixed(2)} ${units[index]}`;
+      },
     },
-  },
-  {
-    title: 'Créé par',
-    dataIndex: 'created_by',
-    key: 'created_by',
-    render: (createdBy) => createdBy || '-',
-  },
-  {
-    title: 'Actions',
-    key: 'actions',
-    render: (_, record) => (
-      <Space>
-        <Button
-          type="link"
-          icon={<CloudDownloadOutlined />}
-          onClick={() => adminAPI.downloadBackup(record.id)}
-          disabled={record.status !== 'SUCCES'}
-        >
-          Télécharger
-        </Button>
-        <Button
-          type="link"
-          danger
-          icon={<RollbackOutlined />}
-          onClick={() => handleRestoreBackup(record.id)}
-          disabled={record.status !== 'SUCCES'}
-        >
-          Restaurer
-        </Button>
-      </Space>
-    ),
-  },
-];
+    {
+      title: 'Type',
+      dataIndex: 'type',
+      key: 'type',
+      render: (type) => {
+        const colors = {
+          'FULL': 'blue',
+          'DIFF': 'green',
+          'LOG': 'orange',
+          'INCREMENTAL': 'cyan'
+        };
+        return <Tag color={colors[type] || 'default'}>{type || 'FULL'}</Tag>;
+      },
+    },
+    {
+      title: 'Statut',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status) => {
+        const colors = {
+          'SUCCESS': 'green',
+          'SUCCES': 'green',
+          'IN_PROGRESS': 'orange',
+          'EN_COURS': 'orange',
+          'FAILED': 'red',
+          'ECHEC': 'red',
+          'RESTORING': 'cyan',
+          'RESTORED': 'blue',
+        };
+        const labels = {
+          'SUCCESS': 'Terminé',
+          'SUCCES': 'Terminé',
+          'IN_PROGRESS': 'En cours',
+          'EN_COURS': 'En cours',
+          'FAILED': 'Échec',
+          'ECHEC': 'Échec',
+          'RESTORING': 'Restauration en cours',
+          'RESTORED': 'Restauré',
+        };
+        const statusKey = status?.toUpperCase();
+        return <Tag color={colors[statusKey] || 'default'}>{labels[statusKey] || status || 'Inconnu'}</Tag>;
+      },
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 250,
+      render: (_, record) => {
+        const isDownloadable = record.status === 'SUCCESS' || 
+                               record.status === 'SUCCES' || 
+                               record.status === 'RESTORED';
+        
+        return (
+          <Space>
+            <Button
+              type="primary"
+              icon={<CloudDownloadOutlined />}
+              onClick={() => handleDownloadBackup(record.id)}
+              disabled={!isDownloadable}
+              size="small"
+            >
+              Télécharger
+            </Button>
+            <Button
+              type="default"
+              icon={<RollbackOutlined />}
+              onClick={() => handleRestoreBackup(record.id)}
+              disabled={record.status !== 'SUCCESS' && record.status !== 'SUCCES'}
+              size="small"
+            >
+              Restaurer
+            </Button>
+          </Space>
+        );
+      },
+    },
+  ];
 
   // ==================== RENDU DES ONGLETS ====================
 
@@ -1640,7 +1915,7 @@ const AdminPage = () => {
                   </Descriptions.Item>
                   <Descriptions.Item label="Dernière vérification">
                     {etatSysteme?.dernier_verification ? 
-                      moment(etatSysteme.dernier_verification).format('DD/MM/YYYY HH:mm') : 
+                      moment(etatSysteme.dernier_verification).fromNow() : 
                       moment().format('DD/MM/YYYY HH:mm')}
                   </Descriptions.Item>
                 </Descriptions>
@@ -1750,14 +2025,39 @@ const AdminPage = () => {
     <Card
       title="Gestion des sessions"
       extra={
-        <Button
-          icon={<ReloadOutlined />}
-          onClick={loadSessions}
-        >
-          Actualiser
-        </Button>
+        <Space>
+          <Select
+            placeholder="Filtrer par statut"
+            style={{ width: 150 }}
+            allowClear
+            onChange={(value) => {
+              setSessionsFilters({ ...sessionsFilters, statut: value });
+              loadSessions({ statut: value });
+            }}
+          >
+            <Option value="ACTIVE">Actives</Option>
+            <Option value="EXPIRED">Expirées</Option>
+            <Option value="TERMINATED">Terminées</Option>
+          </Select>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => {
+              loadSessions();
+              message.success('Sessions actualisées');
+            }}
+          >
+            Actualiser
+          </Button>
+        </Space>
       }
     >
+      <Alert
+        message={`${sessions.filter(s => s.statut === 'ACTIVE').length} sessions actives sur ${sessions.length} total`}
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+      />
+      
       <Table
         columns={sessionColumns}
         dataSource={sessions}
@@ -1819,7 +2119,7 @@ const AdminPage = () => {
             {etatSysteme?.performances && (
               <Descriptions bordered column={2}>
                 <Descriptions.Item label="Connexions actives">
-                  {etatSysteme.performances.connexions_actives || 0}
+                  <Statistic value={etatSysteme.performances.connexions_actives || 0} />
                 </Descriptions.Item>
               </Descriptions>
             )}
@@ -1829,10 +2129,10 @@ const AdminPage = () => {
             {etatSysteme?.securite?.parametres && (
               <Descriptions bordered column={2}>
                 <Descriptions.Item label="Paramètres configurés">
-                  {etatSysteme.securite.parametres.total_parametres || 0}
+                  <Statistic value={etatSysteme.securite.parametres.total_parametres || 0} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Pays configurés">
-                  {etatSysteme.securite.parametres.pays_configures || 0}
+                  <Statistic value={etatSysteme.securite.parametres.pays_configures || 0} />
                 </Descriptions.Item>
               </Descriptions>
             )}
@@ -1871,171 +2171,227 @@ const AdminPage = () => {
     </Card>
   );
 
-  const renderConfigurationsTab = () => (
-    <Card>
-      <Tabs defaultActiveKey="parametres">
-        <TabPane tab="Paramètres système" key="parametres">
-          <div style={{ marginBottom: 16 }}>
-            <Row gutter={[16, 16]}>
-              <Col xs={24} md={16}>
-                <Input
-                  placeholder="Rechercher un paramètre..."
-                  prefix={<SearchOutlined />}
-                  value={parametresSearch}
-                  onChange={(e) => setParametresSearch(e.target.value)}
-                  allowClear
-                  onPressEnter={() => loadParametres()}
-                />
-              </Col>
-              <Col xs={24} md={8} style={{ textAlign: 'right' }}>
+  const renderConfigurationsTab = () => {
+    return (
+      <Card>
+        <Tabs activeKey={configSubTab} onChange={setConfigSubTab}>
+          <TabPane tab="Paramètres système" key="parametres">
+            <div style={{ marginBottom: 16 }}>
+              <Row gutter={[16, 16]}>
+                <Col xs={24} md={16}>
+                  <Input
+                    placeholder="Rechercher un paramètre..."
+                    prefix={<SearchOutlined />}
+                    value={parametresSearch}
+                    onChange={(e) => setParametresSearch(e.target.value)}
+                    allowClear
+                    onPressEnter={() => loadParametres()}
+                    onBlur={() => loadParametres()}
+                  />
+                </Col>
+                <Col xs={24} md={8} style={{ textAlign: 'right' }}>
+                  <Space>
+                    <Button
+                      icon={<ReloadOutlined />}
+                      onClick={loadParametres}
+                    >
+                      Actualiser
+                    </Button>
+                    <Button
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={() => showParametreDrawer({})}
+                    >
+                      Nouveau paramètre
+                    </Button>
+                  </Space>
+                </Col>
+              </Row>
+            </div>
+
+            <Table
+              columns={parametreColumns}
+              dataSource={parametres}
+              rowKey="COD_PAR"
+              loading={loading.parametres}
+              pagination={{ pageSize: 20 }}
+            />
+          </TabPane>
+
+          <TabPane tab="Journaux d'activité" key="logs">
+            <Card
+              title="Journaux système"
+              extra={
                 <Space>
-                  <Button
-                    icon={<ImportOutlined />}
-                    onClick={() => setImportModalVisible(true)}
-                  >
-                    Importer
-                  </Button>
-                  <Button
-                    icon={<ExportOutlined />}
-                    onClick={async () => {
-                      try {
-                        const response = await adminAPI.exportParametres();
-                        if (response.success && response.data) {
-                          const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
-                          const url = window.URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `parametres_${moment().format('YYYYMMDD_HHmmss')}.json`;
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
-                          window.URL.revokeObjectURL(url);
-                          message.success('Paramètres exportés avec succès');
-                        } else {
-                          message.error(response.message || 'Erreur lors de l\'exportation');
-                        }
-                      } catch (error) {
-                        message.error('Erreur lors de l\'exportation');
-                      }
+                  <Select
+                    placeholder="Filtrer par niveau"
+                    style={{ width: 150 }}
+                    allowClear
+                    onChange={(value) => {
+                      setLogsFilters({ ...logsFilters, level: value });
+                      loadLogs({ level: value });
                     }}
                   >
-                    Exporter
+                    <Option value="ERROR">Erreur</Option>
+                    <Option value="WARN">Avertissement</Option>
+                    <Option value="INFO">Information</Option>
+                    <Option value="DEBUG">Débogage</Option>
+                  </Select>
+                  <RangePicker
+                    onChange={(dates) => {
+                      if (dates && dates[0] && dates[1]) {
+                        setLogsFilters({
+                          ...logsFilters,
+                          start_date: dates[0].format('YYYY-MM-DD'),
+                          end_date: dates[1].format('YYYY-MM-DD')
+                        });
+                        loadLogs({
+                          start_date: dates[0].format('YYYY-MM-DD'),
+                          end_date: dates[1].format('YYYY-MM-DD')
+                        });
+                      }
+                    }}
+                  />
+                  <Button
+                    icon={<ReloadOutlined />}
+                    onClick={loadLogs}
+                  >
+                    Actualiser
+                  </Button>
+                </Space>
+              }
+            >
+              <Table
+                columns={logColumns}
+                dataSource={logs}
+                rowKey="id"
+                loading={loading.logs}
+                pagination={{
+                  ...logsPagination,
+                  showSizeChanger: true,
+                  showTotal: (total) => `Total ${total} logs`,
+                }}
+                onChange={(pagination) => {
+                  setLogsPagination(pagination);
+                  loadLogs({ page: pagination.current, limit: pagination.pageSize });
+                }}
+              />
+            </Card>
+          </TabPane>
+
+          <TabPane tab="Backup & Restauration" key="backup">
+            <Card
+              title="Gestion des sauvegardes"
+              extra={
+                <Space>
+                  <Button
+                    icon={<SettingOutlined />}
+                    onClick={() => {
+                      backupSettingsForm.setFieldsValue({
+                        ...backupSettings,
+                        auto_backup_time: moment(backupSettings.auto_backup_time, 'HH:mm')
+                      });
+                      setBackupSettingsModal(true);
+                    }}
+                  >
+                    Paramètres
                   </Button>
                   <Button
                     type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={() => showParametreDrawer({})}
+                    icon={<SaveOutlined />}
+                    onClick={handleCreateBackup}
+                    loading={loading.backup}
                   >
-                    Nouveau paramètre
+                    Nouveau backup
                   </Button>
                 </Space>
-              </Col>
-            </Row>
-          </div>
+              }
+            >
+              {backupStatus && (
+                <Alert
+                  message={
+                    <Space>
+                      <span>Dernier backup: {backupStatus.last_backup ? moment(backupStatus.last_backup).format('DD/MM/YYYY HH:mm') : 'Jamais'}</span>
+                      <Divider orientation="left" />
+                      <span>Espace utilisé: {backupStatus.used_space || '0'} / {backupStatus.total_space || '∞'}</span>
+                      <Divider orientation="left" />
+                      <Switch
+                        checkedChildren="Auto ON"
+                        unCheckedChildren="Auto OFF"
+                        checked={backupSettings.auto_backup}
+                        onChange={toggleAutoBackup}
+                      />
+                    </Space>
+                  }
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                />
+              )}
 
-          <Table
-            columns={parametreColumns}
-            dataSource={parametres}
-            rowKey="COD_PAR"
-            loading={loading.parametres}
-            pagination={{ pageSize: 20 }}
-          />
-        </TabPane>
-
-        <TabPane tab="Journaux d'activité" key="logs">
-          <Card
-            title="Journaux système"
-            extra={
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={loadLogs}
-              >
-                Actualiser
-              </Button>
-            }
-          >
-            <Table
-              columns={logColumns}
-              dataSource={logs}
-              rowKey="id"
-              loading={loading.logs}
-              pagination={{
-                ...logsPagination,
-                showSizeChanger: true,
-                showTotal: (total) => `Total ${total} logs`,
-              }}
-              onChange={(pagination) => {
-                setLogsPagination(pagination);
-                loadLogs({ page: pagination.current, limit: pagination.pageSize });
-              }}
-            />
-          </Card>
-        </TabPane>
-
-        <TabPane tab="Backup & Restauration" key="backup">
-          <Card
-            title="Gestion des sauvegardes"
-            extra={
-              <Button
-                type="primary"
-                icon={<SaveOutlined />}
-                onClick={handleCreateBackup}
-              >
-                Nouveau backup
-              </Button>
-            }
-          >
-            {backupStatus && (
+              <Table
+                columns={backupColumns}
+                dataSource={backups}
+                rowKey="id"
+                loading={loading.backup}
+                pagination={{ pageSize: 10 }}
+              />
+              
               <Alert
-                message={`Dernier backup: ${moment(backupStatus.last_backup).format('DD/MM/YYYY HH:mm')}`}
-                description={`Espace utilisé: ${backupStatus.used_space} / ${backupStatus.total_space}`}
+                message="Backup automatique"
+                description={`Les backups sont automatiquement créés tous les jours à ${backupSettings.auto_backup_time} et sauvegardés dans ${backupSettings.backup_folder}`}
                 type="info"
                 showIcon
-                style={{ marginBottom: 16 }}
+                style={{ marginTop: 16 }}
               />
-            )}
+            </Card>
+          </TabPane>
 
-            <Table
-              columns={backupColumns}
-              dataSource={backups}
-              rowKey="id"
-              pagination={{ pageSize: 10 }}
-            />
-          </Card>
-        </TabPane>
-
-        <TabPane tab="Audit" key="audit">
-          <Card
-            title="Traces d'audit"
-            extra={
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={loadAuditTrails}
-              >
-                Actualiser
-              </Button>
-            }
-          >
-            <Table
-              columns={auditColumns}
-              dataSource={auditTrails}
-              rowKey="id"
-              loading={loading.audit}
-              pagination={{
-                ...auditPagination,
-                showSizeChanger: true,
-                showTotal: (total) => `Total ${total} traces`,
-              }}
-              onChange={(pagination) => {
-                setAuditPagination(pagination);
-                loadAuditTrails({ page: pagination.current, limit: pagination.pageSize });
-              }}
-            />
-          </Card>
-        </TabPane>
-      </Tabs>
-    </Card>
-  );
+          <TabPane tab="Audit" key="audit">
+            <Card
+              title="Traces d'audit"
+              extra={
+                <Space>
+                  <RangePicker
+                    onChange={(dates) => {
+                      if (dates && dates[0] && dates[1]) {
+                        loadAuditTrails({
+                          start_date: dates[0].format('YYYY-MM-DD'),
+                          end_date: dates[1].format('YYYY-MM-DD')
+                        });
+                      }
+                    }}
+                  />
+                  <Button
+                    icon={<ReloadOutlined />}
+                    onClick={loadAuditTrails}
+                  >
+                    Actualiser
+                  </Button>
+                </Space>
+              }
+            >
+              <Table
+                columns={auditColumns}
+                dataSource={auditTrails}
+                rowKey="id"
+                loading={loading.audit}
+                pagination={{
+                  ...auditPagination,
+                  showSizeChanger: true,
+                  showTotal: (total) => `Total ${total} traces`,
+                }}
+                onChange={(pagination) => {
+                  setAuditPagination(pagination);
+                  loadAuditTrails({ page: pagination.current, limit: pagination.pageSize });
+                }}
+              />
+            </Card>
+          </TabPane>
+        </Tabs>
+      </Card>
+    );
+  };
 
   const renderProfilTab = () => (
     <Card>
@@ -2184,6 +2540,192 @@ const AdminPage = () => {
         </Row>
       )}
     </Card>
+  );
+
+  // ==================== MODAL DÉTAILS AUDIT ====================
+
+  const renderAuditDetailModal = () => (
+    <Modal
+      title="Détails de l'audit"
+      open={auditDetailModal}
+      onCancel={() => setAuditDetailModal(false)}
+      width={800}
+      footer={[
+        <Button key="close" onClick={() => setAuditDetailModal(false)}>
+          Fermer
+        </Button>
+      ]}
+    >
+      {selectedAudit && (
+        <div>
+          <Descriptions bordered column={2} size="small">
+            <Descriptions.Item label="Date" span={2}>
+              {selectedAudit.timestamp ? moment(selectedAudit.timestamp).format('DD/MM/YYYY HH:mm:ss') : '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Action">
+              <Tag color={
+                selectedAudit.action === 'CREATE' ? 'green' :
+                selectedAudit.action === 'UPDATE' ? 'blue' :
+                selectedAudit.action === 'DELETE' ? 'red' :
+                selectedAudit.action === 'LOGIN' ? 'cyan' : 'default'
+              }>
+                {selectedAudit.action}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="Table">
+              {selectedAudit.table_name}
+            </Descriptions.Item>
+            <Descriptions.Item label="Utilisateur">
+              {selectedAudit.username || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Adresse IP">
+              <Tag color="blue">{selectedAudit.ip_address || '-'}</Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="ID Enregistrement">
+              {selectedAudit.record_id || '-'}
+            </Descriptions.Item>
+          </Descriptions>
+
+          <Divider />
+
+          <Card title="Détails complets" size="small">
+            {typeof selectedAudit.details === 'object' ? (
+              <div style={{ maxHeight: 300, overflow: 'auto' }}>
+                <pre style={{ margin: 0, fontSize: 12 }}>
+                  {JSON.stringify(selectedAudit.details, null, 2)}
+                </pre>
+              </div>
+            ) : (
+              <p>{selectedAudit.details || 'Aucun détail supplémentaire'}</p>
+            )}
+          </Card>
+
+          {selectedAudit.old_values && (
+            <Card title="Anciennes valeurs" size="small" style={{ marginTop: 16 }}>
+              <div style={{ maxHeight: 200, overflow: 'auto' }}>
+                <pre style={{ margin: 0, fontSize: 12 }}>
+                  {JSON.stringify(selectedAudit.old_values, null, 2)}
+                </pre>
+              </div>
+            </Card>
+          )}
+
+          {selectedAudit.new_values && (
+            <Card title="Nouvelles valeurs" size="small" style={{ marginTop: 16 }}>
+              <div style={{ maxHeight: 200, overflow: 'auto' }}>
+                <pre style={{ margin: 0, fontSize: 12 }}>
+                  {JSON.stringify(selectedAudit.new_values, null, 2)}
+                </pre>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+
+  // ==================== MODAL PARAMÈTRES BACKUP ====================
+
+  const renderBackupSettingsModal = () => (
+    <Modal
+      title="Paramètres de sauvegarde automatique"
+      open={backupSettingsModal}
+      onCancel={() => setBackupSettingsModal(false)}
+      width={600}
+      footer={null}
+      destroyOnClose
+    >
+      <Form
+        form={backupSettingsForm}
+        layout="vertical"
+        onFinish={handleSaveBackupSettings}
+        initialValues={{
+          ...backupSettings,
+          auto_backup_time: backupSettings.auto_backup_time ? 
+            moment(backupSettings.auto_backup_time, 'HH:mm') : 
+            moment('02:00', 'HH:mm')
+        }}
+      >
+        <Form.Item
+          name="auto_backup"
+          label="Sauvegarde automatique"
+          valuePropName="checked"
+        >
+          <Switch
+            checkedChildren="Activée"
+            unCheckedChildren="Désactivée"
+          />
+        </Form.Item>
+
+        <Form.Item
+          name="auto_backup_time"
+          label="Heure de sauvegarde automatique"
+          rules={[{ required: true, message: 'L\'heure est requise' }]}
+        >
+          <TimePicker
+            format="HH:mm"
+            style={{ width: '100%' }}
+            minuteStep={15}
+          />
+        </Form.Item>
+
+        <Form.Item
+          name="backup_folder"
+          label="Dossier de sauvegarde"
+          rules={[{ required: true, message: 'Le dossier est requis' }]}
+          help="Les backups seront automatiquement sauvegardés dans ce dossier"
+        >
+          <Input
+            placeholder="./backups"
+            prefix={<FolderOutlined />}
+          />
+        </Form.Item>
+
+        <Form.Item
+          name="backup_retention_days"
+          label="Conservation des backups (jours)"
+          rules={[{ required: true, message: 'Le nombre de jours est requis' }]}
+        >
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <InputNumber
+              min={1}
+              max={365}
+              style={{ flex: 1 }}
+            />
+            <span style={{ marginLeft: 8 }}>jours</span>
+          </div>
+        </Form.Item>
+
+        <Form.Item
+          name="compression_enabled"
+          label="Compression"
+          valuePropName="checked"
+          help="Compresser les fichiers de backup pour économiser de l'espace"
+        >
+          <Switch
+            checkedChildren="Activée"
+            unCheckedChildren="Désactivée"
+          />
+        </Form.Item>
+
+        <Alert
+          message="Informations"
+          description="Les backups automatiques s'exécutent quotidiennement à l'heure spécifiée. Les anciens backups seront automatiquement supprimés après le nombre de jours défini."
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+
+        <div style={{ textAlign: 'right' }}>
+          <Button style={{ marginRight: 8 }} onClick={() => setBackupSettingsModal(false)}>
+            Annuler
+          </Button>
+          <Button type="primary" htmlType="submit">
+            Sauvegarder les paramètres
+          </Button>
+        </div>
+      </Form>
+    </Modal>
   );
 
   // ==================== RENDU PRINCIPAL ====================
@@ -2637,6 +3179,17 @@ const AdminPage = () => {
           onFinish={handleParametreSubmit}
         >
           <Form.Item
+            name="COD_PAR"
+            label="Code du paramètre"
+            rules={[{ required: true, message: 'Le code est requis' }]}
+          >
+            <Input 
+              placeholder="Ex: SYS_001" 
+              disabled={!!selectedParametre?.COD_PAR}
+            />
+          </Form.Item>
+
+          <Form.Item
             name="LIB_PAR"
             label="Libellé"
             rules={[{ required: true, message: 'Le libellé est requis' }]}
@@ -2691,6 +3244,12 @@ const AdminPage = () => {
           </Form.Item>
         </Form>
       </Drawer>
+
+      {/* Modal Détails Audit */}
+      {renderAuditDetailModal()}
+
+      {/* Modal Paramètres Backup */}
+      {renderBackupSettingsModal()}
     </div>
   );
 };

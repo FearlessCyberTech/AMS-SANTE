@@ -58,7 +58,7 @@ const Documents = React.lazy(() => import('./pages/documentation/Documents'));
 // I. Module de règlement
 const Reglements = React.lazy(() => import('./pages/reglement/Reglements'));
 const GestionFinanciere = React.lazy(() => import('./pages/reglement/GestionFinanciere'));
-const Litiges = React.lazy(() => import('./pages/reglement/Litiges'));
+const Prestations = React.lazy(() => import('./pages/reglement/Prestations'));
 
 // J. Gestion du réseau de soins
 const ReseauSoins = React.lazy(() => import('./pages/reseau/ReseauSoins'));
@@ -70,7 +70,7 @@ const EvaluationPrestataires = React.lazy(() => import('./pages/reseau/Evaluatio
 // Administration
 const Administration = React.lazy(() => import('./pages/admin/Administration'));
 const Parametres = React.lazy(() => import('./pages/admin/Parametres'));
-const Geographie = React.lazy(() => import('./pages/admin/Geographie'));
+const Importation = React.lazy(() => import('./pages/admin/Importation'));
 const Nomenclatures = React.lazy(() => import('./pages/admin/Nomenclatures'));
 
 // Support
@@ -167,7 +167,7 @@ const routePermissions = {
   // 💳 I. Module de règlement
   '/reglements': ['SuperAdmin', 'Admin', 'Caissier'],
   '/gestion-financiere': ['SuperAdmin', 'Admin'],
-  '/litiges': ['SuperAdmin', 'Admin', 'Caissier'],
+  '/Prestations': ['SuperAdmin', 'Admin', 'Caissier'],
   
   // 🏥 J. Gestion du réseau de soins
   '/reseau-soins': ['SuperAdmin', 'Admin'],
@@ -179,7 +179,7 @@ const routePermissions = {
   // ⚙️ Administration et configuration
   '/administration': ['SuperAdmin', 'Admin'],
   '/parametres': ['SuperAdmin', 'Admin'],
-  '/geographie': ['SuperAdmin', 'Admin'],
+  '/Importation': ['SuperAdmin', 'Admin'],
   '/nomenclatures': ['SuperAdmin', 'Admin', 'Medecin'],
   
   // 🆘 Support et documentation utilisateur
@@ -421,9 +421,9 @@ const AppContent = () => {
               <GestionFinanciere />
             </PermissionRoute>
           } />
-          <Route path="litiges" element={
-            <PermissionRoute allowedRoles={routePermissions['/litiges']}>
-              <Litiges />
+          <Route path="Prestations" element={
+            <PermissionRoute allowedRoles={routePermissions['/Prestations']}>
+              <Prestations />
             </PermissionRoute>
           } />
           
@@ -465,9 +465,9 @@ const AppContent = () => {
               <Parametres />
             </PermissionRoute>
           } />
-          <Route path="geographie" element={
-            <PermissionRoute allowedRoles={routePermissions['/geographie']}>
-              <Geographie />
+          <Route path="Importation" element={
+            <PermissionRoute allowedRoles={routePermissions['/Importation']}>
+              <Importation />
             </PermissionRoute>
           } />
           <Route path="nomenclatures" element={
