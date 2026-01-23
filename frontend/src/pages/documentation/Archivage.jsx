@@ -5,7 +5,6 @@ import {
   FileArchive, Search, Filter, Download, Eye,
   Calendar, FileText, User, Building, Trash2
 } from 'lucide-react';
-import './Archivage.css';
 
 const Archivage = () => {
   const { t } = useTranslation();

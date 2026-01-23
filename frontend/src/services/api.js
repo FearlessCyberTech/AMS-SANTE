@@ -19,17 +19,17 @@
       }
 
       // Environnement de développement local
-      if (hostname === '192.168.100.20' || hostname === '0.0.0.0') {
-        return `http://192.168.100.20:${port || '3000'}/api`;
+      if (hostname === '172.20.10.2' || hostname === '0.0.0.0') {
+        return `http://172.20.10.2:${port || '3000'}/api`;
       }
       
     
       // Production - utilisation de l'URL relative par défaut
-      return process.env.REACT_APP_API_URL || '/api';
+      return import.meta.env.VITE_API_URL || '/api';
     }
     
     // Fallback pour Node.js/SSR
-    return process.env.API_URL || process.env.REACT_APP_API_URL || 'http://localhost:3000/api' || 'http://192.168.100.20:3000/api';
+    return import.meta.env.VITE_API_URL || 'http://localhost:3000/api' || 'http://172.20.10.2:3000/api';
   };
 
   let API_URL = getApiBaseUrl();
@@ -148,7 +148,7 @@
     method: 'GET',
     headers: defaultHeaders,
     ...options,
-    credentials: process.env.NODE_ENV === 'production' ? 'same-origin' : 'include',
+    credentials: import.meta.env.MODE === 'production' ? 'same-origin' : 'include',
   };
   
   // Gestion spéciale pour FormData (upload de fichiers)
@@ -168,10 +168,10 @@
   let timeoutDuration;
   if (isFormData) {
     // Upload de fichiers : timeout plus long (2 minutes)
-    timeoutDuration = process.env.NODE_ENV === 'production' ? 120000 : 180000;
+    timeoutDuration = import.meta.env.MODE === 'production' ? 120000 : 180000;
   } else {
     // Requêtes normales : timeout standard
-    timeoutDuration = process.env.NODE_ENV === 'production' ? 15000 : 30000;
+    timeoutDuration = import.meta.env.MODE === 'production' ? 15000 : 30000;
   }
   
   const controller = new AbortController();
@@ -183,7 +183,7 @@
     const fullUrl = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
     
     // Logging en développement (adapté pour FormData)
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.MODE === 'development') {
       console.log(`📞 API Call: ${config.method} ${fullUrl}`, {
         headers: config.headers,
         hasBody: !!config.body,
@@ -303,7 +303,7 @@ const fetchBlob = async (endpoint, options = {}) => {
   const config = {
     method: 'GET',
     headers: headers,
-    credentials: process.env.NODE_ENV === 'production' ? 'same-origin' : 'include',
+    credentials: import.meta.env.MODE === 'production' ? 'same-origin' : 'include',
     ...options
   };
 
@@ -4262,23 +4262,6 @@ async create(formData) {
   }
 },
 
-async update(id, formData) {
-  try {
-    const response = await fetchAPI(`/beneficiaires/${id}`, {
-      method: 'PUT',
-      body: formData,
-    });
-    
-    return response;
-  } catch (error) {
-    console.error('❌ Erreur mise à jour bénéficiaire:', error);
-    return {
-      success: false,
-      message: error.message || 'Erreur lors de la mise à jour du bénéficiaire'
-    };
-  }
-},
-
   // Supprimer un bénéficiaire (soft delete)
   async delete(id) {
     try {
@@ -6232,7 +6215,7 @@ async initierPaiement(data) {
         success: false,
         message: errorMessage,
         status: errorStatus,
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        error: import.meta.env.MODE === 'development' ? error.message : undefined
       };
     }
   },
@@ -6509,7 +6492,7 @@ async initierPaiement(data) {
   genererQuittancePDF: async (id) => {
     try {
       const token = localStorage.getItem('token');
-      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api' || 'http://192.168.100.20:3000/api';
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api' || 'http://172.20.10.2:3000/api';
       
       const response = await fetch(`${API_URL}/facturation/quittance/generer/${id}`, {
         method: 'GET',
@@ -6543,7 +6526,7 @@ async initierPaiement(data) {
   genererQuittance: async (id) => {
     try {
       const token = localStorage.getItem('token');
-      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
       
       const response = await fetch(`${API_URL}/facturation/quittance/generer/${id}`, {
         method: 'GET',
@@ -7089,7 +7072,7 @@ export const remboursementsAPI = {
     } catch (error) {
       console.error('❌ Erreur récupération nombre notifications non lues:', error);
       // Fallback pour le développement
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.MODE === 'development') {
         return { success: true, count: Math.floor(Math.random() * 10) };
       }
       return { success: false, message: error.message, count: 0 };
@@ -7104,7 +7087,7 @@ export const remboursementsAPI = {
     } catch (error) {
       console.error('❌ Erreur récupération notifications non lues:', error);
       // Fallback pour le développement
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.MODE === 'development') {
         return this.getMockNotifications();
       }
       return { success: false, message: error.message, notifications: [] };
@@ -7368,7 +7351,7 @@ export const remboursementsAPI = {
       }
       
       // Fallback final: Données mockées pour développement
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.MODE === 'development') {
         return {
           success: true,
           patients: [
@@ -8510,100 +8493,6 @@ export const remboursementsAPI = {
       }
     },
 
-  // Récupérer les statistiques
-  async getStats(id, periode = 'tous') {
-    try {
-      if (!id || isNaN(parseInt(id))) {
-        throw new Error('ID patient invalide');
-      }
-      
-      // Récupérer le dossier complet
-      const dossierResponse = await this.getDossierPatient(id);
-      
-      if (!dossierResponse.success) {
-        throw new Error('Impossible de récupérer le dossier');
-      }
-      
-      const dossier = dossierResponse.dossier;
-      const consultations = dossier.consultations?.liste || [];
-      const prescriptions = dossier.prescriptions?.liste || [];
-      const factures = dossier.facturation?.factures || [];
-      
-      // Filtrer par période
-      let filteredConsultations = [...consultations];
-      let filteredPrescriptions = [...prescriptions];
-      let filteredFactures = [...factures];
-      
-      if (periode === 'mois') {
-        const oneMonthAgo = new Date();
-        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-        
-        filteredConsultations = consultations.filter(c => 
-          new Date(c.DATE_CONSULTATION) >= oneMonthAgo
-        );
-        filteredPrescriptions = prescriptions.filter(p => 
-          new Date(p.DATE_PRESCRIPTION) >= oneMonthAgo
-        );
-        filteredFactures = factures.filter(f => 
-          new Date(f.DATE_FACTURE) >= oneMonthAgo
-        );
-      } else if (periode === 'semaine') {
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-        
-        filteredConsultations = consultations.filter(c => 
-          new Date(c.DATE_CONSULTATION) >= oneWeekAgo
-        );
-        filteredPrescriptions = prescriptions.filter(p => 
-          new Date(p.DATE_PRESCRIPTION) >= oneWeekAgo
-        );
-        filteredFactures = factures.filter(f => 
-          new Date(f.DATE_FACTURE) >= oneWeekAgo
-        );
-      }
-      
-      // Calculer les statistiques
-      const stats = {
-        periode: periode,
-        consultations: {
-          total: filteredConsultations.length,
-          urgentes: filteredConsultations.filter(c => c.URGENT === true || c.URGENT === 1).length,
-          hospitalisations: filteredConsultations.filter(c => c.HOSPITALISATION).length,
-          montant_total: filteredConsultations.reduce((sum, c) => sum + (parseFloat(c.MONTANT_CONSULTATION) || 0), 0),
-          montant_prise_charge: filteredConsultations.reduce((sum, c) => sum + (parseFloat(c.MONTANT_PRISE_EN_CHARGE) || 0), 0)
-        },
-        prescriptions: {
-          total: filteredPrescriptions.length,
-          executees: filteredPrescriptions.filter(p => p.STATUT === 'Executee').length,
-          en_attente: filteredPrescriptions.filter(p => p.STATUT === 'En attente').length,
-          montant_total: filteredPrescriptions.reduce((sum, p) => sum + (parseFloat(p.MONTANT_TOTAL) || 0), 0)
-        },
-        factures: {
-          total: filteredFactures.length,
-          payees: filteredFactures.filter(f => f.statut === 'Payée').length,
-          en_attente: filteredFactures.filter(f => f.statut !== 'Payée').length,
-          montant_total: filteredFactures.reduce((sum, f) => sum + (parseFloat(f.MONTANT_TOTAL) || 0), 0),
-          montant_paye: filteredFactures.reduce((sum, f) => sum + (parseFloat(f.MONTANT_PAYE) || 0), 0),
-          montant_restant: filteredFactures.reduce((sum, f) => sum + (parseFloat(f.MONTANT_RESTANT) || 0), 0)
-        },
-        evolution: []
-      };
-      
-      return {
-        success: true,
-        statistiques: stats,
-        message: 'Statistiques calculées'
-      };
-    } catch (error) {
-      console.error('❌ Erreur calcul statistiques:', error);
-      return {
-        success: false,
-        message: error.message,
-        statistiques: null
-      };
-    }
-  },
-
   // Exporter le dossier en PDF
   async exportPDF(id) {
     try {
@@ -8654,7 +8543,7 @@ export const remboursementsAPI = {
     } catch (error) {
       console.error('❌ Erreur ajout note dossier:', error);
       
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.MODE === 'development') {
         console.warn('Simulation en développement');
         return {
           success: true,
@@ -9099,45 +8988,6 @@ export const remboursementsAPI = {
     }
   },
 
-  // Alias pour compatibilité
-  async getPatientDossier(patientId) {
-    return this.getDossierPatient(patientId);
-  },
-
-    // Vérifier l'accès au dossier médical
-    async checkAccess(patientId) {
-      try {
-        if (!patientId || isNaN(parseInt(patientId))) {
-          return { success: false, hasAccess: false, reason: 'ID patient invalide' };
-        }
-        
-        // Tentative de récupération de données limitées pour vérifier l'accès
-        const response = await fetchAPI(`/dossiers-medicaux/patient/${patientId}`, {
-          method: 'HEAD' // Utiliser HEAD pour vérifier uniquement l'accès sans récupérer les données
-        }).catch(async () => {
-          // Si HEAD échoue, essayer avec GET limité
-          return await fetchAPI(`/dossiers-medicaux/patient/${patientId}?fields=id`);
-        });
-        
-        return {
-          success: true,
-          hasAccess: response.success !== false,
-          message: response.success !== false ? 'Accès autorisé' : 'Accès refusé',
-          timestamp: new Date().toISOString()
-        };
-        
-      } catch (error) {
-        console.error(`❌ Erreur vérification accès dossier ${patientId}:`, error);
-        
-        return {
-          success: false,
-          hasAccess: false,
-          reason: error.message,
-          timestamp: new Date().toISOString()
-        };
-      }
-    }
-  
 };
 
   export const urgencesAPI = {
@@ -11022,51 +10872,6 @@ async generateNetworkReport(networkId, reportType, params = {}) {
     }
   },
 
-  async searchCentresSante(searchTerm, limit = 20) {
-    try {
-      if (!searchTerm || searchTerm.trim().length < 2) {
-        return { success: true, centres: [] };
-      }
-      
-      // CORRECTION : Utiliser buildQueryString
-      const queryParams = {
-        search: searchTerm,
-        limit: limit
-      };
-      
-      const queryString = buildQueryString(queryParams);
-      const response = await fetchAPI(`/reseau-soins/centres-sante/search${queryString}`);
-      
-      // CORRECTION : Gérer la structure de réponse
-      if (response.success === false) {
-        console.warn('Recherche centres de santé échouée:', response.message);
-        return { success: false, message: response.message, centres: [] };
-      }
-      
-      // S'assurer que nous avons toujours un tableau
-      const centres = response.centres || response.data || [];
-      
-      return {
-        success: true,
-        centres: centres.map(centre => ({
-          id: centre.id || centre.COD_CEN,
-          nom: centre.nom || centre.NOM_CENTRE,
-          type: centre.type || centre.TYPE_CENTRE,
-          categorie: centre.categorie || centre.CATEGORIE_CENTRE,
-          telephone: centre.TELEPHONE || centre.telephone || '',
-          email: centre.EMAIL || centre.email || '',
-          region_code: centre.COD_REGION || centre.region_code,
-          status: centre.status || centre.STATUT,
-          actif: centre.actif || centre.ACTIF
-        })),
-        count: centres.length
-      };
-      
-    } catch (error) {
-      console.error('❌ Erreur recherche centres de santé:', error);
-      return { success: false, message: error.message, centres: [] };
-    }
-  },
     
     // =============================================
   // CONTRATS
@@ -12177,27 +11982,6 @@ async suspend(id, reason) {
     // ==============================================
     // DONNÉES DE RÉFÉRENCE
     // ==============================================
-
-    // Récupérer les compagnies
-    async getCompagnies() {
-      try {
-        const response = await fetchAPI('/polices/compagnies');
-        
-        if (response.success) {
-          return response;
-        }
-        
-        // Fallback si l'API ne répond pas
-        console.warn('⚠️ API compagnies non disponible');
-        return { 
-          success: true,
-          compagnies: []
-        };
-      } catch (error) {
-        console.error('❌ Erreur récupération compagnies:', error);
-        return { success: false, message: error.message, compagnies: [] };
-      }
-    },
 
     // Récupérer les souscripteurs
     async getSouscripteurs() {
@@ -16364,7 +16148,7 @@ async terminerSession(id) {
       throw new Error('ID backup invalide');
     }
     
-    const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api' || 'http://192.168.100.20:3000/api';
+    const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api' || 'http://172.20.10.2:3000/api';
     const url = `${baseURL}/config/backups/${id}/download`;
     const token = localStorage.getItem('token');
     
@@ -16546,7 +16330,7 @@ async getBackupStatus(id) {
           success: true,
           api: healthResponse,
           timestamp: new Date().toISOString(),
-          environment: process.env.NODE_ENV || 'development',
+          environment: import.meta.env.MODE || 'development',
           apiUrl: API_URL
         };
       } catch (error) {
@@ -16636,7 +16420,7 @@ async getBackupStatus(id) {
   if (typeof window !== 'undefined') {
     // Restauration de l'URL API depuis localStorage
     const savedUrl = localStorage.getItem('api_base_url');
-    if (savedUrl && process.env.NODE_ENV === 'development') {
+    if (savedUrl && import.meta.env.MODE === 'development') {
       api.setBaseURL(savedUrl);
     }
     

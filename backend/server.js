@@ -22,8 +22,8 @@ const corsOptions = {
         'http://localhost:3000',
         'http://localhost:5173',
         'http://127.0.0.1:3000',
-        'http://192.168.100.20:3000',
-        'http://192.168.100.20:5173'
+        'http://172.20.10.2:3000',
+        'http://172.20.10.2:5000'
       ]
     : [
         process.env.FRONTEND_URL,
@@ -121,7 +121,7 @@ app.use((req, res, next) => {
 
 // === CONFIGURATION DU SERVEUR ===
 
-const PORT = process.env.PORT || 5030;
+const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || '0.0.0.0';
 
 // Démarrer le serveur
@@ -129,7 +129,7 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`✅ Serveur démarré avec succès`);
   console.log(`   URL: http://${HOST}:${PORT}`);
   console.log(`   URL locale: http://localhost:${PORT}`);
-  console.log(`   URL réseau: http://192.168.100.20:${PORT}`);
+  console.log(`   URL réseau: http://172.20.10.2:${PORT}`);
   console.log(`   Environnement: ${process.env.NODE_ENV || 'development'}`);
 });
 

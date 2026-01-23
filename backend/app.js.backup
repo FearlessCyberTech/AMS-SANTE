@@ -25820,7 +25820,7 @@ app.get('/dashboard/revenue-par-mois', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/dashboard/stats', authenticateToken, async (req, res) => {
+app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
   try {
     const pool = await dbConfig.getConnection();
     
@@ -48018,12 +48018,7 @@ app.get('/api/import/schemas', authenticateToken, async (req, res) => {
 });
 
 // Route pour récupérer toutes les tables d'un schéma
-app.get('/api/upload/tables/all',
-  authenticateToken,
-  validateRequest({
-    schema: { type: 'string', required: false, maxLength: 50 }
-  }),
-  async (req, res) => {
+app.get('/api/upload/tables/all', authenticateToken, async (req, res) => {
   try {
     const { schema = 'core' } = req.query;
     const pool = await dbConfig.getConnection();
@@ -48073,6 +48068,35 @@ app.get('/api/upload/tables/all',
       `;
       request.input('schema', sql.VarChar, schema);
     }
+
+    const result = await request.query(query);
+
+    const tables = result.recordset.map(table => ({
+      name: table.name,
+      schema: table.schema,
+      label: table.label,
+      description: table.description || `${table.label} table`,
+      rowCount: table.rowCount,
+      columnsCount: table.columnsCount,
+      lastModified: table.lastModified,
+      canImport: table.canImport === 1
+    }));
+
+    return res.json({
+      success: true,
+      tables: tables,
+      total: tables.length,
+      message: `${tables.length} tables trouvées dans le schéma ${schema}`
+    });
+
+  } catch (error) {
+    console.error('Erreur récupération tables:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des tables',
+      error: error.message
+    });
+  }
 
     const result = await request.query(query);
 

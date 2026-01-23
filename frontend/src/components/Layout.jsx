@@ -88,7 +88,7 @@ const Layout = () => {
         '/reglements': ['SuperAdmin', 'Admin', 'Caissier'],
         '/gestion-financiere': ['SuperAdmin', 'Admin'],
         '/Prestations': ['SuperAdmin', 'Admin', 'Caissier'],
-        '/statistiques': ['SuperAdmin', 'Admin', 'Medecin'],
+        // '/statistiques': ['SuperAdmin', 'Admin', 'Medecin'],
         '/rapports': ['SuperAdmin', 'Admin', 'Medecin'],
         '/tableaux-bord': ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier', 'Secretaire', 'Caissier'],
         '/evacuations': ['SuperAdmin', 'Admin', 'Medecin'],
@@ -188,13 +188,13 @@ const Layout = () => {
         roles: ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier'],
         translationKey: 'medicalRecords'
       },
-      { 
-        path: '/teleconsultations', 
-        icon: PhoneCall, 
-        label: t('menu.teleconsultations', 'Téléconsultations'), 
-        roles: ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier'],
-        translationKey: 'teleconsultations'
-      },
+      // { 
+      //   path: '/teleconsultations', 
+      //   icon: PhoneCall, 
+      //   label: t('menu.teleconsultations', 'Téléconsultations'), 
+      //   roles: ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier'],
+      //   translationKey: 'teleconsultations'
+      // },
       { 
         path: '/urgences', 
         icon: Ambulance, 
@@ -231,21 +231,21 @@ const Layout = () => {
         roles: ['SuperAdmin', 'Admin'],
         translationKey: 'declarationReimbursement'
       },
-       { 
-        path: '/Prestations', 
-        icon: Scale, 
-          label: t('menu.prestations','Prestations'), 
-          roles: ['SuperAdmin', 'Admin', 'Caissier'],
-         translationKey: 'prestations'
-       },
-      // Statistiques et rapports (partie administration)
-      { 
-        path: '/statistiques', 
-        icon: PieChart, 
-        label: t('menu.statistics', 'Statistiques'), 
-        roles: ['SuperAdmin', 'Admin', 'Medecin'],
-        translationKey: 'statistics'
-      },
+      //  { 
+      //   path: '/Prestations', 
+      //   icon: Scale, 
+      //     label: t('menu.prestations','Prestations'), 
+      //     roles: ['SuperAdmin', 'Admin', 'Caissier'],
+      //    translationKey: 'prestations'
+      //  },
+      // // Statistiques et rapports (partie administration)
+      // { 
+      //   path: '/statistiques', 
+      //   icon: PieChart, 
+      //   label: t('menu.statistics', 'Statistiques'), 
+      //   roles: ['SuperAdmin', 'Admin', 'Medecin'],
+      //   translationKey: 'statistics'
+      // },
       { 
         path: '/rapports', 
         icon: FileBarChart, 
@@ -253,13 +253,13 @@ const Layout = () => {
         roles: ['SuperAdmin', 'Admin', 'Medecin'],
         translationKey: 'reports'
       },
-      { 
-        path: '/tableaux-bord', 
-        icon: ActivitySquare, 
-        label: t('menu.dashboards', 'Tableaux de Bord'), 
-        roles: ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier', 'Secretaire', 'Caissier'],
-        translationKey: 'dashboards'
-      },
+      // { 
+      //   path: '/tableaux-bord', 
+      //   icon: ActivitySquare, 
+      //   label: t('menu.dashboards', 'Tableaux de Bord'), 
+      //   roles: ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier', 'Secretaire', 'Caissier'],
+      //   translationKey: 'dashboards'
+      // },
       // Gestion médicale : Évacuations
       { 
         path: '/evacuations', 
@@ -276,27 +276,27 @@ const Layout = () => {
       //   translationKey: 'evacuationTracking'
       // },
       // Contrôle et audit (administration)
-      { 
-        path: '/controle-fraudes', 
-        icon: ShieldAlert, 
-        label: t('menu.fraudControl', 'Contrôle des Fraudes'), 
-        roles: ['SuperAdmin', 'Admin'],
-        translationKey: 'fraudControl'
-      },
-      { 
-        path: '/audit', 
-        icon: FileSearch, 
-        label: t('menu.audit', 'Audit'), 
-        roles: ['SuperAdmin', 'Admin'],
-        translationKey: 'audit'
-      },
-      { 
-        path: '/alertes-anomalies', 
-        icon: AlertTriangle, 
-        label: t('menu.anomalyAlerts', 'Alertes Anomalies'), 
-        roles: ['SuperAdmin', 'Admin', 'Medecin', 'Caissier'],
-        translationKey: 'anomalyAlerts'
-      },
+      // { 
+      //   path: '/controle-fraudes', 
+      //   icon: ShieldAlert, 
+      //   label: t('menu.fraudControl', 'Contrôle des Fraudes'), 
+      //   roles: ['SuperAdmin', 'Admin'],
+      //   translationKey: 'fraudControl'
+      // },
+      // { 
+      //   path: '/audit', 
+      //   icon: FileSearch, 
+      //   label: t('menu.audit', 'Audit'), 
+      //   roles: ['SuperAdmin', 'Admin'],
+      //   translationKey: 'audit'
+      // },
+      // { 
+      //   path: '/alertes-anomalies', 
+      //   icon: AlertTriangle, 
+      //   label: t('menu.anomalyAlerts', 'Alertes Anomalies'), 
+      //   roles: ['SuperAdmin', 'Admin', 'Medecin', 'Caissier'],
+      //   translationKey: 'anomalyAlerts'
+      // },
       // Réseau de soins (partie médicale)
       { 
         path: '/reseau-soins', 
@@ -319,13 +319,13 @@ const Layout = () => {
         roles: ['SuperAdmin', 'Admin'],
         translationKey: 'healthCenters'
       },
-      { 
-        path: '/conventions', 
-        icon: MessageSquare, 
-        label: t('menu.agreements', 'Conventions'), 
-        roles: ['SuperAdmin', 'Admin'],
-        translationKey: 'agreements'
-      },
+      // { 
+      //   path: '/conventions', 
+      //   icon: MessageSquare, 
+      //   label: t('menu.agreements', 'Conventions'), 
+      //   roles: ['SuperAdmin', 'Admin'],
+      //   translationKey: 'agreements'
+      // },
       { 
         path: '/evaluation-prestataires', 
         icon: BarChart3, 
@@ -341,13 +341,13 @@ const Layout = () => {
         roles: ['SuperAdmin', 'Admin'],
         translationKey: 'administration'
       },
-      { 
-        path: '/parametres', 
-        icon: Settings, 
-        label: t('menu.settings', 'Paramètres'), 
-        roles: ['SuperAdmin', 'Admin'],
-        translationKey: 'settings'
-      },
+      // { 
+      //   path: '/parametres', 
+      //   icon: Settings, 
+      //   label: t('menu.settings', 'Paramètres'), 
+      //   roles: ['SuperAdmin', 'Admin'],
+      //   translationKey: 'settings'
+      // },
       { 
         path: '/importation', 
         icon: Map, 
@@ -355,13 +355,13 @@ const Layout = () => {
         roles: ['SuperAdmin', 'Admin'],
         translationKey: 'importation'
       },
-      { 
-        path: '/nomenclatures', 
-        icon: FileDigit, 
-        label: t('menu.nomenclatures', 'Nomenclatures'), 
-        roles: ['SuperAdmin', 'Admin', 'Medecin'],
-        translationKey: 'nomenclatures'
-      },
+      // { 
+      //   path: '/nomenclatures', 
+      //   icon: FileDigit, 
+      //   label: t('menu.nomenclatures', 'Nomenclatures'), 
+      //   roles: ['SuperAdmin', 'Admin', 'Medecin'],
+      //   translationKey: 'nomenclatures'
+      // },
       // Gestion du profil
       { 
         path: '/profil', 
@@ -886,13 +886,13 @@ const Layout = () => {
                 >
                   <BadgeCheck size={20} />
                 </button>
-                <button 
+                {/* <button 
                   className="btn-icon" 
                   title={t('menu.settings', 'Paramètres')}
                   onClick={() => handleNavigation('/parametres')}
                 >
                   <Settings size={20} />
-                </button>
+                </button> */}
                 <button 
                   className="btn-icon logout-btn" 
                   title={t('actions.logout', 'Déconnexion')} 

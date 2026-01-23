@@ -6,7 +6,6 @@ import {
   Calendar, Filter, Download, BarChart3,
   PieChart, LineChart
 } from 'lucide-react';
-import './Statistiques.css';
 
 const Statistiques = () => {
   const { t } = useTranslation();

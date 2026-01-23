@@ -5,7 +5,6 @@ import {
   Shield, Search, Filter, AlertTriangle, CheckCircle,
   XCircle, Eye, FileText, Download, User, DollarSign
 } from 'lucide-react';
-import './ControleFraudes.css';
 
 const ControleFraudes = () => {
   const { t } = useTranslation();

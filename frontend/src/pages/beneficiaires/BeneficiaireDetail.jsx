@@ -7,7 +7,6 @@ import {
   FileText, Stethoscope, DollarSign, History,
   Edit, Download, Printer, Share2, ArrowLeft
 } from 'lucide-react';
-import './BeneficiaireDetail.css';
 
 const BeneficiaireDetail = () => {
   const { t } = useTranslation();

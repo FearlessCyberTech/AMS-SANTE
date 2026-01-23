@@ -5,7 +5,6 @@ import {
   Mail, Search, Filter, Send, Paperclip,
   User, Clock, Check, CheckCheck, Phone
 } from 'lucide-react';
-import './Messagerie.css';
 
 const Messagerie = () => {
   const { t } = useTranslation();

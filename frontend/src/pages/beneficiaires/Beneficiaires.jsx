@@ -751,13 +751,10 @@ const normalizedBeneficiaires = beneficiairesList.map((ben) => {
     ID_ASSURE_PRINCIPAL: ben.ID_ASSURE_PRINCIPAL || ben.id_assure_principal || null,
     
     // Photo - URL complète
-    PHOTO: photoUrl,
     photo: photoUrl,
-    PHOTO_URL: photoUrl,
     
     // Autres champs (simplifiés)
     IDENTIFIANT_NATIONAL: ben.IDENTIFIANT_NATIONAL || ben.identifiant_national || '',
-    ASSURANCE_PRIVE: ben.ASSURANCE_PRIVE || ben.assurance_prive || false,
     ZONE_HABITATION: ben.ZONE_HABITATION || ben.zone_habitation || '',
     
     TYPE_HABITAT: ben.TYPE_HABITAT || '',
@@ -795,16 +792,13 @@ const normalizedBeneficiaires = beneficiairesList.map((ben) => {
     // INFORMATIONS D'ASSURANCE
     // ==============================================
     ASSURANCE_PRIVE: ben.ASSURANCE_PRIVE || ben.assurance_prive || false,
-    assurance_prive: ben.ASSURANCE_PRIVE || ben.assurance_prive || false,
     
     MUTUELLE: ben.MUTUELLE || ben.mutuelle || '',
-    mutuelle: ben.MUTUELLE || ben.mutuelle || '',
     
     // ==============================================
     // PHOTOGRAPHIE - CHAMPS UNIFIÉS
     // ==============================================
     PHOTO: photoUrl,           // URL complète de la photo
-    photo: photoUrl,           // Alias pour compatibilité
     PHOTO_URL: photoUrl,       // URL complète (primaire)
     PHOTO_FILENAME: photoField, // Nom de fichier original
     

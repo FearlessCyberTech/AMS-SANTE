@@ -5,7 +5,6 @@ import {
   HelpCircle, MessageSquare, Phone, Mail, FileText,
   Search, Clock, CheckCircle, AlertCircle
 } from 'lucide-react';
-import './Support.css';
 
 const Support = () => {
   const { t } = useTranslation();
