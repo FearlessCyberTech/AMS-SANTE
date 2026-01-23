@@ -1,16 +1,17 @@
+// src/i18n.js
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
 const resources = {
   'fr-FR': {
     translation: {
-      // Application
+      // ============ APPLICATION ============
       'app.name': 'HealthCenterSoft',
       'app.centralAfrica': 'Afrique Centrale',
       'app.description': 'Système HealthCenterSoft',
       'app.regionalSystem': 'Système régional',
       
-      // Pays
+      // ============ PAYS ============
       'countries.CMF': 'Cameroun-Francophone',
       'countries.CMA': 'Cameroun-Anglophone',
       'countries.RCA': 'République Centrafricaine',
@@ -19,7 +20,7 @@ const resources = {
       'countries.BDI': 'Burundi',
       'countries.COG': 'République du Congo',
       
-      // Rôles
+      // ============ RÔLES ============
       'roles.administrator': 'Administrateur',
       'roles.doctor': 'Médecin',
       'roles.nurse': 'Infirmier(ère)',
@@ -27,14 +28,16 @@ const resources = {
       'roles.cashier': 'Caissier(ère)',
       'roles.user': 'Utilisateur',
       
-      // Titres de page
+      // ============ TITRES DE PAGE ============
       'pageTitles.dashboard': 'Tableau de Bord',
       'pageTitles.beneficiaryDetail': 'Détail du Bénéficiaire',
       'pageTitles.consultationDetail': 'Détail de la Consultation',
       'pageTitles.medicalManagementSystem': 'Système de Gestion Médicale',
       'pageTitles.patientFile': 'Dossier Patient',
+      'pageTitles.consultations': 'Gestion des Consultations',
+      'pageTitles.prescriptions': 'Gestion des Prescriptions',
       
-      // Sections de menu
+      // ============ SECTIONS DE MENU ============
       'menuSections.dashboard': 'Tableau de Bord',
       'menuSections.beneficiaryManagement': 'Gestion des Bénéficiaires',
       'menuSections.carePathway': 'Parcours de Soins',
@@ -50,7 +53,7 @@ const resources = {
       'menuSections.support': 'Support',
       'menuSections.profile': 'Profil',
       
-      // Éléments de menu
+      // ============ ÉLÉMENTS DE MENU ============
       'menu.dashboard': 'Tableau de Bord',
       'menu.beneficiaries': 'Bénéficiaires',
       'menu.biometricEnrollment': 'Enrôlement Biométrique',
@@ -94,7 +97,7 @@ const resources = {
       'menu.userDocumentation': 'Documentation Utilisateur',
       'menu.myProfile': 'Mon Profil',
       
-      // Modules
+      // ============ MODULES ============
       'modules.beneficiaryManagement': 'Gestion des bénéficiaires',
       'modules.carePathway': 'Parcours de soins',
       'modules.financial': 'Financier',
@@ -104,8 +107,9 @@ const resources = {
       'modules.settlements': 'Règlement',
       'modules.profile': 'Profil',
       'modules.managementSystem': 'Système de gestion',
+      'modules.prescriptions': 'Prescriptions',
       
-      // Actions
+      // ============ ACTIONS ============
       'actions.logout': 'Déconnexion',
       'actions.save': 'Enregistrer',
       'actions.cancel': 'Annuler',
@@ -124,8 +128,13 @@ const resources = {
       'actions.view': 'Voir',
       'actions.add': 'Ajouter',
       'actions.update': 'Mettre à jour',
+      'actions.execute': 'Exécuter',
+      'actions.select': 'Sélectionner',
+      'actions.close': 'Fermer',
+      'actions.confirm': 'Confirmer',
+      'actions.scan': 'Scanner',
       
-      // Alertes et messages
+      // ============ ALERTES ET MESSAGES ============
       'alerts.accessDenied': 'Accès refusé',
       'alerts.sessionExpired': 'Session expirée',
       'alerts.operationSuccess': 'Opération réussie',
@@ -138,7 +147,7 @@ const resources = {
       'alerts.errorOccurred': 'Une erreur est survenue',
       'alerts.requiredFields': 'Champs obligatoires manquants',
       
-      // Pied de page
+      // ============ PIED DE PAGE ============
       'footer.version': 'Version',
       'footer.regionalDatabase': 'Base de données régionale',
       'footer.activeModules': 'Modules actifs',
@@ -150,7 +159,7 @@ const resources = {
       'footer.lastUpdate': 'Dernière mise à jour',
       'footer.copyright': 'Copyright',
       
-      // Commun
+      // ============ COMMUN ============
       'common.yes': 'Oui',
       'common.no': 'Non',
       'common.ok': 'OK',
@@ -193,7 +202,6 @@ const resources = {
       'common.print': 'Imprimer',
       'common.export': 'Exporter',
       'common.import': 'Importer',
-      'common.refresh': 'Actualiser',
       'common.more': 'Plus',
       'common.less': 'Moins',
       'common.required': 'Obligatoire',
@@ -228,8 +236,20 @@ const resources = {
       'common.approved': 'Approuvé',
       'common.rejected': 'Rejeté',
       'common.pendingApproval': 'En attente d\'approbation',
+      'common.notAvailable': 'Non disponible',
+      'common.notSpecified': 'Non spécifié',
+      'common.male': 'Masculin',
+      'common.female': 'Féminin',
+      'common.identifier': 'Identifiant',
+      'common.quantity': 'Quantité',
+      'common.price': 'Prix',
+      'common.amount': 'Montant',
+      'common.unit': 'Unité',
+      'common.type': 'Type',
+      'common.description': 'Description',
+      'common.totalAmount': 'Montant total',
       
-      // Formulaires
+      // ============ FORMULAIRES ============
       'form.firstName': 'Prénom',
       'form.lastName': 'Nom',
       'form.email': 'Email',
@@ -268,7 +288,7 @@ const resources = {
       'form.exporting': 'Exportation...',
       'form.importing': 'Importation...',
       
-      // Login (conservé pour compatibilité)
+      // ============ LOGIN ============
       'welcome': 'Système de Gestion Santé - Version 2.0',
       'selectCountry': 'Sélectionnez votre pays',
       'username': 'Nom d\'utilisateur',
@@ -281,18 +301,701 @@ const resources = {
       'loggingIn': 'Connexion en cours...',
       'usernameRequired': 'Le nom d\'utilisateur est requis',
       'passwordRequired': 'Le mot de passe est requis',
-      'loginError': 'Nom d\'utilisateur ou mot de passe incorrect'
+      'loginError': 'Nom d\'utilisateur ou mot de passe incorrect',
+      
+      // ============ CONSULTATIONS ============
+      // Titres et sections
+      'consultations.title': 'GESTION DES CONSULTATIONS',
+      'consultations.steps.patientIdentification': '1. IDENTIFICATION DU PATIENT',
+      'consultations.steps.consultationSettings': '2. PARAMÉTRAGE DE LA CONSULTATION',
+      'consultations.steps.medicalInfo': '3. INFORMATIONS MÉDICALES',
+      'consultations.steps.financialBreakdown': '4. DÉCOMPTE FINANCIER ET VALIDATION',
+      'consultations.steps.insuranceSheet': '5. FEUILLE DE PRISE EN CHARGE',
+      'consultations.steps.patient': 'Patient',
+      'consultations.steps.settings': 'Paramétrage',
+      'consultations.steps.medical': 'Médical',
+      'consultations.steps.validation': 'Validation',
+      'consultations.steps.print': 'Impression',
+      
+      // Recherche patient
+      'consultations.search.nationalId': 'Identifiant national',
+      'consultations.search.insuranceCard': 'Carte d\'assuré',
+      'consultations.search.name': 'Nom',
+      'consultations.search.scanBarcode': 'Scanner code-barres',
+      'consultations.search.patientName': 'Nom du patient',
+      'consultations.search.searching': 'Recherche en cours...',
+      'consultations.search.patientsFound': 'Patients trouvés:',
+      
+      // Scanner
+      'consultations.scanner.title': 'Scanner le code-barres du patient',
+      'consultations.scanner.instruction1': 'Placez le code-barres dans le cadre',
+      'consultations.scanner.instruction2': 'La lecture est automatique',
+      'consultations.scanner.instruction3': 'Éclairage suffisant recommandé',
+      'consultations.scanner.scanPrompt': 'Veuillez scanner le code-barres de la carte du patient.',
+      'consultations.scanner.scan': 'le scan',
+      
+      // Labels et placeholders
+      'consultations.labels.consultingDoctor': 'Médecin consulté',
+      'consultations.labels.consultationType': 'Type de consultation',
+      'consultations.labels.freeConsultation': 'Consultation gratuite (montant à 0)',
+      'consultations.labels.primaryInsuredName': 'Nom de l\'assuré principal',
+      'consultations.labels.bloodPressure': 'Tension artérielle (TA)',
+      'consultations.labels.weight': 'Poids (kg)',
+      'consultations.labels.height': 'Taille (cm)',
+      'consultations.labels.temperature': 'Température (°C)',
+      'consultations.labels.pulse': 'Pouls (bpm)',
+      'consultations.labels.respiratoryRate': 'Fréquence respiratoire',
+      'consultations.labels.glycemia': 'Glycémie (g/L)',
+      'consultations.labels.observations': 'Observations médicales',
+      'consultations.labels.complementaryExams': 'Examens complémentaires prescrits',
+      'consultations.labels.treatment': 'Traitement prescrit',
+      'consultations.labels.recommendations': 'Recommandations et conseils',
+      'consultations.labels.tiersPayant': 'Tiers Payant',
+      'consultations.labels.coveragePercentage': 'Pourcentage de couverture',
+      'consultations.labels.doctor': 'Médecin',
+      'consultations.labels.type': 'Type',
+      'consultations.labels.rate': 'Tarif',
+      'consultations.labels.paymentType': 'Type de paiement',
+      'consultations.labels.coverageRate': 'Taux couverture',
+      'consultations.labels.coverage': 'de couverture',
+      'consultations.labels.appointment': 'Rendez-vous',
+      'consultations.labels.totalAmount': 'Montant total',
+      'consultations.labels.paymentStatus': 'Statut paiement',
+      'consultations.labels.consultationNumber': 'N° de consultation',
+      'consultations.labels.primaryInsured': 'Assuré Principal',
+      
+      'consultations.placeholders.nationalId': 'Ex: CM12345678',
+      'consultations.placeholders.cardNumber': 'Numéro de carte',
+      'consultations.placeholders.name': 'Nom ou prénom',
+      'consultations.placeholders.selectDoctor': 'Sélectionnez un médecin',
+      'consultations.placeholders.selectType': 'Sélectionnez un type',
+      'consultations.placeholders.primaryInsuredName': 'Saisir le nom complet de l\'assuré principal',
+      'consultations.placeholders.bloodPressure': 'Ex: 120/80',
+      'consultations.placeholders.weight': 'Ex: 70',
+      'consultations.placeholders.height': 'Ex: 175',
+      'consultations.placeholders.temperature': 'Ex: 37.5',
+      'consultations.placeholders.pulse': 'Ex: 72',
+      'consultations.placeholders.respiratoryRate': 'Ex: 16',
+      'consultations.placeholders.glycemia': 'Ex: 1.0',
+      'consultations.placeholders.observations': 'Saisir les observations médicales (optionnel)',
+      'consultations.placeholders.complementaryExams': 'Liste des examens complémentaires (optionnel)',
+      'consultations.placeholders.treatment': 'Médicaments et posologie (optionnel)',
+      'consultations.placeholders.recommendations': 'Recommandations pour le patient (optionnel)',
+      
+      // Sections
+      'consultations.sections.primaryInsured': 'INFORMATION SUR L\'ASSURÉ PRINCIPAL',
+      'consultations.sections.vitalSigns': 'SIGNES VITAUX',
+      'consultations.sections.patientDetails': 'Détails du patient',
+      'consultations.sections.financialBreakdown': 'DÉCOMPTE FINANCIER',
+      
+      // Patient
+      'consultations.patient.id': 'ID',
+      'consultations.patient.age': 'Âge',
+      'consultations.patient.years': 'ans',
+      'consultations.patient.gender': 'Sexe',
+      'consultations.patient.phone': 'Tél',
+      'consultations.patient.employer': 'Employeur',
+      'consultations.patient.aceStatus': 'Statut ACE',
+      'consultations.patient.patient': 'Patient',
+      'consultations.patient.name': 'Nom',
+      'consultations.patient.identifiant': 'Identifiant',
+      'consultations.patient.entreprise': 'Entreprise',
+      
+      // Paiement
+      'consultations.payment.tiers': 'Tiers Payant',
+      'consultations.payment.dependent': 'À charge',
+      'consultations.payment.toPay': 'À payer',
+      'consultations.payment.free': 'Gratuit',
+      
+      // Finance
+      'consultations.financial.totalAmount': 'Montant total consultation',
+      'consultations.financial.coverage': 'Prise en charge',
+      'consultations.financial.freeConsultation': 'Consultation gratuite',
+      'consultations.financial.patientRemaining': 'RESTE À CHARGE PATIENT',
+      
+      // Résumé
+      'consultations.summary.title': 'Résumé',
+      
+      // Navigation
+      'consultations.navigation.continue': 'Continuer',
+      'consultations.navigation.toSettings': 'au paramétrage',
+      'consultations.navigation.continueToMedical': 'Continuer vers informations médicales',
+      'consultations.navigation.continueToValidation': 'Continuer vers validation',
+      'consultations.navigation.toMedicalInfo': 'aux infos médicales',
+      
+      // Boutons
+      'consultations.buttons.validateConsultation': 'VALIDER LA CONSULTATION',
+      'consultations.buttons.validating': 'Validation en cours...',
+      'consultations.buttons.printSheet': 'IMPRIMER LA FEUILLE (1 page)',
+      'consultations.buttons.newConsultation': 'NOUVELLE CONSULTATION',
+      
+      // Descriptions
+      'consultations.descriptions.medicalInfo': 'Ces informations seront enregistrées et imprimées sur la feuille de prise en charge.',
+      
+      // Hints
+      'consultations.hints.maxLines': '(Limitez à 2-3 lignes maximum)',
+      'consultations.hints.noDoctors': 'Aucun médecin disponible. Cliquez sur ⟳ pour rafraîchir.',
+      'consultations.hints.doctorsAvailable': '{{count}} médecin(s) disponible(s)',
+      
+      // Valeurs par défaut
+      'consultations.default.motif': 'Consultation médicale',
+      'consultations.default.diagnostic': 'À déterminer',
+      
+      // Confirmations
+      'consultations.confirmation.message': '⚠️ CONFIRMATION DÉFINITIVE\n\nCette action est irréversible. La consultation sera enregistrée et facturable.\n\nPatient: {{patientName}}\nMédecin: {{doctorName}}\nType: {{consultationType}}\nMontant: {{amount}} FCFA\n{{appointment}}\nCliquez sur OK pour confirmer.',
+      'consultations.confirmation.appointment': 'Rendez-vous: {{date}}',
+      
+      // Messages de succès
+      'consultations.success.patientSelected': 'Patient sélectionné: {{name}}',
+      'consultations.success.patientSelectedShort': 'Patient sélectionné:',
+      'consultations.success.consultationSaved': 'Consultation enregistrée avec succès!',
+      
+      // Messages d'erreur
+      'consultations.errors.loadingDoctors': 'Erreur lors du chargement des médecins',
+      'consultations.errors.networkDoctors': 'Erreur réseau lors du chargement des médecins',
+      'consultations.errors.noConsultationTypes': 'Aucun type de consultation disponible',
+      'consultations.errors.loadingTypes': 'Erreur lors du chargement des types de consultation',
+      'consultations.errors.noPatientSelected': 'Veuillez sélectionner un patient',
+      'consultations.errors.noDoctorSelected': 'Veuillez sélectionner un médecin',
+      'consultations.errors.noConsultationType': 'Veuillez sélectionner un type de consultation',
+      'consultations.errors.searchPatient': 'Erreur lors de la recherche du patient',
+      'consultations.errors.saveConsultation': 'Erreur lors de l\'enregistrement',
+      'consultations.errors.saveError': 'Erreur lors de l\'enregistrement: ',
+      'consultations.errors.popupBlocked': 'Veuillez autoriser les popups pour l\'impression',
+      
+      // Avertissements
+      'consultations.warnings.searchEmpty': 'Veuillez saisir une valeur de recherche',
+      'consultations.warnings.noTiersForFree': 'La consultation gratuite ne peut pas avoir de tiers payant',
+      'consultations.warnings.freeConsultation': 'Consultation gratuite activée',
+      'consultations.warnings.warning': 'AVERTISSEMENT',
+      'consultations.warnings.irreversible': 'La validation est IRREVERSIBLE. La consultation sera enregistrée et facturable.',
+      
+      // Informations
+      'consultations.info.noPatientsFound': 'Aucun patient trouvé',
+      'consultations.info.newConsultationReady': 'Nouvelle consultation prête',
+      
+      // Impression
+      'consultations.print.title': 'FEUILLE DE PRISE EN CHARGE',
+      'consultations.print.subtitle': 'CONSULTATION MÉDICALE',
+      'consultations.print.center': 'Centre de Santé Principal',
+      'consultations.print.phone': 'Tél',
+      'consultations.print.number': 'N°',
+      'consultations.print.patientInformation': 'INFORMATIONS DU PATIENT',
+      'consultations.print.fullName': 'Nom & Prénoms',
+      'consultations.print.nationalId': 'Identifiant national',
+      'consultations.print.company': 'Entreprise/Employeur',
+      'consultations.print.aceStatus': 'Statut ACE',
+      'consultations.print.primaryInsured': 'Assuré principal (pour ayant droit)',
+      'consultations.print.consultationInformation': 'INFORMATIONS DE LA CONSULTATION',
+      'consultations.print.dateTime': 'Date & Heure',
+      'consultations.print.speciality': 'Spécialité',
+      'consultations.print.consultationType': 'Type de consultation',
+      'consultations.print.reason': 'Motif de consultation',
+      'consultations.print.diagnosis': 'Diagnostic principal',
+      'consultations.print.financialBreakdown': 'DÉCOMPTE FINANCIER',
+      'consultations.print.description': 'Description',
+      'consultations.print.amount': 'Montant (FCFA)',
+      'consultations.print.rate': 'Taux',
+      'consultations.print.coverage': 'Prise en charge',
+      'consultations.print.remaining': 'Reste à charge',
+      'consultations.print.medicalConsultation': 'Consultation médicale',
+      'consultations.print.totalToPay': 'TOTAL À PAYER PAR LE PATIENT',
+      'consultations.print.paymentStatus': 'Statut de paiement',
+      'consultations.print.complementaryExams': 'EXAMENS COMPLÉMENTAIRES PRESCRITS',
+      'consultations.print.prescribedTreatment': 'TRAITEMENT PRESCRIT',
+      'consultations.print.takeAsPrescribed': 'À prendre selon la posologie indiquée',
+      'consultations.print.recommendations': 'RECOMMANDATIONS ET CONSEILS',
+      'consultations.print.nextAppointment': 'PROCHAIN RENDEZ-VOUS',
+      'consultations.print.arriveEarly': 'Merci de vous présenter 10 minutes avant l\'heure du rendez-vous',
+      'consultations.print.doctorSignature': 'Signature du médecin',
+      'consultations.print.patientSignature': 'Signature du patient',
+      'consultations.print.readAndApproved': 'Lu et approuvé',
+      'consultations.print.centerStamp': 'Cachet du centre',
+      'consultations.print.consultationCode': 'Code de consultation',
+      'consultations.print.generationDate': 'Date de génération',
+      'consultations.print.confidential': 'Document confidentiel - Ne pas dupliquer sans autorisation',
+      'consultations.print.page': 'Page',
+      'consultations.print.consultation': 'Consultation',
+      'consultations.print.generatedOn': 'Généré le',
+      'consultations.print.logo': 'LOGO<br>CENTRE',
+      'consultations.print.sheetWillOpen': 'La feuille s\'ouvrira dans un nouvel onglet pour impression.',
+      'consultations.print.format': 'Format: 1 page A4 | Vérifiez les paramètres de popup de votre navigateur.',
+      'consultations.print.patientName': 'NOM DU PATIENT',
+// ============ BÉNÉFICIAIRES ============
+      'beneficiaries': {
+        'title': 'Gestion des Bénéficiaires',
+        'subtitle': 'Gérez l\'ensemble des bénéficiaires du système',
+        'loading': 'Chargement des bénéficiaires...',
+        
+        // Statuts ACE
+        'status': {
+          'principal': 'Assuré Principal',
+          'conjoint': 'Conjoint/Conjointe',
+          'enfant': 'Enfant',
+          'autre': 'Autre ayant droit'
+        },
+        
+        // Formulaires
+        'form': {
+          'createTitle': 'Nouveau Bénéficiaire',
+          'editTitle': 'Modifier Bénéficiaire',
+          'personalInfo': 'Informations Personnelles',
+          'identificationInfo': 'Informations d\'Identification',
+          'contactInfo': 'Coordonnées',
+          'aceStatus': 'Statut ACE',
+          'additionalInfo': 'Informations Supplémentaires',
+          'primaryInsured': 'Assuré Principal',
+          'nationalId': 'Identifiant National',
+          'passportNumber': 'Numéro de Passeport',
+          'birthPlace': 'Lieu de Naissance',
+          'profession': 'Profession',
+          'bloodGroup': 'Groupe Sanguin',
+          'rhesus': 'Rhésus',
+          'selectedPrimaryInsured': 'Assuré principal sélectionné',
+          'availableCount': 'disponible(s)',
+          'dependentHelp': 'Un ayant droit (conjoint, enfant) doit être rattaché à un assuré principal existant.',
+          'selectPrimaryInsured': '-- Sélectionner un assuré principal --',
+          
+          'placeholders': {
+            'lastName': 'Entrez le nom',
+            'firstName': 'Entrez le prénom',
+            'birthPlace': 'Ville de naissance',
+            'nationalId': 'Numéro d\'identification national',
+            'passportNumber': 'Numéro de passeport',
+            'phone': '+237 XXX XXX XXX',
+            'email': 'email@exemple.com',
+            'profession': 'Profession',
+            'searchPrimaryInsured': 'Rechercher parmi {{count}} assurés principaux...'
+          }
+        },
+        
+        // Rhesus
+        'rhesus': {
+          'positive': 'Positif',
+          'negative': 'Négatif'
+        },
+        
+        // Validation
+        'validation': {
+          'lastNameRequired': 'Le nom est requis',
+          'firstNameRequired': 'Le prénom est requis',
+          'genderRequired': 'Le sexe est requis',
+          'birthDateRequired': 'La date de naissance est requise',
+          'phoneRequired': 'Le téléphone mobile est requis',
+          'statusRequired': 'Le statut ACE est requis',
+          'primaryInsuredRequired': 'L\'assuré principal est requis pour les ayants droit',
+          'primaryInsuredNotFound': 'L\'assuré principal sélectionné n\'existe pas',
+          'futureBirthDate': 'La date de naissance ne peut pas être dans le futur',
+          'minAgePrimary': 'L\'assuré principal doit avoir au moins 16 ans',
+          'invalidPhone': 'Numéro de téléphone invalide (8-20 chiffres)',
+          'correctErrors': 'Veuillez corriger les erreurs dans le formulaire'
+        },
+        
+        // Messages
+        'messages': {
+          'refreshSuccess': 'Liste des assurés principaux rafraîchie',
+          'updateSuccess': 'Bénéficiaire mis à jour avec succès',
+          'createSuccess': 'Bénéficiaire créé avec succès',
+          'noPrimaryInsured': 'Aucun assuré principal disponible. Créez d\'abord un assuré principal.'
+        },
+        
+        // Erreurs
+        'errors': {
+          'loadCountries': 'Erreur lors du chargement des pays',
+          'loadPrimaryInsured': 'Erreur lors du chargement des assurés principaux',
+          'loadBeneficiaries': 'Erreur lors du chargement des bénéficiaires',
+          'connectionError': 'Erreur de connexion avec le serveur',
+          'searchPrimaryInsured': 'Erreur lors de la recherche d\'assuré principal',
+          'refreshError': 'Erreur lors du rafraîchissement',
+          'saveError': 'Erreur lors de la sauvegarde',
+          'loadBeneficiary': 'Erreur lors du chargement du bénéficiaire'
+        },
+        
+        // Actions
+        'actions': {
+          'newBeneficiary': 'Nouveau Bénéficiaire',
+          'addBeneficiary': 'Ajouter un bénéficiaire',
+          'createBeneficiary': 'Créer le bénéficiaire',
+          'createPrimaryInsured': 'Créer un assuré principal',
+          'refreshPrimaryInsured': 'Rafraîchir la liste des assurés principaux',
+          'removePrimaryInsured': 'Retirer l\'assuré principal'
+        },
+        
+        // Recherche
+        'search': {
+          'placeholder': 'Rechercher par nom, prénom, téléphone, identifiant...',
+          'ariaLabel': 'Rechercher un bénéficiaire'
+        },
+        
+        // Tableau
+        'table': {
+          'name': 'Nom & Prénom',
+          'ageGender': 'Âge/Sexe',
+          'contact': 'Contact',
+          'aceStatus': 'Statut ACE',
+          'years': 'ans'
+        },
+        
+        // États vides
+        'empty': {
+          'title': 'Aucun bénéficiaire trouvé',
+          'noResults': 'Aucun résultat pour votre recherche',
+          'noBeneficiaries': 'Commencez par ajouter un nouveau bénéficiaire'
+        },
+        
+        // Confirmation
+        'confirm': {
+          'delete': 'Confirmer la suppression de {{name}} ?'
+        },
+        
+        // Fonctionnalités
+        'features': {
+          'deleteNotImplemented': 'Fonctionnalité de suppression à implémenter'
+        }
+      },
+      
+      // ============ PRESCRIPTIONS ============
+      // Titres et en-têtes
+      'prescriptions.title': 'Gestion des Prescriptions',
+      'prescriptions.subtitle': 'Créez, gérez et exécutez les prescriptions médicales',
+      'prescriptions.list.title': 'Liste des Prescriptions',
+      'prescriptions.create.title': 'Nouvelle Prescription',
+      'prescriptions.edit.title': 'Modifier Détails',
+      'prescriptions.execute.title': 'Exécuter Prescription',
+      'prescriptions.management': 'GESTION DES PRESCRIPTIONS',
+      
+      // Tabs
+      'prescriptions.tabs.list': 'Liste des Prescriptions',
+      'prescriptions.tabs.create': 'Nouvelle Prescription',
+      'prescriptions.tabs.execute': 'Exécuter Prescription',
+      'prescriptions.tabs.edit': 'Modifier Détails',
+      
+      // Filtres
+      'prescriptions.filters.search': 'Rechercher...',
+      'prescriptions.filters.status': 'Statut',
+      'prescriptions.filters.type': 'Type',
+      'prescriptions.filters.dateStart': 'Date début',
+      'prescriptions.filters.dateEnd': 'Date fin',
+      'prescriptions.filters.all': 'Tous',
+      
+      // Tableau
+      'prescriptions.table.number': 'Numéro',
+      'prescriptions.table.patient': 'Patient',
+      'prescriptions.table.type': 'Type',
+      'prescriptions.table.date': 'Date',
+      'prescriptions.table.status': 'Statut',
+      'prescriptions.table.amount': 'Montant',
+      'prescriptions.table.details': 'Détails',
+      'prescriptions.table.actions': 'Actions',
+      'prescriptions.table.complete': 'Complets',
+      'prescriptions.table.incomplete': 'À compléter',
+      'prescriptions.table.id': 'ID',
+      'prescriptions.table.identifier': 'Identifiant',
+      'prescriptions.table.company': 'Entreprise',
+      'prescriptions.table.pagination': '{{total}} prescriptions au total',
+      
+      // Statuts
+      'prescriptions.status.pending': 'En attente',
+      'prescriptions.status.inProgress': 'En cours',
+      'prescriptions.status.executed': 'Exécutée',
+      'prescriptions.status.cancelled': 'Annulée',
+      'prescriptions.status.partiallyExecuted': 'Partiellement exécutée',
+      'prescriptions.status.toExecute': 'À exécuter',
+      
+      // Types de prestations
+      'prescriptions.types.pharmacy': 'Pharmacie',
+      'prescriptions.types.biology': 'Biologie',
+      'prescriptions.types.imaging': 'Imagerie',
+      'prescriptions.types.consultation': 'Consultation',
+      'prescriptions.types.hospitalization': 'Hospitalisation',
+      'prescriptions.types.medication': 'Médicament',
+      'prescriptions.types.act': 'Acte',
+      
+      // Création de prescription
+      'prescriptions.create.patientSearch': 'Rechercher patient',
+      'prescriptions.create.patientSearchButton': 'Rechercher',
+      'prescriptions.create.patientInfo': 'Informations Patient',
+      'prescriptions.create.prescriptionType': 'Type de prestation',
+      'prescriptions.create.validityDate': 'Date de validité',
+      'prescriptions.create.observations': 'Observations',
+      'prescriptions.create.medicalInfo': 'Informations Médicales',
+      'prescriptions.create.fillDetails': 'Renseigner les détails de la prescription ?',
+      'prescriptions.create.fillDetailsYes': 'Oui',
+      'prescriptions.create.fillDetailsNo': 'Non',
+      'prescriptions.create.doctor': 'Médecin prescripteur',
+      'prescriptions.create.center': 'Centre de santé',
+      'prescriptions.create.prescriptionItems': 'Éléments de la prescription',
+      'prescriptions.create.addItem': 'Rechercher un élément',
+      'prescriptions.create.itemType': 'Type',
+      'prescriptions.create.itemLabel': 'Libellé',
+      'prescriptions.create.itemQuantity': 'Quantité',
+      'prescriptions.create.itemDosage': 'Posologie',
+      'prescriptions.create.itemDuration': 'Durée (jours)',
+      'prescriptions.create.itemUnitPrice': 'Prix unitaire (FCFA)',
+      'prescriptions.create.itemAmount': 'Montant (FCFA)',
+      'prescriptions.create.total': 'Total de la prescription',
+      'prescriptions.create.cancel': 'Annuler',
+      'prescriptions.create.submit': 'Terminer et Imprimer',
+      'prescriptions.create.update': 'Mettre à jour les détails',
+      'prescriptions.create.selectDoctor': 'Sélectionner un médecin...',
+      'prescriptions.create.noCenter': 'Aucun centre sélectionné',
+      
+      // Exécution de prescription
+      'prescriptions.execute.search': 'Recherche de prescription à exécuter',
+      'prescriptions.execute.searchPlaceholder': 'Numéro de prescription',
+      'prescriptions.execute.searchButton': 'Rechercher',
+      'prescriptions.execute.prescriptionNumber': 'Prescription #',
+      'prescriptions.execute.patient': 'Patient',
+      'prescriptions.execute.type': 'Type',
+      'prescriptions.execute.status': 'Statut',
+      'prescriptions.execute.itemsToExecute': 'Éléments à exécuter',
+      'prescriptions.execute.executeColumn': 'Exécuter',
+      'prescriptions.execute.itemLabel': 'Libellé',
+      'prescriptions.execute.prescribedQuantity': 'Quantité prescrite',
+      'prescriptions.execute.executedQuantity': 'Quantité exécutée',
+      'prescriptions.execute.remainingQuantity': 'Quantité restante',
+      'prescriptions.execute.unitPrice': 'Prix unitaire',
+      'prescriptions.execute.amount': 'Montant',
+      'prescriptions.execute.totalToExecute': 'Total à exécuter',
+      'prescriptions.execute.cancel': 'Annuler',
+      'prescriptions.execute.validate': 'Valider l\'exécution',
+      'prescriptions.execute.noItems': 'Aucun détail disponible pour cette prescription ou tous les éléments sont déjà exécutés.',
+      'prescriptions.execute.dosage': 'Posologie',
+      'prescriptions.execute.executeAll': 'Tout exécuter',
+      
+      // Modals
+      'prescriptions.modal.scanner.title': 'Scanner un QR Code',
+      'prescriptions.modal.scanner.instructions': 'Placez le QR Code dans le cadre ci-dessus',
+      'prescriptions.modal.scanner.start': 'Démarrer le scan',
+      'prescriptions.modal.scanner.stop': 'Arrêter le scan',
+      'prescriptions.modal.scanner.test': 'Scanner de test',
+      'prescriptions.modal.scanner.close': 'Fermer',
+      'prescriptions.modal.scanner.pointCamera': 'Pointez la caméra vers le QR Code',
+      'prescriptions.modal.scanner.autoDetection': 'La détection est automatique',
+      'prescriptions.modal.scanner.scanSuccess': 'QR Code scanné avec succès',
+      'prescriptions.modal.scanner.cameraError': 'Impossible d\'accéder à la caméra',
+      'prescriptions.modal.scanner.permissionDenied': 'Permission caméra refusée',
+      'prescriptions.modal.scanner.noCamera': 'Aucune caméra trouvée',
+      'prescriptions.modal.scanner.cameraBusy': 'Caméra déjà utilisée par une autre application',
+      
+      'prescriptions.modal.patientSearch.title': 'Rechercher un patient',
+      'prescriptions.modal.patientSearch.searchLabel': 'Nom, prénom, identifiant ou téléphone',
+      'prescriptions.modal.patientSearch.searchButton': 'Rechercher',
+      'prescriptions.modal.patientSearch.name': 'Nom',
+      'prescriptions.modal.patientSearch.firstName': 'Prénom',
+      'prescriptions.modal.patientSearch.gender': 'Sexe',
+      'prescriptions.modal.patientSearch.age': 'Âge',
+      'prescriptions.modal.patientSearch.identifier': 'Identifiant',
+      'prescriptions.modal.patientSearch.select': 'Sélectionner',
+      'prescriptions.modal.patientSearch.close': 'Fermer',
+      'prescriptions.modal.patientSearch.man': 'Homme',
+      'prescriptions.modal.patientSearch.woman': 'Femme',
+      'prescriptions.modal.patientSearch.years': 'ans',
+      
+      'prescriptions.modal.itemSearch.title': 'Rechercher un médicament ou un acte',
+      'prescriptions.modal.itemSearch.searchLabel': 'Nom du médicament ou libellé de l\'acte',
+      'prescriptions.modal.itemSearch.searchButton': 'Rechercher',
+      'prescriptions.modal.itemSearch.type': 'Type',
+      'prescriptions.modal.itemSearch.label': 'Libellé',
+      'prescriptions.modal.itemSearch.form': 'Forme/Détails',
+      'prescriptions.modal.itemSearch.price': 'Prix (FCFA)',
+      'prescriptions.modal.itemSearch.reimbursable': 'Remboursable',
+      'prescriptions.modal.itemSearch.add': 'Ajouter',
+      'prescriptions.modal.itemSearch.close': 'Fermer',
+      'prescriptions.modal.itemSearch.dosage': 'Dosage',
+      'prescriptions.modal.itemSearch.completeLabel': 'Libellé complet',
+      
+      'prescriptions.modal.confirmation.title': 'Confirmation requise',
+      'prescriptions.modal.confirmation.message': 'Cette action est irréversible !',
+      'prescriptions.modal.confirmation.details': 'Êtes-vous sûr de vouloir {{action}} cette prescription ?',
+      'prescriptions.modal.confirmation.cancel': 'Annuler',
+      'prescriptions.modal.confirmation.confirm': '{{action}} la prescription',
+      'prescriptions.modal.confirmation.warning': 'Une fois créée, la prescription ne pourra être modifiée que via l\'option "Modifier Détails".',
+      'prescriptions.modal.confirmation.checklist': '• Vérifiez bien les informations du patient<br/>• Vérifiez le type de prestation<br/>• Vérifiez les éléments de la prescription',
+      
+      // Feuille de soins (ordonnance)
+      'prescriptions.sheet.title': 'Ordonnance Médicale',
+      'prescriptions.sheet.subtitle': 'Document officiel de soins médicaux',
+      'prescriptions.sheet.patientInfo': 'INFORMATIONS DU PATIENT',
+      'prescriptions.sheet.patientName': 'Nom et Prénom',
+      'prescriptions.sheet.patientGender': 'Sexe',
+      'prescriptions.sheet.patientAge': 'Âge',
+      'prescriptions.sheet.prescriptionDate': 'Date de prescription',
+      'prescriptions.sheet.patientId': 'Identifiant',
+      'prescriptions.sheet.validityDate': 'Date de validité',
+      'prescriptions.sheet.medicalInfo': 'INFORMATIONS MÉDICALES',
+      'prescriptions.sheet.center': 'Centre de santé',
+      'prescriptions.sheet.prescriptionType': 'Type de prestation',
+      'prescriptions.sheet.doctor': 'Médecin prescripteur',
+      'prescriptions.sheet.status': 'Statut',
+      'prescriptions.sheet.diagnosis': 'DIAGNOSTIC / AFFECTION',
+      'prescriptions.sheet.prescriptionDetails': 'DÉTAILS DE LA PRESCRIPTION',
+      'prescriptions.sheet.itemNumber': 'N°',
+      'prescriptions.sheet.itemDescription': 'DÉSIGNATION',
+      'prescriptions.sheet.itemQuantity': 'QUANTITÉ',
+      'prescriptions.sheet.itemDosage': 'POSOLOGIE',
+      'prescriptions.sheet.itemUnitPrice': 'PRIX UNIT.',
+      'prescriptions.sheet.itemAmount': 'MONTANT',
+      'prescriptions.sheet.total': 'TOTAL DE LA PRESCRIPTION',
+      'prescriptions.sheet.reimbursement': 'Mode de remboursement',
+      'prescriptions.sheet.validityPeriod': 'Délai de validité',
+      'prescriptions.sheet.additionalObservations': 'OBSERVATIONS SUPPLÉMENTAIRES',
+      'prescriptions.sheet.doctorSignature': 'Le Médecin Prescripteur',
+      'prescriptions.sheet.executorSignature': 'Le Pharmacien / Exécutant',
+      'prescriptions.sheet.legalNotice': 'MENTION LÉGALE',
+      'prescriptions.sheet.print': 'Imprimer l\'ordonnance',
+      'prescriptions.sheet.close': 'Fermer',
+      'prescriptions.sheet.generatedOn': 'Document généré le',
+      'prescriptions.sheet.centerMedical': 'CENTRE MÉDICAL',
+      'prescriptions.sheet.healthWellbeing': 'Santé & Bien-être',
+      'prescriptions.sheet.phone': 'Tél',
+      'prescriptions.sheet.fax': 'Fax',
+      'prescriptions.sheet.address': 'Adresse',
+      'prescriptions.sheet.city': 'Ville',
+      'prescriptions.sheet.openingHours': 'Horaires d\'ouverture',
+      'prescriptions.sheet.qrNote': 'Scannez pour vérifier',
+      'prescriptions.sheet.socialSecurity': 'Sécurité Sociale',
+      'prescriptions.sheet.mutual': 'Mutuelle',
+      'prescriptions.sheet.validityMonths': '3 mois à compter de la date d\'émission',
+      'prescriptions.sheet.providerCalculate': 'Total à calculer par le prestataire',
+      'prescriptions.sheet.executionDate': 'Date d\'exécution',
+      'prescriptions.sheet.stampSignature': 'Cachet et signature',
+      'prescriptions.sheet.documentConfidential': 'Ce document a une valeur légale. Conserver pour vos archives.',
+      'prescriptions.sheet.qrContains': 'QR Code contenant: N° prescription, patient, date, centre et statut',
+      
+      // Messages d'alerte et de succès
+      'prescriptions.alerts.prescriptionCreated': 'Prescription créée avec succès',
+      'prescriptions.alerts.prescriptionUpdated': 'Détails de la prescription mis à jour avec succès',
+      'prescriptions.alerts.prescriptionExecuted': 'Prescription exécutée avec succès',
+      'prescriptions.alerts.errorCreating': 'Erreur lors de la création de la prescription',
+      'prescriptions.alerts.errorUpdating': 'Erreur lors de la mise à jour des détails',
+      'prescriptions.alerts.errorExecuting': 'Erreur lors de l\'exécution de la prescription',
+      'prescriptions.alerts.noPatientSelected': 'Veuillez sélectionner un patient valide',
+      'prescriptions.alerts.noPrescriptionType': 'Veuillez sélectionner le type de prestation',
+      'prescriptions.alerts.noItems': 'Veuillez ajouter au moins un élément à la prescription',
+      'prescriptions.alerts.noDoctorSelected': 'Veuillez sélectionner un médecin prescripteur',
+      'prescriptions.alerts.noCenterSelected': 'Veuillez sélectionner un centre de santé',
+      'prescriptions.alerts.noPrescriptionNumber': 'Veuillez entrer un numéro de prescription',
+      'prescriptions.alerts.prescriptionNotFound': 'Prescription non trouvée',
+      'prescriptions.alerts.noItemsToExecute': 'Veuillez sélectionner au moins un élément à exécuter',
+      'prescriptions.alerts.invalidQuantities': 'Quantités invalides pour',
+      'prescriptions.alerts.networkError': 'Erreur réseau. Vérifiez votre connexion.',
+      'prescriptions.alerts.serverError': 'Erreur serveur. Veuillez réessayer plus tard.',
+      'prescriptions.alerts.sessionExpired': 'Session expirée. Veuillez vous reconnecter.',
+      'prescriptions.alerts.serviceNotFound': 'Service non trouvé. Contactez l\'équipe technique.',
+      'prescriptions.alerts.invalidElements': 'Erreur de validation des éléments',
+      'prescriptions.alerts.noDoctors': 'Aucun médecin disponible. Vérifiez la base de données.',
+      'prescriptions.alerts.noDetails': 'Prescription trouvée mais aucun détail disponible',
+      'prescriptions.alerts.popupBlocked': 'Veuillez autoriser les popups pour imprimer',
+      'prescriptions.alerts.elementInvalid': 'Cet élément n\'a pas de code valide. Veuillez en sélectionner un autre dans la base de données.',
+      
+      // Boutons
+      'prescriptions.buttons.previous': 'Précédent',
+      'prescriptions.buttons.next': 'Suivant',
+      'prescriptions.buttons.refresh': 'Actualiser',
+      'prescriptions.buttons.viewSheet': 'Voir feuille de soins',
+      'prescriptions.buttons.addDetails': 'Ajouter/modifier les détails',
+      'prescriptions.buttons.changePatient': 'Changer de patient',
+      'prescriptions.buttons.searchPatient': 'Rechercher un patient',
+      'prescriptions.buttons.searchItem': 'Rechercher un élément',
+      'prescriptions.buttons.scanQR': 'Scanner un QR Code',
+      'prescriptions.buttons.testScan': 'Scanner de test',
+      'prescriptions.buttons.restartScan': 'Redémarrer le scan',
+      'prescriptions.buttons.printPrescription': 'Imprimer l\'ordonnance',
+      'prescriptions.buttons.printing': 'Impression en cours...',
+      'prescriptions.buttons.generatingQR': 'Génération QR Code...',
+      
+      // Placeholders
+      'prescriptions.placeholders.searchPatient': 'Ex: Dupont, Jean, 0123456789',
+      'prescriptions.placeholders.searchItem': 'Ex: Paracétamol, Analyse sanguine',
+      'prescriptions.placeholders.prescriptionNumber': 'PRES-2024-00001 ou PRES202400001',
+      'prescriptions.placeholders.format': 'Format: PRES-YYYY-NNNNN ou PRESYYYYNNNNN',
+      'prescriptions.placeholders.dosage': 'Ex: 1 comprimé matin et soir',
+      'prescriptions.placeholders.observations': 'Observations médicales...',
+      
+      // Informations
+      'prescriptions.info.noPatients': 'Aucun patient trouvé',
+      'prescriptions.info.noItems': 'Aucun élément trouvé',
+      'prescriptions.info.noPrescriptions': 'Aucune prescription trouvée',
+      'prescriptions.info.loadingDoctors': 'Chargement des médecins...',
+      'prescriptions.info.loadingCenters': 'Chargement des centres...',
+      'prescriptions.info.noItemsAdded': 'Aucun élément ajouté. Cliquez sur "Rechercher un élément" pour commencer.',
+      'prescriptions.info.prescriptionWithoutDetails': 'La prescription sera créée sans détails. Vous pourrez les ajouter ultérieurement.',
+      'prescriptions.info.scanInstructions': 'Placez le QR Code dans le cadre',
+      'prescriptions.info.scanAutomatic': 'La lecture est automatique',
+      'prescriptions.info.scanLighting': 'Éclairage suffisant recommandé',
+      'prescriptions.info.scanQRPatient': 'Veuillez scanner le QR Code de la prescription.',
+      'prescriptions.info.dataCopied': 'Les données ont été automatiquement copiées dans le champ de recherche.',
+      'prescriptions.info.qrContainsData': 'QR Code contenant les informations essentielles de la prescription',
+      
+      // Types d'éléments
+      'prescriptions.elements.medication': 'Médicament',
+      'prescriptions.elements.medicalAct': 'Acte médical',
+      'prescriptions.elements.laboratory': 'Examen laboratoire',
+      'prescriptions.elements.imaging': 'Imagerie',
+      'prescriptions.elements.treatment': 'Traitement',
+      
+      // Unités
+      'prescriptions.units.box': 'boîte',
+      'prescriptions.units.unit': 'unité',
+      'prescriptions.units.tablet': 'comprimé',
+      'prescriptions.units.ampoule': 'ampoule',
+      'prescriptions.units.bottle': 'flacon',
+      'prescriptions.units.tube': 'tube',
+      'prescriptions.units.sachet': 'sachet',
+      'prescriptions.units.ml': 'ml',
+      'prescriptions.units.mg': 'mg',
+      
+      // Remboursement
+      'prescriptions.reimbursement.yes': 'Oui',
+      'prescriptions.reimbursement.no': 'Non',
+      'prescriptions.reimbursement.rate': 'Taux de prise en charge',
+      'prescriptions.reimbursement.coverage': 'Couverture',
+      
+      // Format de date
+      'prescriptions.dateFormat': 'dd/MM/yyyy',
+      'prescriptions.timeFormat': 'HH:mm',
+      'prescriptions.dateTimeFormat': 'dd/MM/yyyy HH:mm',
+      
+      // Scan
+      'prescriptions.scan.fps': 'FPS',
+      'prescriptions.scan.detected': 'QR Code détecté',
+      'prescriptions.scan.initiating': 'Initialisation de la caméra...',
+      'prescriptions.scan.percent': '%',
+      'prescriptions.scan.ready': 'Prêt à scanner',
+      
+      // Validation
+      'prescriptions.validation.required': 'Ce champ est requis',
+      'prescriptions.validation.invalidQuantity': 'Quantité invalide',
+      'prescriptions.validation.invalidPrice': 'Prix invalide',
+      'prescriptions.validation.minQuantity': 'Quantité minimale: 0.1',
+      'prescriptions.validation.maxQuantity': 'Quantité maximale dépassée',
+      'prescriptions.validation.elementCode': 'Code d\'élément manquant ou invalide',
+      'prescriptions.validation.elementString': 'Code d\'élément doit être une chaîne de caractères',
+      
+      // Tooltips
+      'prescriptions.tooltips.scanQR': 'Scanner un QR Code',
+      'prescriptions.tooltips.addDetails': 'Ajouter/modifier les détails',
+      'prescriptions.tooltips.execute': 'Exécuter',
+      'prescriptions.tooltips.view': 'Voir',
+      'prescriptions.tooltips.edit': 'Modifier',
+      'prescriptions.tooltips.delete': 'Supprimer',
+      'prescriptions.tooltips.refresh': 'Rafraîchir',
+      'prescriptions.tooltips.filter': 'Filtrer',
+      'prescriptions.tooltips.print': 'Imprimer',
+      'prescriptions.tooltips.download': 'Télécharger',
+      'prescriptions.tooltips.upload': 'Téléverser',
     }
   },
   'en-GB': {
     translation: {
-      // Application
+      // ============ APPLICATION ============
       'app.name': 'HealthCenterSoft',
       'app.centralAfrica': 'Central Africa',
       'app.description': 'HealthCenterSoft System',
       'app.regionalSystem': 'Regional system',
       
-      // Countries
+      // ============ COUNTRIES ============
       'countries.CMF': 'Francophone Cameroon',
       'countries.CMA': 'Anglophone Cameroon',
       'countries.RCA': 'Central African Republic',
@@ -301,7 +1004,7 @@ const resources = {
       'countries.BDI': 'Burundi',
       'countries.COG': 'Republic of Congo',
       
-      // Roles
+      // ============ ROLES ============
       'roles.administrator': 'Administrator',
       'roles.doctor': 'Doctor',
       'roles.nurse': 'Nurse',
@@ -309,14 +1012,16 @@ const resources = {
       'roles.cashier': 'Cashier',
       'roles.user': 'User',
       
-      // Page Titles
+      // ============ PAGE TITLES ============
       'pageTitles.dashboard': 'Dashboard',
       'pageTitles.beneficiaryDetail': 'Beneficiary Detail',
       'pageTitles.consultationDetail': 'Consultation Detail',
       'pageTitles.medicalManagementSystem': 'Medical Management System',
       'pageTitles.patientFile': 'Patient File',
+      'pageTitles.consultations': 'Consultation Management',
+      'pageTitles.prescriptions': 'Prescriptions Management',
       
-      // Menu Sections
+      // ============ MENU SECTIONS ============
       'menuSections.dashboard': 'Dashboard',
       'menuSections.beneficiaryManagement': 'Beneficiary Management',
       'menuSections.carePathway': 'Care Pathway',
@@ -332,7 +1037,7 @@ const resources = {
       'menuSections.support': 'Support',
       'menuSections.profile': 'Profile',
       
-      // Menu Items
+      // ============ MENU ITEMS ============
       'menu.dashboard': 'Dashboard',
       'menu.beneficiaries': 'Beneficiaries',
       'menu.biometricEnrollment': 'Biometric Enrollment',
@@ -376,7 +1081,7 @@ const resources = {
       'menu.userDocumentation': 'User Documentation',
       'menu.myProfile': 'My Profile',
       
-      // Modules
+      // ============ MODULES ============
       'modules.beneficiaryManagement': 'Beneficiary management',
       'modules.carePathway': 'Care pathway',
       'modules.financial': 'Financial',
@@ -386,8 +1091,9 @@ const resources = {
       'modules.settlements': 'Settlements',
       'modules.profile': 'Profile',
       'modules.managementSystem': 'Management system',
+      'modules.prescriptions': 'Prescriptions',
       
-      // Actions
+      // ============ ACTIONS ============
       'actions.logout': 'Logout',
       'actions.save': 'Save',
       'actions.cancel': 'Cancel',
@@ -406,8 +1112,13 @@ const resources = {
       'actions.view': 'View',
       'actions.add': 'Add',
       'actions.update': 'Update',
+      'actions.execute': 'Execute',
+      'actions.select': 'Select',
+      'actions.close': 'Close',
+      'actions.confirm': 'Confirm',
+      'actions.scan': 'Scan',
       
-      // Alerts and messages
+      // ============ ALERTS AND MESSAGES ============
       'alerts.accessDenied': 'Access denied',
       'alerts.sessionExpired': 'Session expired',
       'alerts.operationSuccess': 'Operation successful',
@@ -420,7 +1131,7 @@ const resources = {
       'alerts.errorOccurred': 'An error occurred',
       'alerts.requiredFields': 'Missing required fields',
       
-      // Footer
+      // ============ FOOTER ============
       'footer.version': 'Version',
       'footer.regionalDatabase': 'Regional database',
       'footer.activeModules': 'Active modules',
@@ -432,7 +1143,7 @@ const resources = {
       'footer.lastUpdate': 'Last update',
       'footer.copyright': 'Copyright',
       
-      // Common
+      // ============ COMMON ============
       'common.yes': 'Yes',
       'common.no': 'No',
       'common.ok': 'OK',
@@ -475,7 +1186,6 @@ const resources = {
       'common.print': 'Print',
       'common.export': 'Export',
       'common.import': 'Import',
-      'common.refresh': 'Refresh',
       'common.more': 'More',
       'common.less': 'Less',
       'common.required': 'Required',
@@ -510,8 +1220,20 @@ const resources = {
       'common.approved': 'Approved',
       'common.rejected': 'Rejected',
       'common.pendingApproval': 'Pending approval',
+      'common.notAvailable': 'Not available',
+      'common.notSpecified': 'Not specified',
+      'common.male': 'Male',
+      'common.female': 'Female',
+      'common.identifier': 'Identifier',
+      'common.quantity': 'Quantity',
+      'common.price': 'Price',
+      'common.amount': 'Amount',
+      'common.unit': 'Unit',
+      'common.type': 'Type',
+      'common.description': 'Description',
+      'common.totalAmount': 'Total amount',
       
-      // Forms
+      // ============ FORMS ============
       'form.firstName': 'First name',
       'form.lastName': 'Last name',
       'form.email': 'Email',
@@ -550,7 +1272,7 @@ const resources = {
       'form.exporting': 'Exporting...',
       'form.importing': 'Importing...',
       
-      // Login (kept for compatibility)
+      // ============ LOGIN ============
       'welcome': 'Healthcare Management System - Version 2.0',
       'selectCountry': 'Select your country',
       'username': 'Username',
@@ -563,18 +1285,702 @@ const resources = {
       'loggingIn': 'Logging in...',
       'usernameRequired': 'Username is required',
       'passwordRequired': 'Password is required',
-      'loginError': 'Invalid username or password'
+      'loginError': 'Invalid username or password',
+
+      // ============ BENEFICIARIES ============
+'beneficiaries': {
+  'title': 'Beneficiaries Management',
+  'subtitle': 'Manage all system beneficiaries',
+  'loading': 'Loading beneficiaries...',
+  
+  // ACE Status
+  'status': {
+    'principal': 'Primary Insured',
+    'conjoint': 'Spouse',
+    'enfant': 'Child',
+    'autre': 'Other Dependent'
+  },
+  
+  // Forms
+  'form': {
+    'createTitle': 'New Beneficiary',
+    'editTitle': 'Edit Beneficiary',
+    'personalInfo': 'Personal Information',
+    'identificationInfo': 'Identification Information',
+    'contactInfo': 'Contact Information',
+    'aceStatus': 'ACE Status',
+    'additionalInfo': 'Additional Information',
+    'primaryInsured': 'Primary Insured',
+    'nationalId': 'National ID',
+    'passportNumber': 'Passport Number',
+    'birthPlace': 'Place of Birth',
+    'profession': 'Profession',
+    'bloodGroup': 'Blood Group',
+    'rhesus': 'Rhesus',
+    'selectedPrimaryInsured': 'Selected primary insured',
+    'availableCount': 'available',
+    'dependentHelp': 'A dependent (spouse, child) must be attached to an existing primary insured.',
+    'selectPrimaryInsured': '-- Select a primary insured --',
+    
+    'placeholders': {
+      'lastName': 'Enter last name',
+      'firstName': 'Enter first name',
+      'birthPlace': 'City of birth',
+      'nationalId': 'National identification number',
+      'passportNumber': 'Passport number',
+      'phone': '+237 XXX XXX XXX',
+      'email': 'email@example.com',
+      'profession': 'Profession',
+      'searchPrimaryInsured': 'Search among {{count}} primary insured...'
+    }
+  },
+  
+  // Rhesus
+  'rhesus': {
+    'positive': 'Positive',
+    'negative': 'Negative'
+  },
+  
+  // Validation
+  'validation': {
+    'lastNameRequired': 'Last name is required',
+    'firstNameRequired': 'First name is required',
+    'genderRequired': 'Gender is required',
+    'birthDateRequired': 'Date of birth is required',
+    'phoneRequired': 'Mobile phone is required',
+    'statusRequired': 'ACE status is required',
+    'primaryInsuredRequired': 'Primary insured is required for dependents',
+    'primaryInsuredNotFound': 'Selected primary insured does not exist',
+    'futureBirthDate': 'Date of birth cannot be in the future',
+    'minAgePrimary': 'Primary insured must be at least 16 years old',
+    'invalidPhone': 'Invalid phone number (8-20 digits)',
+    'correctErrors': 'Please correct errors in the form'
+  },
+  
+  // Messages
+  'messages': {
+    'refreshSuccess': 'Primary insured list refreshed',
+    'updateSuccess': 'Beneficiary updated successfully',
+    'createSuccess': 'Beneficiary created successfully',
+    'noPrimaryInsured': 'No primary insured available. Create a primary insured first.'
+  },
+  
+  // Errors
+  'errors': {
+    'loadCountries': 'Error loading countries',
+    'loadPrimaryInsured': 'Error loading primary insured',
+    'loadBeneficiaries': 'Error loading beneficiaries',
+    'connectionError': 'Connection error with server',
+    'searchPrimaryInsured': 'Error searching for primary insured',
+    'refreshError': 'Error refreshing',
+    'saveError': 'Error saving',
+    'loadBeneficiary': 'Error loading beneficiary'
+  },
+  
+  // Actions
+  'actions': {
+    'newBeneficiary': 'New Beneficiary',
+    'addBeneficiary': 'Add beneficiary',
+    'createBeneficiary': 'Create beneficiary',
+    'createPrimaryInsured': 'Create primary insured',
+    'refreshPrimaryInsured': 'Refresh primary insured list',
+    'removePrimaryInsured': 'Remove primary insured'
+  },
+  
+  // Search
+  'search': {
+    'placeholder': 'Search by name, first name, phone, identifier...',
+    'ariaLabel': 'Search beneficiary'
+  },
+  
+  // Table
+  'table': {
+    'name': 'Name & First Name',
+    'ageGender': 'Age/Gender',
+    'contact': 'Contact',
+    'aceStatus': 'ACE Status',
+    'years': 'years'
+  },
+  
+  // Empty states
+  'empty': {
+    'title': 'No beneficiary found',
+    'noResults': 'No results for your search',
+    'noBeneficiaries': 'Start by adding a new beneficiary'
+  },
+  
+  // Confirmation
+  'confirm': {
+    'delete': 'Confirm deletion of {{name}}?'
+  },
+  
+  // Features
+  'features': {
+    'deleteNotImplemented': 'Delete functionality to be implemented'
+  }
+},
+      
+      // ============ CONSULTATIONS ============
+      // Titles and sections
+      'consultations.title': 'CONSULTATION MANAGEMENT',
+      'consultations.steps.patientIdentification': '1. PATIENT IDENTIFICATION',
+      'consultations.steps.consultationSettings': '2. CONSULTATION SETTINGS',
+      'consultations.steps.medicalInfo': '3. MEDICAL INFORMATION',
+      'consultations.steps.financialBreakdown': '4. FINANCIAL BREAKDOWN AND VALIDATION',
+      'consultations.steps.insuranceSheet': '5. INSURANCE SHEET',
+      'consultations.steps.patient': 'Patient',
+      'consultations.steps.settings': 'Settings',
+      'consultations.steps.medical': 'Medical',
+      'consultations.steps.validation': 'Validation',
+      'consultations.steps.print': 'Print',
+      
+      // Patient search
+      'consultations.search.nationalId': 'National ID',
+      'consultations.search.insuranceCard': 'Insurance Card',
+      'consultations.search.name': 'Name',
+      'consultations.search.scanBarcode': 'Scan barcode',
+      'consultations.search.patientName': 'Patient name',
+      'consultations.search.searching': 'Searching...',
+      'consultations.search.patientsFound': 'Patients found:',
+      
+      // Scanner
+      'consultations.scanner.title': 'Scan patient barcode',
+      'consultations.scanner.instruction1': 'Place barcode in the frame',
+      'consultations.scanner.instruction2': 'Reading is automatic',
+      'consultations.scanner.instruction3': 'Adequate lighting recommended',
+      'consultations.scanner.scanPrompt': 'Please scan the patient\'s card barcode.',
+      'consultations.scanner.scan': 'scan',
+      
+      // Labels and placeholders
+      'consultations.labels.consultingDoctor': 'Consulting doctor',
+      'consultations.labels.consultationType': 'Consultation type',
+      'consultations.labels.freeConsultation': 'Free consultation (amount set to 0)',
+      'consultations.labels.primaryInsuredName': 'Primary insured name',
+      'consultations.labels.bloodPressure': 'Blood pressure (BP)',
+      'consultations.labels.weight': 'Weight (kg)',
+      'consultations.labels.height': 'Height (cm)',
+      'consultations.labels.temperature': 'Temperature (°C)',
+      'consultations.labels.pulse': 'Pulse (bpm)',
+      'consultations.labels.respiratoryRate': 'Respiratory rate',
+      'consultations.labels.glycemia': 'Glycemia (g/L)',
+      'consultations.labels.observations': 'Medical observations',
+      'consultations.labels.complementaryExams': 'Complementary exams prescribed',
+      'consultations.labels.treatment': 'Prescribed treatment',
+      'consultations.labels.recommendations': 'Recommendations and advice',
+      'consultations.labels.tiersPayant': 'Third Party Payer',
+      'consultations.labels.coveragePercentage': 'Coverage percentage',
+      'consultations.labels.doctor': 'Doctor',
+      'consultations.labels.type': 'Type',
+      'consultations.labels.rate': 'Rate',
+      'consultations.labels.paymentType': 'Payment type',
+      'consultations.labels.coverageRate': 'Coverage rate',
+      'consultations.labels.coverage': 'coverage',
+      'consultations.labels.appointment': 'Appointment',
+      'consultations.labels.totalAmount': 'Total amount',
+      'consultations.labels.paymentStatus': 'Payment status',
+      'consultations.labels.consultationNumber': 'Consultation No.',
+      'consultations.labels.primaryInsured': 'Primary Insured',
+      
+      'consultations.placeholders.nationalId': 'Ex: CM12345678',
+      'consultations.placeholders.cardNumber': 'Card number',
+      'consultations.placeholders.name': 'Name or surname',
+      'consultations.placeholders.selectDoctor': 'Select a doctor',
+      'consultations.placeholders.selectType': 'Select a type',
+      'consultations.placeholders.primaryInsuredName': 'Enter full name of primary insured',
+      'consultations.placeholders.bloodPressure': 'Ex: 120/80',
+      'consultations.placeholders.weight': 'Ex: 70',
+      'consultations.placeholders.height': 'Ex: 175',
+      'consultations.placeholders.temperature': 'Ex: 37.5',
+      'consultations.placeholders.pulse': 'Ex: 72',
+      'consultations.placeholders.respiratoryRate': 'Ex: 16',
+      'consultations.placeholders.glycemia': 'Ex: 1.0',
+      'consultations.placeholders.observations': 'Enter medical observations (optional)',
+      'consultations.placeholders.complementaryExams': 'List of complementary exams (optional)',
+      'consultations.placeholders.treatment': 'Medications and dosage (optional)',
+      'consultations.placeholders.recommendations': 'Recommendations for the patient (optional)',
+      
+      // Sections
+      'consultations.sections.primaryInsured': 'PRIMARY INSURED INFORMATION',
+      'consultations.sections.vitalSigns': 'VITAL SIGNS',
+      'consultations.sections.patientDetails': 'Patient details',
+      'consultations.sections.financialBreakdown': 'FINANCIAL BREAKDOWN',
+      
+      // Patient
+      'consultations.patient.id': 'ID',
+      'consultations.patient.age': 'Age',
+      'consultations.patient.years': 'years',
+      'consultations.patient.gender': 'Gender',
+      'consultations.patient.phone': 'Phone',
+      'consultations.patient.employer': 'Employer',
+      'consultations.patient.aceStatus': 'ACE Status',
+      'consultations.patient.patient': 'Patient',
+      'consultations.patient.name': 'Name',
+      'consultations.patient.identifiant': 'Identifier',
+      'consultations.patient.entreprise': 'Company',
+      
+      // Payment
+      'consultations.payment.tiers': 'Third Party Payer',
+      'consultations.payment.dependent': 'Dependent',
+      'consultations.payment.toPay': 'To pay',
+      'consultations.payment.free': 'Free',
+      
+      // Finance
+      'consultations.financial.totalAmount': 'Total consultation amount',
+      'consultations.financial.coverage': 'Coverage',
+      'consultations.financial.freeConsultation': 'Free consultation',
+      'consultations.financial.patientRemaining': 'PATIENT REMAINING CHARGE',
+      
+      // Summary
+      'consultations.summary.title': 'Summary',
+      
+      // Navigation
+      'consultations.navigation.continue': 'Continue',
+      'consultations.navigation.toSettings': 'to settings',
+      'consultations.navigation.continueToMedical': 'Continue to medical information',
+      'consultations.navigation.continueToValidation': 'Continue to validation',
+      'consultations.navigation.toMedicalInfo': 'to medical information',
+      
+      // Buttons
+      'consultations.buttons.validateConsultation': 'VALIDATE CONSULTATION',
+      'consultations.buttons.validating': 'Validating...',
+      'consultations.buttons.printSheet': 'PRINT SHEET (1 page)',
+      'consultations.buttons.newConsultation': 'NEW CONSULTATION',
+      
+      // Descriptions
+      'consultations.descriptions.medicalInfo': 'This information will be recorded and printed on the insurance sheet.',
+      
+      // Hints
+      'consultations.hints.maxLines': '(Limit to 2-3 lines maximum)',
+      'consultations.hints.noDoctors': 'No doctors available. Click ⟳ to refresh.',
+      'consultations.hints.doctorsAvailable': '{{count}} doctor(s) available',
+      
+      // Default values
+      'consultations.default.motif': 'Medical consultation',
+      'consultations.default.diagnostic': 'To be determined',
+      
+      // Confirmations
+      'consultations.confirmation.message': '⚠️ FINAL CONFIRMATION\n\nThis action is irreversible. The consultation will be recorded and billable.\n\nPatient: {{patientName}}\nDoctor: {{doctorName}}\nType: {{consultationType}}\nAmount: {{amount}} FCFA\n{{appointment}}\nClick OK to confirm.',
+      'consultations.confirmation.appointment': 'Appointment: {{date}}',
+      
+      // Success messages
+      'consultations.success.patientSelected': 'Patient selected: {{name}}',
+      'consultations.success.patientSelectedShort': 'Patient selected:',
+      'consultations.success.consultationSaved': 'Consultation saved successfully!',
+      
+      // Error messages
+      'consultations.errors.loadingDoctors': 'Error loading doctors',
+      'consultations.errors.networkDoctors': 'Network error loading doctors',
+      'consultations.errors.noConsultationTypes': 'No consultation types available',
+      'consultations.errors.loadingTypes': 'Error loading consultation types',
+      'consultations.errors.noPatientSelected': 'Please select a patient',
+      'consultations.errors.noDoctorSelected': 'Please select a doctor',
+      'consultations.errors.noConsultationType': 'Please select a consultation type',
+      'consultations.errors.searchPatient': 'Error searching for patient',
+      'consultations.errors.saveConsultation': 'Error saving consultation',
+      'consultations.errors.saveError': 'Error saving: ',
+      'consultations.errors.popupBlocked': 'Please allow popups for printing',
+      
+      // Warnings
+      'consultations.warnings.searchEmpty': 'Please enter a search value',
+      'consultations.warnings.noTiersForFree': 'Free consultation cannot have third party payer',
+      'consultations.warnings.freeConsultation': 'Free consultation activated',
+      'consultations.warnings.warning': 'WARNING',
+      'consultations.warnings.irreversible': 'Validation is IRREVERSIBLE. The consultation will be recorded and billable.',
+      
+      // Information
+      'consultations.info.noPatientsFound': 'No patients found',
+      'consultations.info.newConsultationReady': 'New consultation ready',
+      
+      // Printing
+      'consultations.print.title': 'INSURANCE SHEET',
+      'consultations.print.subtitle': 'MEDICAL CONSULTATION',
+      'consultations.print.center': 'Main Health Center',
+      'consultations.print.phone': 'Phone',
+      'consultations.print.number': 'No.',
+      'consultations.print.patientInformation': 'PATIENT INFORMATION',
+      'consultations.print.fullName': 'Full Name',
+      'consultations.print.nationalId': 'National ID',
+      'consultations.print.company': 'Company/Employer',
+      'consultations.print.aceStatus': 'ACE Status',
+      'consultations.print.primaryInsured': 'Primary insured (for dependent)',
+      'consultations.print.consultationInformation': 'CONSULTATION INFORMATION',
+      'consultations.print.dateTime': 'Date & Time',
+      'consultations.print.speciality': 'Speciality',
+      'consultations.print.consultationType': 'Consultation type',
+      'consultations.print.reason': 'Reason for consultation',
+      'consultations.print.diagnosis': 'Main diagnosis',
+      'consultations.print.financialBreakdown': 'FINANCIAL BREAKDOWN',
+      'consultations.print.description': 'Description',
+      'consultations.print.amount': 'Amount (FCFA)',
+      'consultations.print.rate': 'Rate',
+      'consultations.print.coverage': 'Coverage',
+      'consultations.print.remaining': 'Remaining charge',
+      'consultations.print.medicalConsultation': 'Medical consultation',
+      'consultations.print.totalToPay': 'TOTAL TO BE PAID BY PATIENT',
+      'consultations.print.paymentStatus': 'Payment status',
+      'consultations.print.complementaryExams': 'COMPLEMENTARY EXAMS PRESCRIBED',
+      'consultations.print.prescribedTreatment': 'PRESCRIBED TREATMENT',
+      'consultations.print.takeAsPrescribed': 'Take as prescribed',
+      'consultations.print.recommendations': 'RECOMMENDATIONS AND ADVICE',
+      'consultations.print.nextAppointment': 'NEXT APPOINTMENT',
+      'consultations.print.arriveEarly': 'Please arrive 10 minutes before appointment time',
+      'consultations.print.doctorSignature': 'Doctor\'s signature',
+      'consultations.print.patientSignature': 'Patient\'s signature',
+      'consultations.print.readAndApproved': 'Read and approved',
+      'consultations.print.centerStamp': 'Center stamp',
+      'consultations.print.consultationCode': 'Consultation code',
+      'consultations.print.generationDate': 'Generation date',
+      'consultations.print.confidential': 'Confidential document - Do not duplicate without authorization',
+      'consultations.print.page': 'Page',
+      'consultations.print.consultation': 'Consultation',
+      'consultations.print.generatedOn': 'Generated on',
+      'consultations.print.logo': 'LOGO<br>CENTER',
+      'consultations.print.sheetWillOpen': 'The sheet will open in a new tab for printing.',
+      'consultations.print.format': 'Format: 1 A4 page | Check your browser popup settings.',
+      'consultations.print.patientName': 'PATIENT NAME',
+
+      // ============ PRESCRIPTIONS ============
+      // Titles and headers
+      'prescriptions.title': 'Prescriptions Management',
+      'prescriptions.subtitle': 'Create, manage and execute medical prescriptions',
+      'prescriptions.list.title': 'Prescriptions List',
+      'prescriptions.create.title': 'New Prescription',
+      'prescriptions.edit.title': 'Edit Details',
+      'prescriptions.execute.title': 'Execute Prescription',
+      'prescriptions.management': 'PRESCRIPTIONS MANAGEMENT',
+      
+      // Tabs
+      'prescriptions.tabs.list': 'Prescriptions List',
+      'prescriptions.tabs.create': 'New Prescription',
+      'prescriptions.tabs.execute': 'Execute Prescription',
+      'prescriptions.tabs.edit': 'Edit Details',
+      
+      // Filters
+      'prescriptions.filters.search': 'Search...',
+      'prescriptions.filters.status': 'Status',
+      'prescriptions.filters.type': 'Type',
+      'prescriptions.filters.dateStart': 'Start date',
+      'prescriptions.filters.dateEnd': 'End date',
+      'prescriptions.filters.all': 'All',
+      
+      // Table
+      'prescriptions.table.number': 'Number',
+      'prescriptions.table.patient': 'Patient',
+      'prescriptions.table.type': 'Type',
+      'prescriptions.table.date': 'Date',
+      'prescriptions.table.status': 'Status',
+      'prescriptions.table.amount': 'Amount',
+      'prescriptions.table.details': 'Details',
+      'prescriptions.table.actions': 'Actions',
+      'prescriptions.table.complete': 'Complete',
+      'prescriptions.table.incomplete': 'To complete',
+      'prescriptions.table.id': 'ID',
+      'prescriptions.table.identifier': 'Identifier',
+      'prescriptions.table.company': 'Company',
+      'prescriptions.table.pagination': '{{total}} prescriptions total',
+      
+      // Statuses
+      'prescriptions.status.pending': 'Pending',
+      'prescriptions.status.inProgress': 'In progress',
+      'prescriptions.status.executed': 'Executed',
+      'prescriptions.status.cancelled': 'Cancelled',
+      'prescriptions.status.partiallyExecuted': 'Partially executed',
+      'prescriptions.status.toExecute': 'To execute',
+      
+      // Service types
+      'prescriptions.types.pharmacy': 'Pharmacy',
+      'prescriptions.types.biology': 'Biology',
+      'prescriptions.types.imaging': 'Imaging',
+      'prescriptions.types.consultation': 'Consultation',
+      'prescriptions.types.hospitalization': 'Hospitalization',
+      'prescriptions.types.medication': 'Medication',
+      'prescriptions.types.act': 'Act',
+      
+      // Prescription creation
+      'prescriptions.create.patientSearch': 'Search patient',
+      'prescriptions.create.patientSearchButton': 'Search',
+      'prescriptions.create.patientInfo': 'Patient Information',
+      'prescriptions.create.prescriptionType': 'Service type',
+      'prescriptions.create.validityDate': 'Validity date',
+      'prescriptions.create.observations': 'Observations',
+      'prescriptions.create.medicalInfo': 'Medical Information',
+      'prescriptions.create.fillDetails': 'Fill prescription details?',
+      'prescriptions.create.fillDetailsYes': 'Yes',
+      'prescriptions.create.fillDetailsNo': 'No',
+      'prescriptions.create.doctor': 'Prescribing doctor',
+      'prescriptions.create.center': 'Health center',
+      'prescriptions.create.prescriptionItems': 'Prescription items',
+      'prescriptions.create.addItem': 'Search an item',
+      'prescriptions.create.itemType': 'Type',
+      'prescriptions.create.itemLabel': 'Label',
+      'prescriptions.create.itemQuantity': 'Quantity',
+      'prescriptions.create.itemDosage': 'Dosage',
+      'prescriptions.create.itemDuration': 'Duration (days)',
+      'prescriptions.create.itemUnitPrice': 'Unit price (FCFA)',
+      'prescriptions.create.itemAmount': 'Amount (FCFA)',
+      'prescriptions.create.total': 'Prescription total',
+      'prescriptions.create.cancel': 'Cancel',
+      'prescriptions.create.submit': 'Finish and Print',
+      'prescriptions.create.update': 'Update details',
+      'prescriptions.create.selectDoctor': 'Select a doctor...',
+      'prescriptions.create.noCenter': 'No center selected',
+      
+      // Prescription execution
+      'prescriptions.execute.search': 'Search prescription to execute',
+      'prescriptions.execute.searchPlaceholder': 'Prescription number',
+      'prescriptions.execute.searchButton': 'Search',
+      'prescriptions.execute.prescriptionNumber': 'Prescription #',
+      'prescriptions.execute.patient': 'Patient',
+      'prescriptions.execute.type': 'Type',
+      'prescriptions.execute.status': 'Status',
+      'prescriptions.execute.itemsToExecute': 'Items to execute',
+      'prescriptions.execute.executeColumn': 'Execute',
+      'prescriptions.execute.itemLabel': 'Label',
+      'prescriptions.execute.prescribedQuantity': 'Prescribed quantity',
+      'prescriptions.execute.executedQuantity': 'Executed quantity',
+      'prescriptions.execute.remainingQuantity': 'Remaining quantity',
+      'prescriptions.execute.unitPrice': 'Unit price',
+      'prescriptions.execute.amount': 'Amount',
+      'prescriptions.execute.totalToExecute': 'Total to execute',
+      'prescriptions.execute.cancel': 'Cancel',
+      'prescriptions.execute.validate': 'Validate execution',
+      'prescriptions.execute.noItems': 'No details available for this prescription or all items are already executed.',
+      'prescriptions.execute.dosage': 'Dosage',
+      'prescriptions.execute.executeAll': 'Execute all',
+      
+      // Modals
+      'prescriptions.modal.scanner.title': 'Scan a QR Code',
+      'prescriptions.modal.scanner.instructions': 'Place the QR Code in the frame above',
+      'prescriptions.modal.scanner.start': 'Start scan',
+      'prescriptions.modal.scanner.stop': 'Stop scan',
+      'prescriptions.modal.scanner.test': 'Test scan',
+      'prescriptions.modal.scanner.close': 'Close',
+      'prescriptions.modal.scanner.pointCamera': 'Point camera to QR Code',
+      'prescriptions.modal.scanner.autoDetection': 'Detection is automatic',
+      'prescriptions.modal.scanner.scanSuccess': 'QR Code scanned successfully',
+      'prescriptions.modal.scanner.cameraError': 'Unable to access camera',
+      'prescriptions.modal.scanner.permissionDenied': 'Camera permission denied',
+      'prescriptions.modal.scanner.noCamera': 'No camera found',
+      'prescriptions.modal.scanner.cameraBusy': 'Camera already in use by another application',
+      
+      'prescriptions.modal.patientSearch.title': 'Search a patient',
+      'prescriptions.modal.patientSearch.searchLabel': 'Name, first name, identifier or phone',
+      'prescriptions.modal.patientSearch.searchButton': 'Search',
+      'prescriptions.modal.patientSearch.name': 'Name',
+      'prescriptions.modal.patientSearch.firstName': 'First name',
+      'prescriptions.modal.patientSearch.gender': 'Gender',
+      'prescriptions.modal.patientSearch.age': 'Age',
+      'prescriptions.modal.patientSearch.identifier': 'Identifier',
+      'prescriptions.modal.patientSearch.select': 'Select',
+      'prescriptions.modal.patientSearch.close': 'Close',
+      'prescriptions.modal.patientSearch.man': 'Man',
+      'prescriptions.modal.patientSearch.woman': 'Woman',
+      'prescriptions.modal.patientSearch.years': 'years',
+      
+      'prescriptions.modal.itemSearch.title': 'Search a medication or act',
+      'prescriptions.modal.itemSearch.searchLabel': 'Medication name or act label',
+      'prescriptions.modal.itemSearch.searchButton': 'Search',
+      'prescriptions.modal.itemSearch.type': 'Type',
+      'prescriptions.modal.itemSearch.label': 'Label',
+      'prescriptions.modal.itemSearch.form': 'Form/Details',
+      'prescriptions.modal.itemSearch.price': 'Price (FCFA)',
+      'prescriptions.modal.itemSearch.reimbursable': 'Reimbursable',
+      'prescriptions.modal.itemSearch.add': 'Add',
+      'prescriptions.modal.itemSearch.close': 'Close',
+      'prescriptions.modal.itemSearch.dosage': 'Dosage',
+      'prescriptions.modal.itemSearch.completeLabel': 'Complete label',
+      
+      'prescriptions.modal.confirmation.title': 'Confirmation required',
+      'prescriptions.modal.confirmation.message': 'This action is irreversible!',
+      'prescriptions.modal.confirmation.details': 'Are you sure you want to {{action}} this prescription?',
+      'prescriptions.modal.confirmation.cancel': 'Cancel',
+      'prescriptions.modal.confirmation.confirm': '{{action}} prescription',
+      'prescriptions.modal.confirmation.warning': 'Once created, the prescription can only be modified via the "Edit Details" option.',
+      'prescriptions.modal.confirmation.checklist': '• Verify patient information<br/>• Verify service type<br/>• Verify prescription items',
+      
+      // Prescription sheet
+      'prescriptions.sheet.title': 'Medical Prescription',
+      'prescriptions.sheet.subtitle': 'Official medical care document',
+      'prescriptions.sheet.patientInfo': 'PATIENT INFORMATION',
+      'prescriptions.sheet.patientName': 'Full Name',
+      'prescriptions.sheet.patientGender': 'Gender',
+      'prescriptions.sheet.patientAge': 'Age',
+      'prescriptions.sheet.prescriptionDate': 'Prescription date',
+      'prescriptions.sheet.patientId': 'Identifier',
+      'prescriptions.sheet.validityDate': 'Validity date',
+      'prescriptions.sheet.medicalInfo': 'MEDICAL INFORMATION',
+      'prescriptions.sheet.center': 'Health center',
+      'prescriptions.sheet.prescriptionType': 'Service type',
+      'prescriptions.sheet.doctor': 'Prescribing doctor',
+      'prescriptions.sheet.status': 'Status',
+      'prescriptions.sheet.diagnosis': 'DIAGNOSIS / CONDITION',
+      'prescriptions.sheet.prescriptionDetails': 'PRESCRIPTION DETAILS',
+      'prescriptions.sheet.itemNumber': 'No.',
+      'prescriptions.sheet.itemDescription': 'DESCRIPTION',
+      'prescriptions.sheet.itemQuantity': 'QUANTITY',
+      'prescriptions.sheet.itemDosage': 'DOSAGE',
+      'prescriptions.sheet.itemUnitPrice': 'UNIT PRICE',
+      'prescriptions.sheet.itemAmount': 'AMOUNT',
+      'prescriptions.sheet.total': 'PRESCRIPTION TOTAL',
+      'prescriptions.sheet.reimbursement': 'Reimbursement mode',
+      'prescriptions.sheet.validityPeriod': 'Validity period',
+      'prescriptions.sheet.additionalObservations': 'ADDITIONAL OBSERVATIONS',
+      'prescriptions.sheet.doctorSignature': 'The Prescribing Doctor',
+      'prescriptions.sheet.executorSignature': 'The Pharmacist / Executor',
+      'prescriptions.sheet.legalNotice': 'LEGAL NOTICE',
+      'prescriptions.sheet.print': 'Print prescription',
+      'prescriptions.sheet.close': 'Close',
+      'prescriptions.sheet.generatedOn': 'Document generated on',
+      'prescriptions.sheet.centerMedical': 'MEDICAL CENTER',
+      'prescriptions.sheet.healthWellbeing': 'Health & Wellbeing',
+      'prescriptions.sheet.phone': 'Phone',
+      'prescriptions.sheet.fax': 'Fax',
+      'prescriptions.sheet.address': 'Address',
+      'prescriptions.sheet.city': 'City',
+      'prescriptions.sheet.openingHours': 'Opening hours',
+      'prescriptions.sheet.qrNote': 'Scan to verify',
+      'prescriptions.sheet.socialSecurity': 'Social Security',
+      'prescriptions.sheet.mutual': 'Mutual',
+      'prescriptions.sheet.validityMonths': '3 months from issue date',
+      'prescriptions.sheet.providerCalculate': 'Total to be calculated by provider',
+      'prescriptions.sheet.executionDate': 'Execution date',
+      'prescriptions.sheet.stampSignature': 'Stamp and signature',
+      'prescriptions.sheet.documentConfidential': 'This document has legal value. Keep for your records.',
+      'prescriptions.sheet.qrContains': 'QR Code containing: Prescription No., patient, date, center and status',
+      
+      // Alert and success messages
+      'prescriptions.alerts.prescriptionCreated': 'Prescription created successfully',
+      'prescriptions.alerts.prescriptionUpdated': 'Prescription details updated successfully',
+      'prescriptions.alerts.prescriptionExecuted': 'Prescription executed successfully',
+      'prescriptions.alerts.errorCreating': 'Error creating prescription',
+      'prescriptions.alerts.errorUpdating': 'Error updating details',
+      'prescriptions.alerts.errorExecuting': 'Error executing prescription',
+      'prescriptions.alerts.noPatientSelected': 'Please select a valid patient',
+      'prescriptions.alerts.noPrescriptionType': 'Please select service type',
+      'prescriptions.alerts.noItems': 'Please add at least one item to the prescription',
+      'prescriptions.alerts.noDoctorSelected': 'Please select a prescribing doctor',
+      'prescriptions.alerts.noCenterSelected': 'Please select a health center',
+      'prescriptions.alerts.noPrescriptionNumber': 'Please enter a prescription number',
+      'prescriptions.alerts.prescriptionNotFound': 'Prescription not found',
+      'prescriptions.alerts.noItemsToExecute': 'Please select at least one item to execute',
+      'prescriptions.alerts.invalidQuantities': 'Invalid quantities for',
+      'prescriptions.alerts.networkError': 'Network error. Check your connection.',
+      'prescriptions.alerts.serverError': 'Server error. Please try again later.',
+      'prescriptions.alerts.sessionExpired': 'Session expired. Please log in again.',
+      'prescriptions.alerts.serviceNotFound': 'Service not found. Contact technical team.',
+      'prescriptions.alerts.invalidElements': 'Element validation error',
+      'prescriptions.alerts.noDoctors': 'No doctors available. Check the database.',
+      'prescriptions.alerts.noDetails': 'Prescription found but no details available',
+      'prescriptions.alerts.popupBlocked': 'Please allow popups for printing',
+      'prescriptions.alerts.elementInvalid': 'This element does not have a valid code. Please select another from the database.',
+      
+      // Buttons
+      'prescriptions.buttons.previous': 'Previous',
+      'prescriptions.buttons.next': 'Next',
+      'prescriptions.buttons.refresh': 'Refresh',
+      'prescriptions.buttons.viewSheet': 'View care sheet',
+      'prescriptions.buttons.addDetails': 'Add/edit details',
+      'prescriptions.buttons.changePatient': 'Change patient',
+      'prescriptions.buttons.searchPatient': 'Search a patient',
+      'prescriptions.buttons.searchItem': 'Search an item',
+      'prescriptions.buttons.scanQR': 'Scan a QR Code',
+      'prescriptions.buttons.testScan': 'Test scan',
+      'prescriptions.buttons.restartScan': 'Restart scan',
+      'prescriptions.buttons.printPrescription': 'Print prescription',
+      'prescriptions.buttons.printing': 'Printing...',
+      'prescriptions.buttons.generatingQR': 'Generating QR Code...',
+      
+      // Placeholders
+      'prescriptions.placeholders.searchPatient': 'Ex: Dupont, Jean, 0123456789',
+      'prescriptions.placeholders.searchItem': 'Ex: Paracetamol, Blood test',
+      'prescriptions.placeholders.prescriptionNumber': 'PRES-2024-00001 or PRES202400001',
+      'prescriptions.placeholders.format': 'Format: PRES-YYYY-NNNNN or PRESYYYYNNNNN',
+      'prescriptions.placeholders.dosage': 'Ex: 1 tablet morning and evening',
+      'prescriptions.placeholders.observations': 'Medical observations...',
+      
+      // Information
+      'prescriptions.info.noPatients': 'No patients found',
+      'prescriptions.info.noItems': 'No items found',
+      'prescriptions.info.noPrescriptions': 'No prescriptions found',
+      'prescriptions.info.loadingDoctors': 'Loading doctors...',
+      'prescriptions.info.loadingCenters': 'Loading centers...',
+      'prescriptions.info.noItemsAdded': 'No items added. Click "Search an item" to start.',
+      'prescriptions.info.prescriptionWithoutDetails': 'The prescription will be created without details. You can add them later.',
+      'prescriptions.info.scanInstructions': 'Place QR Code in frame',
+      'prescriptions.info.scanAutomatic': 'Reading is automatic',
+      'prescriptions.info.scanLighting': 'Adequate lighting recommended',
+      'prescriptions.info.scanQRPatient': 'Please scan the prescription QR Code.',
+      'prescriptions.info.dataCopied': 'Data has been automatically copied to the search field.',
+      'prescriptions.info.qrContainsData': 'QR Code containing essential prescription information',
+      
+      // Element types
+      'prescriptions.elements.medication': 'Medication',
+      'prescriptions.elements.medicalAct': 'Medical act',
+      'prescriptions.elements.laboratory': 'Laboratory test',
+      'prescriptions.elements.imaging': 'Imaging',
+      'prescriptions.elements.treatment': 'Treatment',
+      
+      // Units
+      'prescriptions.units.box': 'box',
+      'prescriptions.units.unit': 'unit',
+      'prescriptions.units.tablet': 'tablet',
+      'prescriptions.units.ampoule': 'ampoule',
+      'prescriptions.units.bottle': 'bottle',
+      'prescriptions.units.tube': 'tube',
+      'prescriptions.units.sachet': 'sachet',
+      'prescriptions.units.ml': 'ml',
+      'prescriptions.units.mg': 'mg',
+      
+      // Reimbursement
+      'prescriptions.reimbursement.yes': 'Yes',
+      'prescriptions.reimbursement.no': 'No',
+      'prescriptions.reimbursement.rate': 'Coverage rate',
+      'prescriptions.reimbursement.coverage': 'Coverage',
+      
+      // Date format
+      'prescriptions.dateFormat': 'dd/MM/yyyy',
+      'prescriptions.timeFormat': 'HH:mm',
+      'prescriptions.dateTimeFormat': 'dd/MM/yyyy HH:mm',
+      
+      // Scan
+      'prescriptions.scan.fps': 'FPS',
+      'prescriptions.scan.detected': 'QR Code detected',
+      'prescriptions.scan.initiating': 'Initializing camera...',
+      'prescriptions.scan.percent': '%',
+      'prescriptions.scan.ready': 'Ready to scan',
+      
+      // Validation
+      'prescriptions.validation.required': 'This field is required',
+      'prescriptions.validation.invalidQuantity': 'Invalid quantity',
+      'prescriptions.validation.invalidPrice': 'Invalid price',
+      'prescriptions.validation.minQuantity': 'Minimum quantity: 0.1',
+      'prescriptions.validation.maxQuantity': 'Maximum quantity exceeded',
+      'prescriptions.validation.elementCode': 'Element code missing or invalid',
+      'prescriptions.validation.elementString': 'Element code must be a string',
+      
+      // Tooltips
+      'prescriptions.tooltips.scanQR': 'Scan a QR Code',
+      'prescriptions.tooltips.addDetails': 'Add/edit details',
+      'prescriptions.tooltips.execute': 'Execute',
+      'prescriptions.tooltips.view': 'View',
+      'prescriptions.tooltips.edit': 'Edit',
+      'prescriptions.tooltips.delete': 'Delete',
+      'prescriptions.tooltips.refresh': 'Refresh',
+      'prescriptions.tooltips.filter': 'Filter',
+      'prescriptions.tooltips.print': 'Print',
+      'prescriptions.tooltips.download': 'Download',
+      'prescriptions.tooltips.upload': 'Upload',
     }
   },
   'es-ES': {
     translation: {
-      // Application
+      // ============ APLICACIÓN ============
       'app.name': 'HealthCenterSoft',
       'app.centralAfrica': 'África Central',
       'app.description': 'Sistema HealthCenterSoft',
       'app.regionalSystem': 'Sistema regional',
       
-      // Países
+      // ============ PAÍSES ============
       'countries.CMF': 'Camerún Francófono',
       'countries.CMA': 'Camerún Anglófono',
       'countries.RCA': 'República Centroafricana',
@@ -583,7 +1989,7 @@ const resources = {
       'countries.BDI': 'Burundi',
       'countries.COG': 'República del Congo',
       
-      // Roles
+      // ============ ROLES ============
       'roles.administrator': 'Administrador',
       'roles.doctor': 'Médico',
       'roles.nurse': 'Enfermero(a)',
@@ -591,14 +1997,16 @@ const resources = {
       'roles.cashier': 'Cajero(a)',
       'roles.user': 'Usuario',
       
-      // Títulos de página
+      // ============ TÍTULOS DE PÁGINA ============
       'pageTitles.dashboard': 'Panel de Control',
       'pageTitles.beneficiaryDetail': 'Detalle del Beneficiario',
       'pageTitles.consultationDetail': 'Detalle de la Consulta',
       'pageTitles.medicalManagementSystem': 'Sistema de Gestión Médica',
       'pageTitles.patientFile': 'Expediente del Paciente',
+      'pageTitles.consultations': 'Gestión de Consultas',
+      'pageTitles.prescriptions': 'Gestión de Prescripciones',
       
-      // Secciones de menú
+      // ============ SECCIONES DE MENÚ ============
       'menuSections.dashboard': 'Panel de Control',
       'menuSections.beneficiaryManagement': 'Gestión de Beneficiarios',
       'menuSections.carePathway': 'Ruta de Atención',
@@ -614,7 +2022,7 @@ const resources = {
       'menuSections.support': 'Soporte',
       'menuSections.profile': 'Perfil',
       
-      // Elementos de menú
+      // ============ ELEMENTOS DE MENÚ ============
       'menu.dashboard': 'Panel de Control',
       'menu.beneficiaries': 'Beneficiarios',
       'menu.biometricEnrollment': 'Inscripción Biométrica',
@@ -658,7 +2066,7 @@ const resources = {
       'menu.userDocumentation': 'Documentación de Usuario',
       'menu.myProfile': 'Mi Perfil',
       
-      // Módulos
+      // ============ MÓDULOS ============
       'modules.beneficiaryManagement': 'Gestión de beneficiarios',
       'modules.carePathway': 'Ruta de atención',
       'modules.financial': 'Financiero',
@@ -668,8 +2076,9 @@ const resources = {
       'modules.settlements': 'Liquidación',
       'modules.profile': 'Perfil',
       'modules.managementSystem': 'Sistema de gestión',
+      'modules.prescriptions': 'Prescripciones',
       
-      // Acciones
+      // ============ ACCIONES ============
       'actions.logout': 'Cerrar Sesión',
       'actions.save': 'Guardar',
       'actions.cancel': 'Cancelar',
@@ -688,8 +2097,13 @@ const resources = {
       'actions.view': 'Ver',
       'actions.add': 'Agregar',
       'actions.update': 'Actualizar',
+      'actions.execute': 'Ejecutar',
+      'actions.select': 'Seleccionar',
+      'actions.close': 'Cerrar',
+      'actions.confirm': 'Confirmar',
+      'actions.scan': 'Escanear',
       
-      // Alertas y mensajes
+      // ============ ALERTAS Y MENSAJES ============
       'alerts.accessDenied': 'Acceso denegado',
       'alerts.sessionExpired': 'Sesión expirada',
       'alerts.operationSuccess': 'Operación exitosa',
@@ -702,7 +2116,7 @@ const resources = {
       'alerts.errorOccurred': 'Ocurrió un error',
       'alerts.requiredFields': 'Campos requeridos faltantes',
       
-      // Pie de página
+      // ============ PIE DE PÁGINA ============
       'footer.version': 'Versión',
       'footer.regionalDatabase': 'Base de datos regional',
       'footer.activeModules': 'Módulos activos',
@@ -714,7 +2128,7 @@ const resources = {
       'footer.lastUpdate': 'Última actualización',
       'footer.copyright': 'Copyright',
       
-      // Común
+      // ============ COMÚN ============
       'common.yes': 'Sí',
       'common.no': 'No',
       'common.ok': 'OK',
@@ -757,7 +2171,6 @@ const resources = {
       'common.print': 'Imprimir',
       'common.export': 'Exportar',
       'common.import': 'Importar',
-      'common.refresh': 'Actualizar',
       'common.more': 'Más',
       'common.less': 'Menos',
       'common.required': 'Requerido',
@@ -792,8 +2205,20 @@ const resources = {
       'common.approved': 'Aprobado',
       'common.rejected': 'Rechazado',
       'common.pendingApproval': 'Pendiente de aprobación',
+      'common.notAvailable': 'No disponible',
+      'common.notSpecified': 'No especificado',
+      'common.male': 'Masculino',
+      'common.female': 'Femenino',
+      'common.identifier': 'Identificador',
+      'common.quantity': 'Cantidad',
+      'common.price': 'Precio',
+      'common.amount': 'Monto',
+      'common.unit': 'Unidad',
+      'common.type': 'Tipo',
+      'common.description': 'Descripción',
+      'common.totalAmount': 'Monto total',
       
-      // Formularios
+      // ============ FORMULARIOS ============
       'form.firstName': 'Nombre',
       'form.lastName': 'Apellido',
       'form.email': 'Email',
@@ -832,7 +2257,7 @@ const resources = {
       'form.exporting': 'Exportando...',
       'form.importing': 'Importando...',
       
-      // Login (mantenido para compatibilidad)
+      // ============ LOGIN ============
       'welcome': 'Sistema de Gestión de Salud - Versión 2.0',
       'selectCountry': 'Seleccione su país',
       'username': 'Nombre de usuario',
@@ -845,7 +2270,690 @@ const resources = {
       'loggingIn': 'Iniciando sesión...',
       'usernameRequired': 'Se requiere nombre de usuario',
       'passwordRequired': 'Se requiere contraseña',
-      'loginError': 'Nombre de usuario o contraseña incorrectos'
+      'loginError': 'Nombre de usuario o contraseña incorrectos',
+      
+      // ============ BENEFICIARIOS ============
+'beneficiaries': {
+  'title': 'Gestión de Beneficiarios',
+  'subtitle': 'Gestionar todos los beneficiarios del sistema',
+  'loading': 'Cargando beneficiarios...',
+  
+  // Estado ACE
+  'status': {
+    'principal': 'Asegurado Principal',
+    'conjoint': 'Cónyuge',
+    'enfant': 'Hijo/a',
+    'autre': 'Otro Dependiente'
+  },
+  
+  // Formularios
+  'form': {
+    'createTitle': 'Nuevo Beneficiario',
+    'editTitle': 'Editar Beneficiario',
+    'personalInfo': 'Información Personal',
+    'identificationInfo': 'Información de Identificación',
+    'contactInfo': 'Información de Contacto',
+    'aceStatus': 'Estado ACE',
+    'additionalInfo': 'Información Adicional',
+    'primaryInsured': 'Asegurado Principal',
+    'nationalId': 'Identificación Nacional',
+    'passportNumber': 'Número de Pasaporte',
+    'birthPlace': 'Lugar de Nacimiento',
+    'profession': 'Profesión',
+    'bloodGroup': 'Grupo Sanguíneo',
+    'rhesus': 'Rh',
+    'selectedPrimaryInsured': 'Asegurado principal seleccionado',
+    'availableCount': 'disponible(s)',
+    'dependentHelp': 'Un dependiente (cónyuge, hijo) debe estar vinculado a un asegurado principal existente.',
+    'selectPrimaryInsured': '-- Seleccionar un asegurado principal --',
+    
+    'placeholders': {
+      'lastName': 'Ingrese apellido',
+      'firstName': 'Ingrese nombre',
+      'birthPlace': 'Ciudad de nacimiento',
+      'nationalId': 'Número de identificación nacional',
+      'passportNumber': 'Número de pasaporte',
+      'phone': '+237 XXX XXX XXX',
+      'email': 'email@ejemplo.com',
+      'profession': 'Profesión',
+      'searchPrimaryInsured': 'Buscar entre {{count}} asegurados principales...'
+    }
+  },
+  
+  // Rh
+  'rhesus': {
+    'positive': 'Positivo',
+    'negative': 'Negativo'
+  },
+  
+  // Validación
+  'validation': {
+    'lastNameRequired': 'El apellido es requerido',
+    'firstNameRequired': 'El nombre es requerido',
+    'genderRequired': 'El género es requerido',
+    'birthDateRequired': 'La fecha de nacimiento es requerida',
+    'phoneRequired': 'El teléfono móvil es requerido',
+    'statusRequired': 'El estado ACE es requerido',
+    'primaryInsuredRequired': 'El asegurado principal es requerido para dependientes',
+    'primaryInsuredNotFound': 'El asegurado principal seleccionado no existe',
+    'futureBirthDate': 'La fecha de nacimiento no puede ser en el futuro',
+    'minAgePrimary': 'El asegurado principal debe tener al menos 16 años',
+    'invalidPhone': 'Número de teléfono inválido (8-20 dígitos)',
+    'correctErrors': 'Por favor corrija los errores en el formulario'
+  },
+  
+  // Mensajes
+  'messages': {
+    'refreshSuccess': 'Lista de asegurados principales actualizada',
+    'updateSuccess': 'Beneficiario actualizado exitosamente',
+    'createSuccess': 'Beneficiario creado exitosamente',
+    'noPrimaryInsured': 'No hay asegurados principales disponibles. Cree un asegurado principal primero.'
+  },
+  
+  // Errores
+  'errors': {
+    'loadCountries': 'Error al cargar países',
+    'loadPrimaryInsured': 'Error al cargar asegurados principales',
+    'loadBeneficiaries': 'Error al cargar beneficiarios',
+    'connectionError': 'Error de conexión con el servidor',
+    'searchPrimaryInsured': 'Error al buscar asegurado principal',
+    'refreshError': 'Error al actualizar',
+    'saveError': 'Error al guardar',
+    'loadBeneficiary': 'Error al cargar beneficiario'
+  },
+  
+  // Acciones
+  'actions': {
+    'newBeneficiary': 'Nuevo Beneficiario',
+    'addBeneficiary': 'Agregar beneficiario',
+    'createBeneficiary': 'Crear beneficiario',
+    'createPrimaryInsured': 'Crear asegurado principal',
+    'refreshPrimaryInsured': 'Actualizar lista de asegurados principales',
+    'removePrimaryInsured': 'Quitar asegurado principal'
+  },
+  
+  // Búsqueda
+  'search': {
+    'placeholder': 'Buscar por nombre, apellido, teléfono, identificador...',
+    'ariaLabel': 'Buscar beneficiario'
+  },
+  
+  // Tabla
+  'table': {
+    'name': 'Nombre y Apellido',
+    'ageGender': 'Edad/Género',
+    'contact': 'Contacto',
+    'aceStatus': 'Estado ACE',
+    'years': 'años'
+  },
+  
+  // Estados vacíos
+  'empty': {
+    'title': 'No se encontró beneficiario',
+    'noResults': 'No hay resultados para su búsqueda',
+    'noBeneficiaries': 'Comience agregando un nuevo beneficiario'
+  },
+  
+  // Confirmación
+  'confirm': {
+    'delete': '¿Confirmar la eliminación de {{name}}?'
+  },
+  
+  // Características
+  'features': {
+    'deleteNotImplemented': 'Funcionalidad de eliminación por implementar'
+  }
+},
+      // ============ CONSULTAS ============
+      // Títulos y secciones
+      'consultations.title': 'GESTIÓN DE CONSULTAS',
+      'consultations.steps.patientIdentification': '1. IDENTIFICACIÓN DEL PACIENTE',
+      'consultations.steps.consultationSettings': '2. CONFIGURACIÓN DE LA CONSULTA',
+      'consultations.steps.medicalInfo': '3. INFORMACIÓN MÉDICA',
+      'consultations.steps.financialBreakdown': '4. DESGLOSE FINANCIERO Y VALIDACIÓN',
+      'consultations.steps.insuranceSheet': '5. HOJA DE COBERTURA',
+      'consultations.steps.patient': 'Paciente',
+      'consultations.steps.settings': 'Configuración',
+      'consultations.steps.medical': 'Médico',
+      'consultations.steps.validation': 'Validación',
+      'consultations.steps.print': 'Impresión',
+      
+      // Búsqueda de paciente
+      'consultations.search.nationalId': 'Identificación nacional',
+      'consultations.search.insuranceCard': 'Tarjeta de asegurado',
+      'consultations.search.name': 'Nombre',
+      'consultations.search.scanBarcode': 'Escanear código de barras',
+      'consultations.search.patientName': 'Nombre del paciente',
+      'consultations.search.searching': 'Buscando...',
+      'consultations.search.patientsFound': 'Pacientes encontrados:',
+      
+      // Escáner
+      'consultations.scanner.title': 'Escanear código de barras del paciente',
+      'consultations.scanner.instruction1': 'Coloque el código de barras en el marco',
+      'consultations.scanner.instruction2': 'La lectura es automática',
+      'consultations.scanner.instruction3': 'Iluminación adecuada recomendada',
+      'consultations.scanner.scanPrompt': 'Por favor escanee el código de barras de la tarjeta del paciente.',
+      'consultations.scanner.scan': 'el escaneo',
+      
+      // Etiquetas et placeholders
+      'consultations.labels.consultingDoctor': 'Médico consultante',
+      'consultations.labels.consultationType': 'Tipo de consulta',
+      'consultations.labels.freeConsultation': 'Consulta gratuita (monto en 0)',
+      'consultations.labels.primaryInsuredName': 'Nombre del asegurado principal',
+      'consultations.labels.bloodPressure': 'Tensión arterial (TA)',
+      'consultations.labels.weight': 'Peso (kg)',
+      'consultations.labels.height': 'Altura (cm)',
+      'consultations.labels.temperature': 'Temperatura (°C)',
+      'consultations.labels.pulse': 'Pulso (lpm)',
+      'consultations.labels.respiratoryRate': 'Frecuencia respiratoria',
+      'consultations.labels.glycemia': 'Glucemia (g/L)',
+      'consultations.labels.observations': 'Observaciones médicas',
+      'consultations.labels.complementaryExams': 'Exámenes complementarios prescritos',
+      'consultations.labels.treatment': 'Tratamiento prescrito',
+      'consultations.labels.recommendations': 'Recomendaciones y consejos',
+      'consultations.labels.tiersPayant': 'Tercero Pagador',
+      'consultations.labels.coveragePercentage': 'Porcentaje de cobertura',
+      'consultations.labels.doctor': 'Médico',
+      'consultations.labels.type': 'Tipo',
+      'consultations.labels.rate': 'Tarifa',
+      'consultations.labels.paymentType': 'Tipo de pago',
+      'consultations.labels.coverageRate': 'Tasa de cobertura',
+      'consultations.labels.coverage': 'de cobertura',
+      'consultations.labels.appointment': 'Cita',
+      'consultations.labels.totalAmount': 'Monto total',
+      'consultations.labels.paymentStatus': 'Estado de pago',
+      'consultations.labels.consultationNumber': 'N° de consulta',
+      'consultations.labels.primaryInsured': 'Asegurado Principal',
+      
+      'consultations.placeholders.nationalId': 'Ej: CM12345678',
+      'consultations.placeholders.cardNumber': 'Número de tarjeta',
+      'consultations.placeholders.name': 'Nombre o apellido',
+      'consultations.placeholders.selectDoctor': 'Seleccione un médico',
+      'consultations.placeholders.selectType': 'Seleccione un tipo',
+      'consultations.placeholders.primaryInsuredName': 'Ingrese nombre completo del asegurado principal',
+      'consultations.placeholders.bloodPressure': 'Ej: 120/80',
+      'consultations.placeholders.weight': 'Ej: 70',
+      'consultations.placeholders.height': 'Ej: 175',
+      'consultations.placeholders.temperature': 'Ej: 37.5',
+      'consultations.placeholders.pulse': 'Ej: 72',
+      'consultations.placeholders.respiratoryRate': 'Ej: 16',
+      'consultations.placeholders.glycemia': 'Ej: 1.0',
+      'consultations.placeholders.observations': 'Ingrese observaciones médicas (opcional)',
+      'consultations.placeholders.complementaryExams': 'Lista de exámenes complementarios (opcional)',
+      'consultations.placeholders.treatment': 'Medicamentos y posología (opcional)',
+      'consultations.placeholders.recommendations': 'Recomendaciones para el paciente (opcional)',
+      
+      // Secciones
+      'consultations.sections.primaryInsured': 'INFORMACIÓN DEL ASEGURADO PRINCIPAL',
+      'consultations.sections.vitalSigns': 'SIGNOS VITALES',
+      'consultations.sections.patientDetails': 'Detalles del paciente',
+      'consultations.sections.financialBreakdown': 'DESGLOSE FINANCIERO',
+      
+      // Paciente
+      'consultations.patient.id': 'ID',
+      'consultations.patient.age': 'Edad',
+      'consultations.patient.years': 'años',
+      'consultations.patient.gender': 'Sexo',
+      'consultations.patient.phone': 'Tel',
+      'consultations.patient.employer': 'Empleador',
+      'consultations.patient.aceStatus': 'Estado ACE',
+      'consultations.patient.patient': 'Paciente',
+      'consultations.patient.name': 'Nombre',
+      'consultations.patient.identifiant': 'Identificador',
+      'consultations.patient.entreprise': 'Empresa',
+      
+      // Pago
+      'consultations.payment.tiers': 'Tercero Pagador',
+      'consultations.payment.dependent': 'Dependiente',
+      'consultations.payment.toPay': 'A pagar',
+      'consultations.payment.free': 'Gratuito',
+      
+      // Finanzas
+      'consultations.financial.totalAmount': 'Monto total de consulta',
+      'consultations.financial.coverage': 'Cobertura',
+      'consultations.financial.freeConsultation': 'Consulta gratuita',
+      'consultations.financial.patientRemaining': 'CARGO RESTANTE DEL PACIENTE',
+      
+      // Resumen
+      'consultations.summary.title': 'Resumen',
+      
+      // Navegación
+      'consultations.navigation.continue': 'Continuar',
+      'consultations.navigation.toSettings': 'a configuración',
+      'consultations.navigation.continueToMedical': 'Continuar a información médica',
+      'consultations.navigation.continueToValidation': 'Continuar a validación',
+      'consultations.navigation.toMedicalInfo': 'a información médica',
+      
+      // Botones
+      'consultations.buttons.validateConsultation': 'VALIDAR CONSULTA',
+      'consultations.buttons.validating': 'Validando...',
+      'consultations.buttons.printSheet': 'IMPRIMIR HOJA (1 página)',
+      'consultations.buttons.newConsultation': 'NUEVA CONSULTA',
+      
+      // Descripciones
+      'consultations.descriptions.medicalInfo': 'Esta información será registrada e impresa en la hoja de cobertura.',
+      
+      // Sugerencias
+      'consultations.hints.maxLines': '(Limite a 2-3 líneas máximo)',
+      'consultations.hints.noDoctors': 'No hay médicos disponibles. Haga clic en ⟳ para actualizar.',
+      'consultations.hints.doctorsAvailable': '{{count}} médico(s) disponible(s)',
+      
+      // Valores por defecto
+      'consultations.default.motif': 'Consulta médica',
+      'consultations.default.diagnostic': 'Por determinar',
+      
+      // Confirmaciones
+      'consultations.confirmation.message': '⚠️ CONFIRMACIÓN FINAL\n\nEsta acción es irreversible. La consulta será registrada y facturable.\n\nPaciente: {{patientName}}\nMédico: {{doctorName}}\nTipo: {{consultationType}}\nMonto: {{amount}} FCFA\n{{appointment}}\nHaga clic en OK para confirmar.',
+      'consultations.confirmation.appointment': 'Cita: {{date}}',
+      
+      // Mensajes de éxito
+      'consultations.success.patientSelected': 'Paciente seleccionado: {{name}}',
+      'consultations.success.patientSelectedShort': 'Paciente seleccionado:',
+      'consultations.success.consultationSaved': '¡Consulta guardada exitosamente!',
+      
+      // Mensajes de error
+      'consultations.errors.loadingDoctors': 'Error al cargar médicos',
+      'consultations.errors.networkDoctors': 'Error de red al cargar médicos',
+      'consultations.errors.noConsultationTypes': 'No hay tipos de consulta disponibles',
+      'consultations.errors.loadingTypes': 'Error al cargar tipos de consulta',
+      'consultations.errors.noPatientSelected': 'Por favor seleccione un paciente',
+      'consultations.errors.noDoctorSelected': 'Por favor seleccione un médico',
+      'consultations.errors.noConsultationType': 'Por favor seleccione un tipo de consulta',
+      'consultations.errors.searchPatient': 'Error al buscar paciente',
+      'consultations.errors.saveConsultation': 'Error al guardar consulta',
+      'consultations.errors.saveError': 'Error al guardar: ',
+      'consultations.errors.popupBlocked': 'Por favor permita ventanas emergentes para imprimir',
+      
+      // Advertencias
+      'consultations.warnings.searchEmpty': 'Por favor ingrese un valor de búsqueda',
+      'consultations.warnings.noTiersForFree': 'La consulta gratuita no puede tener tercero pagador',
+      'consultations.warnings.freeConsultation': 'Consulta gratuita activada',
+      'consultations.warnings.warning': 'ADVERTENCIA',
+      'consultations.warnings.irreversible': 'La validación es IRREVERSIBLE. La consulta será registrada y facturable.',
+      
+      // Información
+      'consultations.info.noPatientsFound': 'No se encontraron pacientes',
+      'consultations.info.newConsultationReady': 'Nueva consulta lista',
+      
+      // Impresión
+      'consultations.print.title': 'HOJA DE COBERTURA',
+      'consultations.print.subtitle': 'CONSULTA MÉDICA',
+      'consultations.print.center': 'Centro de Salud Principal',
+      'consultations.print.phone': 'Tel',
+      'consultations.print.number': 'N°',
+      'consultations.print.patientInformation': 'INFORMACIÓN DEL PACIENTE',
+      'consultations.print.fullName': 'Nombre Completo',
+      'consultations.print.nationalId': 'Identificación nacional',
+      'consultations.print.company': 'Empresa/Empleador',
+      'consultations.print.aceStatus': 'Estado ACE',
+      'consultations.print.primaryInsured': 'Asegurado principal (para dependiente)',
+      'consultations.print.consultationInformation': 'INFORMACIÓN DE LA CONSULTA',
+      'consultations.print.dateTime': 'Fecha & Hora',
+      'consultations.print.speciality': 'Especialidad',
+      'consultations.print.consultationType': 'Tipo de consulta',
+      'consultations.print.reason': 'Motivo de consulta',
+      'consultations.print.diagnosis': 'Diagnóstico principal',
+      'consultations.print.financialBreakdown': 'DESGLOSE FINANCIERO',
+      'consultations.print.description': 'Descripción',
+      'consultations.print.amount': 'Monto (FCFA)',
+      'consultations.print.rate': 'Tasa',
+      'consultations.print.coverage': 'Cobertura',
+      'consultations.print.remaining': 'Cargo restante',
+      'consultations.print.medicalConsultation': 'Consulta médica',
+      'consultations.print.totalToPay': 'TOTAL A PAGAR POR EL PACIENTE',
+      'consultations.print.paymentStatus': 'Estado de pago',
+      'consultations.print.complementaryExams': 'EXÁMENES COMPLEMENTARIOS PRESCRITOS',
+      'consultations.print.prescribedTreatment': 'TRATAMIENTO PRESCRITO',
+      'consultations.print.takeAsPrescribed': 'Tomar según posología indicada',
+      'consultations.print.recommendations': 'RECOMENDACIONES Y CONSEJOS',
+      'consultations.print.nextAppointment': 'PRÓXIMA CITA',
+      'consultations.print.arriveEarly': 'Por favor preséntese 10 minutos antes de la hora de la cita',
+      'consultations.print.doctorSignature': 'Firma del médico',
+      'consultations.print.patientSignature': 'Firma del paciente',
+      'consultations.print.readAndApproved': 'Leído y aprobado',
+      'consultations.print.centerStamp': 'Sello del centro',
+      'consultations.print.consultationCode': 'Código de consulta',
+      'consultations.print.generationDate': 'Fecha de generación',
+      'consultations.print.confidential': 'Documento confidencial - No duplicar sin autorización',
+      'consultations.print.page': 'Página',
+      'consultations.print.consultation': 'Consulta',
+      'consultations.print.generatedOn': 'Generado el',
+      'consultations.print.logo': 'LOGO<br>CENTRO',
+      'consultations.print.sheetWillOpen': 'La hoja se abrirá en una nueva pestaña para impresión.',
+      'consultations.print.format': 'Formato: 1 página A4 | Verifique la configuración de ventanas emergentes de su navegador.',
+      'consultations.print.patientName': 'NOMBRE DEL PACIENTE',
+
+      // ============ PRESCRIPCIONES ============
+      // Títulos y encabezados
+      'prescriptions.title': 'Gestión de Prescripciones',
+      'prescriptions.subtitle': 'Cree, gestione y ejecute prescripciones médicas',
+      'prescriptions.list.title': 'Lista de Prescripciones',
+      'prescriptions.create.title': 'Nueva Prescripción',
+      'prescriptions.edit.title': 'Modificar Detalles',
+      'prescriptions.execute.title': 'Ejecutar Prescripción',
+      'prescriptions.management': 'GESTIÓN DE PRESCRIPCIONES',
+      
+      // Pestañas
+      'prescriptions.tabs.list': 'Lista de Prescripciones',
+      'prescriptions.tabs.create': 'Nueva Prescripción',
+      'prescriptions.tabs.execute': 'Ejecutar Prescripción',
+      'prescriptions.tabs.edit': 'Modificar Detalles',
+      
+      // Filtros
+      'prescriptions.filters.search': 'Buscar...',
+      'prescriptions.filters.status': 'Estado',
+      'prescriptions.filters.type': 'Tipo',
+      'prescriptions.filters.dateStart': 'Fecha inicio',
+      'prescriptions.filters.dateEnd': 'Fecha fin',
+      'prescriptions.filters.all': 'Todos',
+      
+      // Tabla
+      'prescriptions.table.number': 'Número',
+      'prescriptions.table.patient': 'Paciente',
+      'prescriptions.table.type': 'Tipo',
+      'prescriptions.table.date': 'Fecha',
+      'prescriptions.table.status': 'Estado',
+      'prescriptions.table.amount': 'Monto',
+      'prescriptions.table.details': 'Detalles',
+      'prescriptions.table.actions': 'Acciones',
+      'prescriptions.table.complete': 'Completos',
+      'prescriptions.table.incomplete': 'Por completar',
+      'prescriptions.table.id': 'ID',
+      'prescriptions.table.identifier': 'Identificador',
+      'prescriptions.table.company': 'Empresa',
+      'prescriptions.table.pagination': '{{total}} prescripciones en total',
+      
+      // Estados
+      'prescriptions.status.pending': 'Pendiente',
+      'prescriptions.status.inProgress': 'En curso',
+      'prescriptions.status.executed': 'Ejecutada',
+      'prescriptions.status.cancelled': 'Cancelada',
+      'prescriptions.status.partiallyExecuted': 'Parcialmente ejecutada',
+      'prescriptions.status.toExecute': 'Por ejecutar',
+      
+      // Tipos de prestaciones
+      'prescriptions.types.pharmacy': 'Farmacia',
+      'prescriptions.types.biology': 'Biología',
+      'prescriptions.types.imaging': 'Imagenología',
+      'prescriptions.types.consultation': 'Consulta',
+      'prescriptions.types.hospitalization': 'Hospitalización',
+      'prescriptions.types.medication': 'Medicamento',
+      'prescriptions.types.act': 'Acto',
+      
+      // Creación de prescripción
+      'prescriptions.create.patientSearch': 'Buscar paciente',
+      'prescriptions.create.patientSearchButton': 'Buscar',
+      'prescriptions.create.patientInfo': 'Información del Paciente',
+      'prescriptions.create.prescriptionType': 'Tipo de prestación',
+      'prescriptions.create.validityDate': 'Fecha de validez',
+      'prescriptions.create.observations': 'Observaciones',
+      'prescriptions.create.medicalInfo': 'Información Médica',
+      'prescriptions.create.fillDetails': '¿Rellenar detalles de la prescripción?',
+      'prescriptions.create.fillDetailsYes': 'Sí',
+      'prescriptions.create.fillDetailsNo': 'No',
+      'prescriptions.create.doctor': 'Médico prescriptor',
+      'prescriptions.create.center': 'Centro de salud',
+      'prescriptions.create.prescriptionItems': 'Elementos de la prescripción',
+      'prescriptions.create.addItem': 'Buscar un elemento',
+      'prescriptions.create.itemType': 'Tipo',
+      'prescriptions.create.itemLabel': 'Etiqueta',
+      'prescriptions.create.itemQuantity': 'Cantidad',
+      'prescriptions.create.itemDosage': 'Posología',
+      'prescriptions.create.itemDuration': 'Duración (días)',
+      'prescriptions.create.itemUnitPrice': 'Precio unitario (FCFA)',
+      'prescriptions.create.itemAmount': 'Monto (FCFA)',
+      'prescriptions.create.total': 'Total de la prescripción',
+      'prescriptions.create.cancel': 'Cancelar',
+      'prescriptions.create.submit': 'Terminar e Imprimir',
+      'prescriptions.create.update': 'Actualizar detalles',
+      'prescriptions.create.selectDoctor': 'Seleccionar un médico...',
+      'prescriptions.create.noCenter': 'Ningún centro seleccionado',
+      
+      // Ejecución de prescripción
+      'prescriptions.execute.search': 'Búsqueda de prescripción a ejecutar',
+      'prescriptions.execute.searchPlaceholder': 'Número de prescripción',
+      'prescriptions.execute.searchButton': 'Buscar',
+      'prescriptions.execute.prescriptionNumber': 'Prescripción #',
+      'prescriptions.execute.patient': 'Paciente',
+      'prescriptions.execute.type': 'Tipo',
+      'prescriptions.execute.status': 'Estado',
+      'prescriptions.execute.itemsToExecute': 'Elementos a ejecutar',
+      'prescriptions.execute.executeColumn': 'Ejecutar',
+      'prescriptions.execute.itemLabel': 'Etiqueta',
+      'prescriptions.execute.prescribedQuantity': 'Cantidad prescrita',
+      'prescriptions.execute.executedQuantity': 'Cantidad ejecutada',
+      'prescriptions.execute.remainingQuantity': 'Cantidad restante',
+      'prescriptions.execute.unitPrice': 'Precio unitario',
+      'prescriptions.execute.amount': 'Monto',
+      'prescriptions.execute.totalToExecute': 'Total a ejecutar',
+      'prescriptions.execute.cancel': 'Cancelar',
+      'prescriptions.execute.validate': 'Validar ejecución',
+      'prescriptions.execute.noItems': 'No hay detalles disponibles para esta prescripción o todos los elementos ya están ejecutados.',
+      'prescriptions.execute.dosage': 'Posología',
+      'prescriptions.execute.executeAll': 'Ejecutar todo',
+      
+      // Modales
+      'prescriptions.modal.scanner.title': 'Escanear un Código QR',
+      'prescriptions.modal.scanner.instructions': 'Coloque el Código QR en el marco anterior',
+      'prescriptions.modal.scanner.start': 'Iniciar escaneo',
+      'prescriptions.modal.scanner.stop': 'Detener escaneo',
+      'prescriptions.modal.scanner.test': 'Escaneo de prueba',
+      'prescriptions.modal.scanner.close': 'Cerrar',
+      'prescriptions.modal.scanner.pointCamera': 'Apunte la cámara al Código QR',
+      'prescriptions.modal.scanner.autoDetection': 'La detección es automática',
+      'prescriptions.modal.scanner.scanSuccess': 'Código QR escaneado exitosamente',
+      'prescriptions.modal.scanner.cameraError': 'No se puede acceder a la cámara',
+      'prescriptions.modal.scanner.permissionDenied': 'Permiso de cámara denegado',
+      'prescriptions.modal.scanner.noCamera': 'No se encontró cámara',
+      'prescriptions.modal.scanner.cameraBusy': 'Cámara ya en uso por otra aplicación',
+      
+      'prescriptions.modal.patientSearch.title': 'Buscar un paciente',
+      'prescriptions.modal.patientSearch.searchLabel': 'Nombre, apellido, identificador o teléfono',
+      'prescriptions.modal.patientSearch.searchButton': 'Buscar',
+      'prescriptions.modal.patientSearch.name': 'Nombre',
+      'prescriptions.modal.patientSearch.firstName': 'Apellido',
+      'prescriptions.modal.patientSearch.gender': 'Género',
+      'prescriptions.modal.patientSearch.age': 'Edad',
+      'prescriptions.modal.patientSearch.identifier': 'Identificador',
+      'prescriptions.modal.patientSearch.select': 'Seleccionar',
+      'prescriptions.modal.patientSearch.close': 'Cerrar',
+      'prescriptions.modal.patientSearch.man': 'Hombre',
+      'prescriptions.modal.patientSearch.woman': 'Mujer',
+      'prescriptions.modal.patientSearch.years': 'años',
+      
+      'prescriptions.modal.itemSearch.title': 'Buscar un medicamento o acto',
+      'prescriptions.modal.itemSearch.searchLabel': 'Nombre del medicamento o etiqueta del acto',
+      'prescriptions.modal.itemSearch.searchButton': 'Buscar',
+      'prescriptions.modal.itemSearch.type': 'Tipo',
+      'prescriptions.modal.itemSearch.label': 'Etiqueta',
+      'prescriptions.modal.itemSearch.form': 'Forma/Detalles',
+      'prescriptions.modal.itemSearch.price': 'Precio (FCFA)',
+      'prescriptions.modal.itemSearch.reimbursable': 'Reembolsable',
+      'prescriptions.modal.itemSearch.add': 'Agregar',
+      'prescriptions.modal.itemSearch.close': 'Cerrar',
+      'prescriptions.modal.itemSearch.dosage': 'Dosificación',
+      'prescriptions.modal.itemSearch.completeLabel': 'Etiqueta completa',
+      
+      'prescriptions.modal.confirmation.title': 'Confirmación requerida',
+      'prescriptions.modal.confirmation.message': '¡Esta acción es irreversible!',
+      'prescriptions.modal.confirmation.details': '¿Está seguro de que desea {{action}} esta prescripción?',
+      'prescriptions.modal.confirmation.cancel': 'Cancelar',
+      'prescriptions.modal.confirmation.confirm': '{{action}} prescripción',
+      'prescriptions.modal.confirmation.warning': 'Una vez creada, la prescripción solo podrá modificarse mediante la opción "Modificar Detalles".',
+      'prescriptions.modal.confirmation.checklist': '• Verifique la información del paciente<br/>• Verifique el tipo de prestación<br/>• Verifique los elementos de la prescripción',
+      
+      // Hoja de prescripción
+      'prescriptions.sheet.title': 'Prescripción Médica',
+      'prescriptions.sheet.subtitle': 'Documento oficial de atención médica',
+      'prescriptions.sheet.patientInfo': 'INFORMACIÓN DEL PACIENTE',
+      'prescriptions.sheet.patientName': 'Nombre y Apellido',
+      'prescriptions.sheet.patientGender': 'Género',
+      'prescriptions.sheet.patientAge': 'Edad',
+      'prescriptions.sheet.prescriptionDate': 'Fecha de prescripción',
+      'prescriptions.sheet.patientId': 'Identificador',
+      'prescriptions.sheet.validityDate': 'Fecha de validez',
+      'prescriptions.sheet.medicalInfo': 'INFORMACIÓN MÉDICA',
+      'prescriptions.sheet.center': 'Centro de salud',
+      'prescriptions.sheet.prescriptionType': 'Tipo de prestación',
+      'prescriptions.sheet.doctor': 'Médico prescriptor',
+      'prescriptions.sheet.status': 'Estado',
+      'prescriptions.sheet.diagnosis': 'DIAGNÓSTICO / AFECCIÓN',
+      'prescriptions.sheet.prescriptionDetails': 'DETALLES DE LA PRESCRIPCIÓN',
+      'prescriptions.sheet.itemNumber': 'No.',
+      'prescriptions.sheet.itemDescription': 'DESCRIPCIÓN',
+      'prescriptions.sheet.itemQuantity': 'CANTIDAD',
+      'prescriptions.sheet.itemDosage': 'POSOLOGÍA',
+      'prescriptions.sheet.itemUnitPrice': 'PRECIO UNIT.',
+      'prescriptions.sheet.itemAmount': 'MONTO',
+      'prescriptions.sheet.total': 'TOTAL DE LA PRESCRIPCIÓN',
+      'prescriptions.sheet.reimbursement': 'Modo de reembolso',
+      'prescriptions.sheet.validityPeriod': 'Período de validez',
+      'prescriptions.sheet.additionalObservations': 'OBSERVACIONES ADICIONALES',
+      'prescriptions.sheet.doctorSignature': 'El Médico Prescriptor',
+      'prescriptions.sheet.executorSignature': 'El Farmacéutico / Ejecutor',
+      'prescriptions.sheet.legalNotice': 'AVISO LEGAL',
+      'prescriptions.sheet.print': 'Imprimir prescripción',
+      'prescriptions.sheet.close': 'Cerrar',
+      'prescriptions.sheet.generatedOn': 'Documento generado el',
+      'prescriptions.sheet.centerMedical': 'CENTRO MÉDICO',
+      'prescriptions.sheet.healthWellbeing': 'Salud & Bienestar',
+      'prescriptions.sheet.phone': 'Tel',
+      'prescriptions.sheet.fax': 'Fax',
+      'prescriptions.sheet.address': 'Dirección',
+      'prescriptions.sheet.city': 'Ciudad',
+      'prescriptions.sheet.openingHours': 'Horario de atención',
+      'prescriptions.sheet.qrNote': 'Escanee para verificar',
+      'prescriptions.sheet.socialSecurity': 'Seguridad Social',
+      'prescriptions.sheet.mutual': 'Mutual',
+      'prescriptions.sheet.validityMonths': '3 meses a partir de la fecha de emisión',
+      'prescriptions.sheet.providerCalculate': 'Total a calcular por el proveedor',
+      'prescriptions.sheet.executionDate': 'Fecha de ejecución',
+      'prescriptions.sheet.stampSignature': 'Sello y firma',
+      'prescriptions.sheet.documentConfidential': 'Este documento tiene valor legal. Conserve para sus archivos.',
+      'prescriptions.sheet.qrContains': 'Código QR que contiene: N° prescripción, paciente, fecha, centro y estado',
+      
+      // Mensajes de alerta y éxito
+      'prescriptions.alerts.prescriptionCreated': 'Prescripción creada exitosamente',
+      'prescriptions.alerts.prescriptionUpdated': 'Detalles de la prescripción actualizados exitosamente',
+      'prescriptions.alerts.prescriptionExecuted': 'Prescripción ejecutada exitosamente',
+      'prescriptions.alerts.errorCreating': 'Error al crear la prescripción',
+      'prescriptions.alerts.errorUpdating': 'Error al actualizar detalles',
+      'prescriptions.alerts.errorExecuting': 'Error al ejecutar la prescripción',
+      'prescriptions.alerts.noPatientSelected': 'Por favor seleccione un paciente válido',
+      'prescriptions.alerts.noPrescriptionType': 'Por favor seleccione el tipo de prestación',
+      'prescriptions.alerts.noItems': 'Por favor agregue al menos un elemento a la prescripción',
+      'prescriptions.alerts.noDoctorSelected': 'Por favor seleccione un médico prescriptor',
+      'prescriptions.alerts.noCenterSelected': 'Por favor seleccione un centro de salud',
+      'prescriptions.alerts.noPrescriptionNumber': 'Por favor ingrese un número de prescripción',
+      'prescriptions.alerts.prescriptionNotFound': 'Prescripción no encontrada',
+      'prescriptions.alerts.noItemsToExecute': 'Por favor seleccione al menos un elemento a ejecutar',
+      'prescriptions.alerts.invalidQuantities': 'Cantidades inválidas para',
+      'prescriptions.alerts.networkError': 'Error de red. Verifique su conexión.',
+      'prescriptions.alerts.serverError': 'Error del servidor. Por favor intente nuevamente más tarde.',
+      'prescriptions.alerts.sessionExpired': 'Sesión expirada. Por favor inicie sesión nuevamente.',
+      'prescriptions.alerts.serviceNotFound': 'Servicio no encontrado. Contacte al equipo técnico.',
+      'prescriptions.alerts.invalidElements': 'Error de validación de elementos',
+      'prescriptions.alerts.noDoctors': 'No hay médicos disponibles. Verifique la base de datos.',
+      'prescriptions.alerts.noDetails': 'Prescripción encontrada pero sin detalles disponibles',
+      'prescriptions.alerts.popupBlocked': 'Por favor permita ventanas emergentes para imprimir',
+      'prescriptions.alerts.elementInvalid': 'Este elemento no tiene un código válido. Por favor seleccione otro de la base de datos.',
+      
+      // Botones
+      'prescriptions.buttons.previous': 'Anterior',
+      'prescriptions.buttons.next': 'Siguiente',
+      'prescriptions.buttons.refresh': 'Actualizar',
+      'prescriptions.buttons.viewSheet': 'Ver hoja de atención',
+      'prescriptions.buttons.addDetails': 'Agregar/modificar detalles',
+      'prescriptions.buttons.changePatient': 'Cambiar paciente',
+      'prescriptions.buttons.searchPatient': 'Buscar un paciente',
+      'prescriptions.buttons.searchItem': 'Buscar un elemento',
+      'prescriptions.buttons.scanQR': 'Escanear un Código QR',
+      'prescriptions.buttons.testScan': 'Escaneo de prueba',
+      'prescriptions.buttons.restartScan': 'Reiniciar escaneo',
+      'prescriptions.buttons.printPrescription': 'Imprimir prescripción',
+      'prescriptions.buttons.printing': 'Imprimiendo...',
+      'prescriptions.buttons.generatingQR': 'Generando Código QR...',
+      
+      // Placeholders
+      'prescriptions.placeholders.searchPatient': 'Ej: Dupont, Jean, 0123456789',
+      'prescriptions.placeholders.searchItem': 'Ej: Paracetamol, Análisis sanguíneo',
+      'prescriptions.placeholders.prescriptionNumber': 'PRES-2024-00001 o PRES202400001',
+      'prescriptions.placeholders.format': 'Formato: PRES-YYYY-NNNNN o PRESYYYYNNNNN',
+      'prescriptions.placeholders.dosage': 'Ej: 1 comprimido mañana y noche',
+      'prescriptions.placeholders.observations': 'Observaciones médicas...',
+      
+      // Información
+      'prescriptions.info.noPatients': 'No se encontraron pacientes',
+      'prescriptions.info.noItems': 'No se encontraron elementos',
+      'prescriptions.info.noPrescriptions': 'No se encontraron prescripciones',
+      'prescriptions.info.loadingDoctors': 'Cargando médicos...',
+      'prescriptions.info.loadingCenters': 'Cargando centros...',
+      'prescriptions.info.noItemsAdded': 'No hay elementos agregados. Haga clic en "Buscar un elemento" para comenzar.',
+      'prescriptions.info.prescriptionWithoutDetails': 'La prescripción será creada sin detalles. Podrá agregarlos posteriormente.',
+      'prescriptions.info.scanInstructions': 'Coloque el Código QR en el marco',
+      'prescriptions.info.scanAutomatic': 'La lectura es automática',
+      'prescriptions.info.scanLighting': 'Iluminación adecuada recomendada',
+      'prescriptions.info.scanQRPatient': 'Por favor escanee el Código QR de la prescripción.',
+      'prescriptions.info.dataCopied': 'Los datos han sido copiados automáticamente al campo de búsqueda.',
+      'prescriptions.info.qrContainsData': 'Código QR que contiene información esencial de la prescripción',
+      
+      // Tipos de elementos
+      'prescriptions.elements.medication': 'Medicamento',
+      'prescriptions.elements.medicalAct': 'Acto médico',
+      'prescriptions.elements.laboratory': 'Examen de laboratorio',
+      'prescriptions.elements.imaging': 'Imagenología',
+      'prescriptions.elements.treatment': 'Tratamiento',
+      
+      // Unidades
+      'prescriptions.units.box': 'caja',
+      'prescriptions.units.unit': 'unidad',
+      'prescriptions.units.tablet': 'comprimido',
+      'prescriptions.units.ampoule': 'ampolla',
+      'prescriptions.units.bottle': 'frasco',
+      'prescriptions.units.tube': 'tubo',
+      'prescriptions.units.sachet': 'sobre',
+      'prescriptions.units.ml': 'ml',
+      'prescriptions.units.mg': 'mg',
+      
+      // Reembolso
+      'prescriptions.reimbursement.yes': 'Sí',
+      'prescriptions.reimbursement.no': 'No',
+      'prescriptions.reimbursement.rate': 'Tasa de cobertura',
+      'prescriptions.reimbursement.coverage': 'Cobertura',
+      
+      // Formato de fecha
+      'prescriptions.dateFormat': 'dd/MM/yyyy',
+      'prescriptions.timeFormat': 'HH:mm',
+      'prescriptions.dateTimeFormat': 'dd/MM/yyyy HH:mm',
+      
+      // Escaneo
+      'prescriptions.scan.fps': 'FPS',
+      'prescriptions.scan.detected': 'Código QR detectado',
+      'prescriptions.scan.initiating': 'Inicializando cámara...',
+      'prescriptions.scan.percent': '%',
+      'prescriptions.scan.ready': 'Listo para escanear',
+      
+      // Validación
+      'prescriptions.validation.required': 'Este campo es requerido',
+      'prescriptions.validation.invalidQuantity': 'Cantidad inválida',
+      'prescriptions.validation.invalidPrice': 'Precio inválido',
+      'prescriptions.validation.minQuantity': 'Cantidad mínima: 0.1',
+      'prescriptions.validation.maxQuantity': 'Cantidad máxima excedida',
+      'prescriptions.validation.elementCode': 'Código de elemento faltante o inválido',
+      'prescriptions.validation.elementString': 'El código de elemento debe ser una cadena de caracteres',
+      
+      // Tooltips
+      'prescriptions.tooltips.scanQR': 'Escanear un Código QR',
+      'prescriptions.tooltips.addDetails': 'Agregar/modificar detalles',
+      'prescriptions.tooltips.execute': 'Ejecutar',
+      'prescriptions.tooltips.view': 'Ver',
+      'prescriptions.tooltips.edit': 'Editar',
+      'prescriptions.tooltips.delete': 'Eliminar',
+      'prescriptions.tooltips.refresh': 'Actualizar',
+      'prescriptions.tooltips.filter': 'Filtrar',
+      'prescriptions.tooltips.print': 'Imprimir',
+      'prescriptions.tooltips.download': 'Descargar',
+      'prescriptions.tooltips.upload': 'Subir',
     }
   }
 };

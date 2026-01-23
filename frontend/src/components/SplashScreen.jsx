@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './SplashScreen.css';
+import HealthCenterSoft from '../assets/HealthCenterSoft.png';
 
-// Icônes médicales (vous pouvez utiliser react-icons ou créer vos propres SVG)
+// Icônes médicales
 const MedicalIcons = {
   Stethoscope: () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -46,17 +47,14 @@ const MedicalIcons = {
       <line x1="3" y1="10" x2="21" y2="10" />
     </svg>
   ),
-  CreditCard: () => (
+  Pill: () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-      <line x1="1" y1="10" x2="23" y2="10" />
-    </svg>
-  ),
-  Database: () => (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <ellipse cx="12" cy="5" rx="9" ry="3" />
-      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+      <path d="M10.5 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v6.5" />
+      <path d="M8 2v4" />
+      <path d="M16 2v4" />
+      <path d="M8 10h8" />
+      <circle cx="18" cy="18" r="3" />
+      <path d="m21 15-3 3" />
     </svg>
   )
 };
@@ -65,49 +63,53 @@ const SplashScreen = ({ onFinish }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [particles, setParticles] = useState([]);
   const [medicalSymbols, setMedicalSymbols] = useState([]);
+  const [logoError, setLogoError] = useState(false); // État pour gérer les erreurs du logo
 
-  // Couleurs professionnelles pour l'application médicale
+  // Couleurs professionnelles pour SaniCare Centre
   const colors = {
-    primary: "#0a6cbd", // Bleu médical
-    secondary: "#10b981", // Vert
-    accent: "#8b5cf6", // Violet
-    success: "#059669", // Vert foncé
-    warning: "#f59e0b", // Orange
-    danger: "#dc2626" // Rouge
+    primary: "#0d6efd", // Bleu médical
+    secondary: "#20c997", // Vert turquoise
+    accent: "#6f42c1", // Violet
+    success: "#198754", // Vert foncé
+    warning: "#fd7e14", // Orange
+    lightBlue: "#0dcaf0" // Bleu clair
   };
+
+  // Durée totale fixée à 5 secondes (5000ms)
+  const TOTAL_DURATION = 5000;
+  const STEP_COUNT = 4; // Réduit à 4 étapes pour 5 secondes
 
   // Générer des particules flottantes
   useEffect(() => {
     const generateParticles = () => {
       const newParticles = [];
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 20; i++) {
         newParticles.push({
           id: i,
           x: Math.random() * 100,
           y: Math.random() * 100,
-          size: Math.random() * 5 + 2,
-          duration: Math.random() * 5 + 3,
-          delay: Math.random() * 3,
-          color: i % 3 === 0 ? colors.primary : i % 3 === 1 ? colors.secondary : colors.accent
+          size: Math.random() * 4 + 1,
+          duration: Math.random() * 4 + 2,
+          delay: Math.random() * 2,
+          color: i % 3 === 0 ? colors.primary : i % 3 === 1 ? colors.secondary : colors.lightBlue
         });
       }
       setParticles(newParticles);
     };
 
-    // Générer des symboles médicaux flottants
     const generateMedicalSymbols = () => {
-      const symbols = ['Stethoscope', 'Heartbeat', 'Shield', 'Users', 'FileText', 'Calendar', 'CreditCard'];
+      const symbols = ['Stethoscope', 'Heartbeat', 'Shield', 'Pill', 'Calendar'];
       const newSymbols = [];
-      for (let i = 0; i < 12; i++) {
+      for (let i = 0; i < 8; i++) {
         const symbol = symbols[Math.floor(Math.random() * symbols.length)];
         newSymbols.push({
           id: i,
           x: Math.random() * 100,
           y: Math.random() * 100,
-          size: Math.random() * 24 + 16,
-          duration: Math.random() * 8 + 5,
-          delay: Math.random() * 4,
-          opacity: Math.random() * 0.3 + 0.1,
+          size: Math.random() * 20 + 12,
+          duration: Math.random() * 6 + 4,
+          delay: Math.random() * 3,
+          opacity: Math.random() * 0.2 + 0.1,
           symbol: symbol
         });
       }
@@ -118,50 +120,36 @@ const SplashScreen = ({ onFinish }) => {
     generateMedicalSymbols();
   }, []);
 
-  // Étapes d'initialisation adaptées à AMS Santé
+  // Étapes d'initialisation adaptées pour 5 secondes
   useEffect(() => {
     const steps = [
       { 
-        duration: 1500, 
-        icon: MedicalIcons.Database, 
-        text: "Initialisation de la base patients", 
-        color: colors.primary,
-        description: "Chargement des dossiers médicaux sécurisés"
-      },
-      { 
-        duration: 1600, 
-        icon: MedicalIcons.Calendar, 
-        text: "Module de consultations", 
-        color: colors.secondary,
-        description: "Configuration des agendas médicaux"
-      },
-      { 
-        duration: 1400, 
-        icon: MedicalIcons.FileText, 
-        text: "Prescriptions électroniques", 
-        color: colors.accent,
-        description: "Chargement des modèles de prescriptions"
-      },
-      { 
-        duration: 1700, 
+        duration: 800, 
         icon: MedicalIcons.Shield, 
         text: "Sécurité des données", 
-        color: colors.success,
-        description: "Cryptage conforme RGPD et HIPAA"
+        color: colors.primary,
+        description: "Cryptage conforme RGPD"
       },
       { 
-        duration: 1300, 
-        icon: MedicalIcons.CreditCard, 
-        text: "Facturation électronique", 
-        color: colors.warning,
-        description: "Connexion aux partenaires payeurs"
+        duration: 800, 
+        icon: MedicalIcons.Calendar, 
+        text: "Gestion des rendez-vous", 
+        color: colors.secondary,
+        description: "Optimisation des agendas"
       },
       { 
-        duration: 1200, 
+        duration: 800, 
+        icon: MedicalIcons.FileText, 
+        text: "Dossiers patients", 
+        color: colors.accent,
+        description: "Chargement des historiques"
+      },
+      { 
+        duration: 800, 
         icon: MedicalIcons.Users, 
-        text: "Profils utilisateurs", 
-        color: colors.danger,
-        description: "Chargement des droits d'accès"
+        text: "Profils personnalisés", 
+        color: colors.success,
+        description: "Configuration des accès"
       }
     ];
 
@@ -176,12 +164,9 @@ const SplashScreen = ({ onFinish }) => {
         currentIndex++;
       } else {
         const elapsedTime = Date.now() - startTime;
-        const minDisplayTime = 6500; // Minimum 6.5 secondes d'affichage
-        const remainingTime = Math.max(0, minDisplayTime - elapsedTime);
+        const remainingTime = Math.max(0, TOTAL_DURATION - elapsedTime);
         
-        setTimeout(() => {
-          setTimeout(onFinish, 800);
-        }, remainingTime);
+        setTimeout(onFinish, remainingTime);
       }
     };
 
@@ -189,12 +174,10 @@ const SplashScreen = ({ onFinish }) => {
   }, [onFinish]);
 
   const steps = [
-    { icon: MedicalIcons.Database, text: "Initialisation de la base patients", color: colors.primary, description: "Chargement des dossiers médicaux sécurisés" },
-    { icon: MedicalIcons.Calendar, text: "Module de consultations", color: colors.secondary, description: "Configuration des agendas médicaux" },
-    { icon: MedicalIcons.FileText, text: "Prescriptions électroniques", color: colors.accent, description: "Chargement des modèles de prescriptions" },
-    { icon: MedicalIcons.Shield, text: "Sécurité des données", color: colors.success, description: "Cryptage conforme RGPD et HIPAA" },
-    { icon: MedicalIcons.CreditCard, text: "Facturation électronique", color: colors.warning, description: "Connexion aux partenaires payeurs" },
-    { icon: MedicalIcons.Users, text: "Profils utilisateurs", color: colors.danger, description: "Chargement des droits d'accès" }
+    { icon: MedicalIcons.Shield, text: "Sécurité des données", color: colors.primary, description: "Cryptage conforme RGPD" },
+    { icon: MedicalIcons.Calendar, text: "Gestion des rendez-vous", color: colors.secondary, description: "Optimisation des agendas" },
+    { icon: MedicalIcons.FileText, text: "Dossiers patients", color: colors.accent, description: "Chargement des historiques" },
+    { icon: MedicalIcons.Users, text: "Profils personnalisés", color: colors.success, description: "Configuration des accès" }
   ];
 
   const IconComponent = steps[currentStep]?.icon;
@@ -206,6 +189,7 @@ const SplashScreen = ({ onFinish }) => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      transition={{ duration: 0.5 }}
     >
       {/* Particules médicales en arrière-plan */}
       <div className="medical-background">
@@ -222,9 +206,9 @@ const SplashScreen = ({ onFinish }) => {
               borderRadius: '50%'
             }}
             animate={{
-              y: [0, -40, 0],
-              x: [0, Math.random() * 20 - 10, 0],
-              opacity: [0.2, 0.6, 0.2]
+              y: [0, -30, 0],
+              x: [0, Math.random() * 15 - 7.5, 0],
+              opacity: [0.1, 0.5, 0.1]
             }}
             transition={{
               duration: particle.duration,
@@ -252,8 +236,8 @@ const SplashScreen = ({ onFinish }) => {
                 position: 'absolute'
               }}
               animate={{
-                y: [0, -30, 0],
-                rotate: [0, 5, -5, 0]
+                y: [0, -20, 0],
+                rotate: [0, 3, -3, 0]
               }}
               transition={{
                 duration: symbol.duration,
@@ -270,81 +254,99 @@ const SplashScreen = ({ onFinish }) => {
 
       {/* Contenu principal */}
       <div className="splash-content">
-        {/* Logo AMS Santé avec animation */}
+        {/* Logo SaniCare Centre */}
         <motion.div
           className="logo-container"
-          initial={{ scale: 0, rotate: -180 }}
+          initial={{ scale: 0.5, opacity: 0 }}
           animate={{ 
             scale: 1, 
-            rotate: 0,
-            boxShadow: [
-              `0 0 20px ${currentColor}40`,
-              `0 0 40px ${currentColor}60`,
-              `0 0 20px ${currentColor}40`
+            opacity: 1,
+            filter: [
+              'drop-shadow(0 0 10px rgba(13, 110, 253, 0.3))',
+              'drop-shadow(0 0 20px rgba(13, 110, 253, 0.5))',
+              'drop-shadow(0 0 10px rgba(13, 110, 253, 0.3))'
             ]
           }}
           transition={{ 
             type: "spring", 
-            damping: 15, 
+            damping: 12, 
             stiffness: 100,
-            boxShadow: {
+            filter: {
               duration: 2,
               repeat: Infinity,
               ease: "easeInOut"
             }
           }}
         >
-          <div className="logo-circle">
-            <motion.div
-              className="logo-pulse"
-              animate={{
-                scale: [1, 1.3, 1],
-                opacity: [0.3, 0.6, 0.3]
-              }}
-              transition={{
-                duration: 2.5,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
+          <motion.div
+            className="logo-pulse"
+            animate={{
+              scale: [1, 1.2, 1],
+              opacity: [0.2, 0.4, 0.2]
+            }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          />
+          
+          <motion.div
+            className="logo-inner"
+            animate={{
+              rotate: [0, 5, -5, 0]
+            }}
+            transition={{
+              duration: 10,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          >
+            <img 
+              src={HealthCenterSoft} 
+              alt="SaniCare Centre Logo"
+              className="company-logo"
+              onError={() => setLogoError(true)}
             />
-            <div className="logo-inner">
-              <MedicalIcons.Stethoscope />
-            </div>
-            <motion.div 
-              className="logo-ring"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-            />
-          </div>
+          </motion.div>
+          
+          <motion.div 
+            className="logo-ring"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+          />
         </motion.div>
 
         {/* Titre de l'application */}
         <motion.div
           className="title-container"
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.2 }}
         >
           <motion.h1
             className="app-title"
+            style={{
+              background: `linear-gradient(90deg, ${colors.primary}, ${colors.secondary}, ${colors.primary})`,
+              backgroundSize: '200% auto'
+            }}
             animate={{ 
-              backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
-              backgroundSize: ['200% 200%', '200% 200%', '200% 200%']
+              backgroundPosition: ['0% 50%', '100% 50%', '0% 50%']
             }}
             transition={{ 
               backgroundPosition: {
-                duration: 6,
+                duration: 5,
                 repeat: Infinity,
                 ease: "easeInOut"
               }
             }}
           >
-            AMS Santé
+            SaniCare Centre
           </motion.h1>
           <motion.p
             className="app-subtitle"
             animate={{ 
-              opacity: [0.7, 1, 0.7]
+              opacity: [0.8, 1, 0.8]
             }}
             transition={{
               duration: 2,
@@ -352,16 +354,16 @@ const SplashScreen = ({ onFinish }) => {
               ease: "easeInOut"
             }}
           >
-            Digitalisation du parcours de soin • Centre pluridisciplinaire
+            Excellence Médicale • Soins Personnalisés
           </motion.p>
         </motion.div>
 
-        {/* Barre de progression linéaire */}
+        {/* Barre de progression linéaire optimisée pour 5 secondes */}
         <motion.div 
           className="linear-progress-container"
           initial={{ opacity: 0, width: 0 }}
-          animate={{ opacity: 1, width: "80%" }}
-          transition={{ delay: 0.5 }}
+          animate={{ opacity: 1, width: "70%" }}
+          transition={{ delay: 0.4 }}
         >
           <div className="progress-track">
             <motion.div 
@@ -369,23 +371,23 @@ const SplashScreen = ({ onFinish }) => {
               style={{ backgroundColor: currentColor }}
               initial={{ width: "0%" }}
               animate={{ width: "100%" }}
-              transition={{ duration: 8, ease: "linear" }}
+              transition={{ duration: TOTAL_DURATION / 1000, ease: "linear" }}
             />
           </div>
           <div className="progress-text">
-            <span>Chargement du système...</span>
+            <span>Initialisation du système...</span>
             <motion.span
               className="progress-percent"
               animate={{ 
-                scale: [1, 1.1, 1]
+                scale: [1, 1.05, 1]
               }}
               transition={{
-                duration: 1.5,
+                duration: 1,
                 repeat: Infinity,
                 ease: "easeInOut"
               }}
             >
-              {Math.min(Math.floor((currentStep + 1) / steps.length * 100), 99)}%
+              {Math.min(Math.floor(((currentStep + 1) / STEP_COUNT) * 100), 99)}%
             </motion.span>
           </div>
         </motion.div>
@@ -395,21 +397,21 @@ const SplashScreen = ({ onFinish }) => {
           <motion.div
             key={currentStep}
             className="step-content"
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            initial={{ opacity: 0, y: 8, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            transition={{ duration: 0.5 }}
+            exit={{ opacity: 0, y: -8, scale: 0.97 }}
+            transition={{ duration: 0.3 }}
           >
             {IconComponent && (
               <motion.div
                 className="step-icon-container"
                 animate={{ 
                   color: currentColor,
-                  scale: [1, 1.15, 1]
+                  scale: [1, 1.1, 1]
                 }}
                 transition={{ 
                   scale: {
-                    duration: 2,
+                    duration: 1.5,
                     repeat: Infinity,
                     ease: "easeInOut"
                   }
@@ -420,11 +422,11 @@ const SplashScreen = ({ onFinish }) => {
                   className="icon-glow"
                   style={{ backgroundColor: currentColor }}
                   animate={{
-                    opacity: [0.2, 0.5, 0.2],
-                    scale: [1, 1.4, 1]
+                    opacity: [0.1, 0.3, 0.1],
+                    scale: [1, 1.3, 1]
                   }}
                   transition={{
-                    duration: 2,
+                    duration: 1.5,
                     repeat: Infinity,
                     ease: "easeInOut"
                   }}
@@ -440,8 +442,8 @@ const SplashScreen = ({ onFinish }) => {
             <motion.p 
               className="step-description"
               initial={{ opacity: 0 }}
-              animate={{ opacity: 0.8 }}
-              transition={{ delay: 0.2 }}
+              animate={{ opacity: 0.7 }}
+              transition={{ delay: 0.1 }}
             >
               {steps[currentStep]?.description}
             </motion.p>
@@ -458,11 +460,11 @@ const SplashScreen = ({ onFinish }) => {
                 backgroundColor: index <= currentStep ? currentColor : 'rgba(255,255,255,0.1)'
               }}
               animate={{
-                scale: index === currentStep ? [1, 1.3, 1] : 1
+                scale: index === currentStep ? [1, 1.2, 1] : 1
               }}
               transition={{
                 scale: {
-                  duration: 1.5,
+                  duration: 1,
                   repeat: Infinity,
                   ease: "easeInOut"
                 }
@@ -475,8 +477,8 @@ const SplashScreen = ({ onFinish }) => {
         <motion.div
           className="system-info"
           initial={{ opacity: 0 }}
-          animate={{ opacity: 0.7 }}
-          transition={{ delay: 0.8 }}
+          animate={{ opacity: 0.6 }}
+          transition={{ delay: 0.6 }}
         >
           <div className="system-item">
             <MedicalIcons.Shield />
@@ -486,7 +488,7 @@ const SplashScreen = ({ onFinish }) => {
             <span>Version: 2.1.0</span>
           </div>
           <div className="system-item">
-            <span>© 2025 AMS INSURANCE. Tous droits réservés.</span>
+            <span>© 2024 SaniCare Centre. Tous droits réservés.</span>
           </div>
         </motion.div>
       </div>

@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+// src/components/biometrie/BiometrieEnrolement.jsx
+// Version corrigée utilisant les API réelles
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Container,
   Grid,
@@ -26,7 +29,16 @@ import {
   ListItemIcon,
   Divider,
   TextField,
-  InputAdornment
+  InputAdornment,
+  LinearProgress,
+  Avatar,
+  Tooltip,
+  Badge,
+  alpha,
+  FormControlLabel,
+  Switch,
+  Tab,
+  Tabs
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -43,310 +55,842 @@ import {
   Create as CreateIcon,
   Save as SaveIcon,
   ArrowBack as ArrowBackIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Warning as WarningIcon,
+  QrCode as QrCodeIcon,
+  Download as DownloadIcon,
+  Print as PrintIcon,
+  Shield as ShieldIcon,
+  VerifiedUser as VerifiedUserIcon,
+  Error as ErrorIcon,
+  PhotoLibrary as PhotoLibraryIcon,
+  History as HistoryIcon,
+  CloudUpload as CloudUploadIcon,
+  Security as SecurityIcon,
+  Speed as SpeedIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
-import Webcam from 'react-webcam';
-import SignatureCanvas from 'react-signature-canvas';
 
-// Services
-import { patientsAPI } from '../../services/api';
-import biometrieAPI from '../../services/biometrieAPI';
+// Import des API réelles
+import { 
+  patientsAPI, 
+  authAPI, 
+  beneficiairesAPI
+} from '../../services/api';
 
-// Configuration doigts
-const DOIGTS = [
-  { code: 'pouce_gauche', label: 'Pouce gauche', main: true },
-  { code: 'index_gauche', label: 'Index gauche', main: false },
-  { code: 'majeur_gauche', label: 'Majeur gauche', main: false },
-  { code: 'annulaire_gauche', label: 'Annulaire gauche', main: false },
-  { code: 'auriculaire_gauche', label: 'Auriculaire gauche', main: false },
-  { code: 'pouce_droit', label: 'Pouce droit', main: true },
-  { code: 'index_droit', label: 'Index droit', main: false },
-  { code: 'majeur_droit', label: 'Majeur droit', main: false },
-  { code: 'annulaire_droit', label: 'Annulaire droit', main: false },
-  { code: 'auriculaire_droit', label: 'Auriculaire droit', main: false }
-];
-
-const Etapes = [
+// =============== CONSTANTS & CONFIGURATIONS ===============
+const ETAPES = [
   'Recherche Patient',
   'Capture Photo',
   'Capture Empreintes',
   'Capture Signature',
-  'Validation'
+  'Validation & Finalisation'
 ];
 
-const StyledWebcamContainer = styled(Box)(({ theme }) => ({
+const DOIGTS_CONFIG = [
+  { code: 'pouce_gauche', label: 'Pouce gauche', side: 'left', priority: 1, required: true },
+  { code: 'index_gauche', label: 'Index gauche', side: 'left', priority: 2, required: false },
+  { code: 'majeur_gauche', label: 'Majeur gauche', side: 'left', priority: 3, required: false },
+  { code: 'annulaire_gauche', label: 'Annulaire gauche', side: 'left', priority: 4, required: false },
+  { code: 'auriculaire_gauche', label: 'Auriculaire gauche', side: 'left', priority: 5, required: false },
+  { code: 'pouce_droit', label: 'Pouce droit', side: 'right', priority: 1, required: true },
+  { code: 'index_droit', label: 'Index droit', side: 'right', priority: 2, required: false },
+  { code: 'majeur_droit', label: 'Majeur droit', side: 'right', priority: 3, required: false },
+  { code: 'annulaire_droit', label: 'Annulaire droit', side: 'right', priority: 4, required: false },
+  { code: 'auriculaire_droit', label: 'Auriculaire droit', side: 'right', priority: 5, required: false }
+];
+
+const FINGERPRINT_QUALITY_THRESHOLD = 60;
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+// =============== STYLED COMPONENTS ===============
+const GradientPaper = styled(Paper)(({ theme }) => ({
+  background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`,
+  borderRadius: theme.spacing(2),
+  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)',
+  overflow: 'hidden'
+}));
+
+const StepCard = styled(Card)(({ theme, active }) => ({
+  border: `2px solid ${active ? theme.palette.primary.main : theme.palette.divider}`,
+  borderRadius: theme.spacing(1.5),
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    borderColor: active ? theme.palette.primary.dark : alpha(theme.palette.primary.main, 0.3),
+    boxShadow: theme.shadows[4]
+  }
+}));
+
+const WebcamContainer = styled(Box)(({ theme }) => ({
   position: 'relative',
   width: '100%',
   maxWidth: 640,
   margin: '0 auto',
   border: `2px solid ${theme.palette.primary.main}`,
-  borderRadius: theme.shape.borderRadius,
+  borderRadius: theme.spacing(2),
   overflow: 'hidden',
-  backgroundColor: '#000'
+  backgroundColor: '#000',
+  minHeight: 400
 }));
 
 const CaptureButton = styled(Button)(({ theme }) => ({
   position: 'absolute',
-  bottom: 20,
+  bottom: theme.spacing(3),
   left: '50%',
   transform: 'translateX(-50%)',
-  backgroundColor: theme.palette.primary.main,
+  background: `linear-gradient(45deg, ${theme.palette.primary.main} 30%, ${theme.palette.primary.dark} 90%)`,
   color: 'white',
+  borderRadius: 50,
+  padding: theme.spacing(1.5, 3),
+  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
   '&:hover': {
-    backgroundColor: theme.palette.primary.dark
+    background: `linear-gradient(45deg, ${theme.palette.primary.dark} 30%, ${theme.palette.primary.main} 90%)`,
+    boxShadow: '0 6px 25px rgba(0, 0, 0, 0.3)'
   }
 }));
 
-const SignatureContainer = styled(Paper)(({ theme }) => ({
-  width: '100%',
-  height: 300,
-  border: `2px solid ${theme.palette.grey[300]}`,
-  borderRadius: theme.shape.borderRadius,
-  overflow: 'hidden',
-  position: 'relative'
-}));
-
-const DoigtButton = styled(Button)(({ theme, captured }) => ({
+const DoigtButton = styled(Button, {
+  shouldForwardProp: (prop) => prop !== 'captured' && prop !== 'main' && prop !== 'quality'
+})(({ theme, captured, main, quality }) => ({
   margin: theme.spacing(0.5),
-  backgroundColor: captured ? theme.palette.success.light : theme.palette.grey[200],
+  background: captured 
+    ? quality >= FINGERPRINT_QUALITY_THRESHOLD
+      ? `linear-gradient(45deg, ${theme.palette.success.main} 30%, ${theme.palette.success.dark} 90%)`
+      : `linear-gradient(45deg, ${theme.palette.warning.main} 30%, ${theme.palette.warning.dark} 90%)`
+    : main
+    ? `linear-gradient(45deg, ${alpha(theme.palette.warning.main, 0.1)} 30%, ${alpha(theme.palette.warning.main, 0.05)} 90%)`
+    : theme.palette.background.paper,
   color: captured ? 'white' : theme.palette.text.primary,
+  border: `2px solid ${captured 
+    ? quality >= FINGERPRINT_QUALITY_THRESHOLD
+      ? theme.palette.success.main
+      : theme.palette.warning.main
+    : main ? theme.palette.warning.main : theme.palette.divider}`,
+  borderRadius: theme.spacing(1),
+  fontWeight: captured ? 600 : 400,
   '&:hover': {
-    backgroundColor: captured ? theme.palette.success.main : theme.palette.grey[300]
+    background: captured 
+      ? quality >= FINGERPRINT_QUALITY_THRESHOLD
+        ? theme.palette.success.dark
+        : theme.palette.warning.dark
+      : main
+      ? alpha(theme.palette.warning.main, 0.2)
+      : theme.palette.action.hover
   }
 }));
 
+const StatusBadge = styled(Box)(({ theme, status }) => ({
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: theme.spacing(0.5, 1.5),
+  borderRadius: 20,
+  fontSize: '0.75rem',
+  fontWeight: 600,
+  backgroundColor: status === 'complete' 
+    ? alpha(theme.palette.success.main, 0.1)
+    : status === 'partial'
+    ? alpha(theme.palette.warning.main, 0.1)
+    : status === 'error'
+    ? alpha(theme.palette.error.main, 0.1)
+    : alpha(theme.palette.info.main, 0.1),
+  color: status === 'complete'
+    ? theme.palette.success.dark
+    : status === 'partial'
+    ? theme.palette.warning.dark
+    : status === 'error'
+    ? theme.palette.error.dark
+    : theme.palette.info.dark
+}));
+
+// =============== UTILITY FUNCTIONS ===============
+const calculateAge = (dateString) => {
+  if (!dateString) return 'N/A';
+  try {
+    const birthDate = new Date(dateString);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  } catch (error) {
+    return 'N/A';
+  }
+};
+
+// =============== MAIN COMPONENT ===============
 function BiometrieEnrolement() {
-  // États
+  // =============== STATE MANAGEMENT ===============
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  
-  // Patient
   const [searchTerm, setSearchTerm] = useState('');
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patientStats, setPatientStats] = useState(null);
-  
-  // Capture
   const [photo, setPhoto] = useState(null);
   const [empreintes, setEmpreintes] = useState({});
   const [signature, setSignature] = useState(null);
-  
-  // Références
-  const webcamRef = useRef(null);
-  const signatureRef = useRef(null);
-  
-  // Dialog
   const [viewDialog, setViewDialog] = useState(false);
   const [viewData, setViewData] = useState(null);
+  const [captureProgress, setCaptureProgress] = useState({
+    photo: 0,
+    empreintes: 0,
+    signature: 0
+  });
+  const [scanningFinger, setScanningFinger] = useState(null);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [autoSave, setAutoSave] = useState(true);
+  const [activeTab, setActiveTab] = useState(0);
+  const [enrollmentHistory, setEnrollmentHistory] = useState([]);
+  const [videoStream, setVideoStream] = useState(null);
 
-  // Recherche de patients
-  const handleSearch = async () => {
-    if (searchTerm.length < 2) return;
+  // =============== REFS ===============
+  const webcamRef = useRef(null);
+  const signatureRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+
+  // =============== EFFECTS ===============
+  useEffect(() => {
+    // Vérifier l'authentification
+    if (!authAPI.isAuthenticated()) {
+      window.location.href = '/login';
+      return;
+    }
+
+    // Si on change d'étape sans patient, retourner à l'étape 0
+    if (activeStep > 0 && !selectedPatient) {
+      setActiveStep(0);
+      setError('Veuillez sélectionner un patient');
+    }
+
+    // Charger l'historique si patient sélectionné
+    if (selectedPatient?.id) {
+      loadEnrollmentHistory();
+    }
+
+    // Nettoyage du stream vidéo
+    return () => {
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [selectedPatient, activeStep]);
+
+  useEffect(() => {
+    // Calculer la progression
+    const photoProgress = photo ? 100 : 0;
+    const capturedFingers = Object.values(empreintes).filter(e => e?.quality >= FINGERPRINT_QUALITY_THRESHOLD).length;
+    const empreintesProgress = (capturedFingers / 10) * 100;
+    const signatureProgress = signature ? 100 : 0;
     
-    setLoading(true);
-    setError(null);
-    
+    setCaptureProgress({
+      photo: photoProgress,
+      empreintes: empreintesProgress,
+      signature: signatureProgress
+    });
+  }, [photo, empreintes, signature]);
+
+  useEffect(() => {
+    // Initialiser la webcam
+    if (activeStep === 1 && activeTab === 0) {
+      initWebcam();
+    }
+  }, [activeStep, activeTab]);
+
+  // =============== WEBCAM FUNCTIONS ===============
+  const initWebcam = async () => {
     try {
-      const response = await patientsAPI.search(searchTerm);
-      if (response.success) {
-        setPatients(response.patients || []);
-      } else {
-        setError('Erreur lors de la recherche');
+      if (!videoRef.current) return;
+
+      const constraints = {
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user"
+        },
+        audio: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      setVideoStream(stream);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
       }
     } catch (err) {
-      setError('Erreur réseau lors de la recherche');
-      console.error(err);
+      console.error('Erreur initialisation webcam:', err);
+      setError('Impossible d\'accéder à la webcam. Veuillez vérifier les permissions.');
+    }
+  };
+
+  // =============== API FUNCTIONS ===============
+  const updatePatientStats = async () => {
+    if (!selectedPatient?.id) return;
+    
+    try {
+      const response = await beneficiairesAPI.getStats(selectedPatient.id);
+      if (response.success) {
+        setPatientStats(response.stats);
+      }
+    } catch (error) {
+      console.error('Erreur mise à jour stats:', error);
+    }
+  };
+
+  const loadPatientDetails = async (patientId) => {
+    if (!patientId) {
+      console.error('loadPatientDetails: patientId is null');
+      return null;
+    }
+    
+    try {
+      setLoading(true);
+      const response = await patientsAPI.getById(patientId);
+      
+      if (response.success && response.patient) {
+        const patientData = response.patient;
+        console.log('Patient chargé:', patientData);
+        
+        // Charger les données biométriques existantes
+        const biometricsResponse = await beneficiairesAPI.getByPatient(patientId);
+        
+        if (biometricsResponse.success && biometricsResponse.data) {
+          const existingData = {};
+          biometricsResponse.data.forEach(item => {
+            if (item.type === 'photo' && item.data) {
+              setPhoto(item.data);
+            }
+            if (item.type === 'signature' && item.data) {
+              setSignature(item.data);
+            }
+            if (item.type === 'empreinte' && item.finger) {
+              existingData[item.finger] = {
+                template: item.template,
+                quality: item.quality || 0,
+                timestamp: item.created_at,
+                image: item.image
+              };
+            }
+          });
+          setEmpreintes(existingData);
+        }
+        
+        // Charger les statistiques
+        const statsResponse = await beneficiairesAPI.getStats(patientId);
+        if (statsResponse.success) {
+          setPatientStats(statsResponse.stats);
+        }
+        
+        return patientData;
+      }
+      return null;
+    } catch (error) {
+      console.error('Erreur chargement patient:', error);
+      setError('Erreur lors du chargement des informations du patient: ' + error.message);
+      return null;
     } finally {
       setLoading(false);
     }
   };
 
-  // Sélectionner un patient
+  const loadEnrollmentHistory = async () => {
+    if (!selectedPatient?.id) return;
+    
+    try {
+      const response = await beneficiairesAPI.getEnrollmentHistory(selectedPatient.id);
+      if (response.success) {
+        setEnrollmentHistory(response.history || []);
+      }
+    } catch (error) {
+      console.error('Erreur chargement historique:', error);
+    }
+  };
+
+  const savePhotoToAPI = async (imageData) => {
+    try {
+      if (!selectedPatient || !selectedPatient.id) {
+        setError('Patient non sélectionné. Impossible de sauvegarder la photo.');
+        return { success: false, error: 'Patient non sélectionné' };
+      }
+
+      setLoading(true);
+      
+      const photoData = {
+        ID_BEN: selectedPatient.id,
+        TYPE_BIOMETRIE: 'photo',
+        DATA_BASE64: imageData.split(',')[1],
+        FORMAT_DATA: 'image/jpeg',
+        QUALITE: 85,
+        STATUT: 'complet',
+        metadata: {
+          device: 'webcam',
+          resolution: '640x480',
+          timestamp: new Date().toISOString(),
+          operator: authAPI.getUser()?.username || 'system'
+        }
+      };
+
+      const response = await beneficiairesAPI.enregistrer(photoData);
+
+      if (response.success) {
+        setPhoto(imageData);
+        await updatePatientStats();
+        return { success: true, data: response.data };
+      } else {
+        setError(response.message || 'Erreur lors de l\'enregistrement de la photo');
+        return { success: false, error: response.message };
+      }
+    } catch (error) {
+      console.error('Erreur sauvegarde photo:', error);
+      setError('Erreur de connexion lors de la sauvegarde de la photo');
+      return { success: false, error: error.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const capturePhoto = async () => {
+    if (!selectedPatient) {
+      setError('Veuillez sélectionner un patient avant de capturer une photo');
+      return;
+    }
+
+    if (!videoRef.current || !canvasRef.current) {
+      setError('Webcam non disponible');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      const imageData = canvas.toDataURL('image/jpeg', 0.9);
+      const result = await savePhotoToAPI(imageData);
+      
+      if (!result.success) {
+        setError('Erreur lors de l\'enregistrement de la photo');
+      }
+    } catch (error) {
+      console.error('Erreur capture photo:', error);
+      setError('Erreur lors de la capture de la photo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const scanFingerprintAPI = async (fingerCode) => {
+    try {
+      setScanningFinger(fingerCode);
+      setScanProgress(0);
+      
+      // Simulation de progression (à remplacer par le vrai scanner)
+      const progressInterval = setInterval(() => {
+        setScanProgress(prev => {
+          if (prev >= 100) {
+            clearInterval(progressInterval);
+            return 100;
+          }
+          return prev + 20;
+        });
+      }, 300);
+
+      // Appel au vrai scanner
+      const response = await beneficiairesAPI.scanFingerprint({
+        patientId: selectedPatient.id,
+        finger: fingerCode,
+        hand: fingerCode.includes('gauche') ? 'left' : 'right',
+        attempts: 3,
+        qualityThreshold: FINGERPRINT_QUALITY_THRESHOLD
+      });
+
+      clearInterval(progressInterval);
+      setScanProgress(100);
+
+      if (response.success && response.template) {
+        const fingerData = {
+          template: response.template,
+          quality: response.quality || 0,
+          timestamp: new Date().toISOString(),
+          image: null,
+          attempts: response.attempts,
+          scannerInfo: response.scannerInfo
+        };
+
+        setEmpreintes(prev => ({
+          ...prev,
+          [fingerCode]: fingerData
+        }));
+
+        // Sauvegarde automatique
+        if (autoSave) {
+          const empreinteData = {
+            ID_BEN: selectedPatient.id,
+            TYPE_BIOMETRIE: 'empreinte',
+            DATA_BASE64: btoa(response.template),
+            FORMAT_DATA: 'template/fingerprint',
+            QUALITE: response.quality,
+            DOIGT: fingerCode,
+            STATUT: 'complet',
+            metadata: {
+              hand: fingerCode.includes('gauche') ? 'left' : 'right',
+              attempts: response.attempts,
+              timestamp: new Date().toISOString()
+            }
+          };
+          
+          await beneficiairesAPI.enregistrer(empreinteData);
+          await updatePatientStats();
+        }
+
+        return { success: true, data: fingerData };
+      } else {
+        setError(`Échec de la capture du doigt ${fingerCode}: Qualité insuffisante (${response.quality}%)`);
+        return { success: false, error: response.message };
+      }
+    } catch (error) {
+      console.error('Erreur scan empreinte:', error);
+      setError('Erreur lors de la communication avec le scanner');
+      return { success: false, error: error.message };
+    } finally {
+      setScanningFinger(null);
+      setScanProgress(0);
+    }
+  };
+
+  const saveSignatureToAPI = async (signatureData) => {
+    try {
+      if (!selectedPatient || !selectedPatient.id) {
+        setError('Patient non sélectionné');
+        return { success: false, error: 'Patient non sélectionné' };
+      }
+
+      setLoading(true);
+      
+      const signatureBase64 = signatureData.split(',')[1];
+      
+      const signatureAPIData = {
+        ID_BEN: selectedPatient.id,
+        TYPE_BIOMETRIE: 'signature',
+        DATA_BASE64: signatureBase64,
+        FORMAT_DATA: 'image/png',
+        QUALITE: 80,
+        STATUT: 'complet',
+        metadata: {
+          device: 'canvas',
+          timestamp: new Date().toISOString(),
+          dimensions: { width: 800, height: 300 }
+        }
+      };
+
+      const response = await beneficiairesAPI.enregistrer(signatureAPIData);
+
+      if (response.success) {
+        setSignature(signatureData);
+        await updatePatientStats();
+        return { success: true, data: response.data };
+      } else {
+        setError(response.message || 'Erreur lors de l\'enregistrement de la signature');
+        return { success: false, error: response.message };
+      }
+    } catch (error) {
+      console.error('Erreur sauvegarde signature:', error);
+      setError('Erreur de connexion lors de la sauvegarde de la signature');
+      return { success: false, error: error.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =============== HANDLER FUNCTIONS ===============
+ // 2. Dans votre handleSearch fonction (ligne ~629)
+const handleSearch = async (searchTerm) => {
+  try {
+    setLoading(true);
+    const result = await beneficiairesAPI.searchAdvanced(searchTerm);
+    
+    if (result.success && Array.isArray(result.beneficiaires)) {
+      // Adaptez selon la structure de votre composant
+      setBeneficiaires(result.beneficiaires);
+      setFilteredBeneficiaires(result.beneficiaires);
+    } else {
+      setBeneficiaires([]);
+      setFilteredBeneficiaires([]);
+    }
+  } catch (error) {
+    console.error('Erreur recherche:', error);
+    setBeneficiaires([]);
+    setFilteredBeneficiaires([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+const onKeyPress = async (event) => {
+  if (event.key === 'Enter') {
+    const searchTerm = event.target.value;
+    
+    if (searchTerm.trim() === '') {
+      // Réinitialiser à la liste complète
+      setFilteredBeneficiaires(beneficiaires);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const searchResults = await beneficiairesAPI.searchAdvanced(searchTerm);
+      
+      if (searchResults.success && Array.isArray(searchResults.beneficiaires)) {
+        setFilteredBeneficiaires(searchResults.beneficiaires);
+      } else {
+        setFilteredBeneficiaires([]);
+      }
+    } catch (error) {
+      console.error('Erreur recherche:', error);
+      setFilteredBeneficiaires([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+};
+
   const handleSelectPatient = async (patient) => {
+    if (!patient || !patient.id) {
+      setError('Patient invalide');
+      return;
+    }
+    
     setSelectedPatient(patient);
     setPatients([]);
     setSearchTerm('');
     
-    // Charger les données biométriques existantes
-    try {
-      const response = await biometrieAPI.verifierEtat(patient.id);
-      if (response.success) {
-        setPatientStats(response.stats);
-        
-        // Charger les données existantes si disponibles
-        if (response.enregistrements) {
-          const empreintesCaptured = {};
-          response.enregistrements.forEach(record => {
-            if (record.type === 'empreinte' && record.doigt) {
-              empreintesCaptured[record.doigt] = true;
-            } else if (record.type === 'photo') {
-              setPhoto(true); // Marquer comme capturé
-            } else if (record.type === 'signature') {
-              setSignature(true); // Marquer comme capturé
-            }
-          });
-          setEmpreintes(empreintesCaptured);
-        }
-      }
-    } catch (err) {
-      console.error('Erreur chargement données existantes:', err);
-    }
+    // Réinitialiser les données biométriques
+    setPhoto(null);
+    setEmpreintes({});
+    setSignature(null);
+    setPatientStats(null);
     
-    // Passer à l'étape suivante
+    // Charger les détails du patient
+    await loadPatientDetails(patient.id);
+    
     setActiveStep(1);
   };
 
-  // Capturer une photo
-  const capturePhoto = () => {
-    if (webcamRef.current) {
-      const imageSrc = webcamRef.current.getScreenshot();
-      setPhoto(imageSrc);
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Veuillez sélectionner un fichier image');
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      setError('L\'image ne doit pas dépasser 5MB');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const reader = new FileReader();
       
-      // Enregistrer immédiatement
-      enregistrerPhoto(imageSrc);
+      reader.onload = async (e) => {
+        const imageData = e.target.result;
+        const result = await savePhotoToAPI(imageData);
+        
+        if (!result.success) {
+          setError('Erreur lors de l\'enregistrement de la photo');
+        }
+      };
+      
+      reader.onerror = () => {
+        setError('Erreur lors de la lecture du fichier');
+        setLoading(false);
+      };
+      
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Erreur upload photo:', error);
+      setError('Erreur lors du téléchargement de la photo');
+      setLoading(false);
     }
   };
 
-  // Capturer une empreinte
-  const captureEmpreinte = (doigt) => {
-    // Dans une implémentation réelle, on utiliserait un scanner d'empreintes
-    // Pour la démo, on simule la capture
-    setEmpreintes(prev => ({
-      ...prev,
-      [doigt]: true
-    }));
+  const captureEmpreinte = async (doigt) => {
+    if (scanningFinger) {
+      setError('Une capture est déjà en cours');
+      return;
+    }
+
+    const result = await scanFingerprintAPI(doigt);
     
-    // Simuler l'enregistrement
-    setTimeout(() => {
-      enregistrerEmpreinte(doigt);
-    }, 500);
-  };
-
-  // Enregistrer la signature
-  const saveSignature = () => {
-    if (signatureRef.current) {
-      const signatureData = signatureRef.current.toDataURL();
-      setSignature(signatureData);
-      
-      // Enregistrer immédiatement
-      enregistrerSignature(signatureData);
+    if (!result.success) {
+      console.warn(`Capture échouée pour ${doigt}:`, result.error);
     }
   };
 
-  // Effacer la signature
+  const retryFingerCapture = async (doigt) => {
+    setEmpreintes(prev => {
+      const newEmpreintes = { ...prev };
+      delete newEmpreintes[doigt];
+      return newEmpreintes;
+    });
+    
+    await captureEmpreinte(doigt);
+  };
+
+  const saveSignature = async () => {
+    if (!signatureRef.current) {
+      setError('Canvas de signature non disponible');
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 300;
+    const context = canvas.getContext('2d');
+    
+    const signatureCanvas = signatureRef.current;
+    const signatureContext = signatureCanvas.getContext('2d');
+    
+    // Vérifier si la signature n'est pas vide
+    const imageData = signatureContext.getImageData(0, 0, signatureCanvas.width, signatureCanvas.height);
+    let isEmpty = true;
+    
+    for (let i = 3; i < imageData.data.length; i += 4) {
+      if (imageData.data[i] > 0) {
+        isEmpty = false;
+        break;
+      }
+    }
+    
+    if (isEmpty) {
+      setError('Veuillez signer avant d\'enregistrer');
+      return;
+    }
+
+    try {
+      context.fillStyle = 'white';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(signatureCanvas, 0, 0);
+      
+      const signatureData = canvas.toDataURL('image/png');
+      const result = await saveSignatureToAPI(signatureData);
+      
+      if (!result.success) {
+        setError('Erreur lors de l\'enregistrement de la signature');
+      }
+    } catch (error) {
+      console.error('Erreur enregistrement signature:', error);
+      setError('Erreur lors de l\'enregistrement de la signature');
+    }
+  };
+
   const clearSignature = () => {
     if (signatureRef.current) {
-      signatureRef.current.clear();
+      const canvas = signatureRef.current;
+      const context = canvas.getContext('2d');
+      context.clearRect(0, 0, canvas.width, canvas.height);
       setSignature(null);
     }
   };
 
-  // API Calls
-  const enregistrerPhoto = async (imageData) => {
-    try {
-      const response = await biometrieAPI.enregistrer({
-        ID_BEN: selectedPatient.id,
-        TYPE_BIOMETRIE: 'photo',
-        DATA_BASE64: imageData,
-        FORMAT_DATA: 'image/jpeg',
-        QUALITE: 85,
-        STATUT: 'complet'
-      });
-      
-      if (response.success) {
-        console.log('✅ Photo enregistrée:', response);
-        setPatientStats(response.stats);
-      }
-    } catch (err) {
-      console.error('❌ Erreur enregistrement photo:', err);
-    }
-  };
-
-  const enregistrerEmpreinte = async (doigt) => {
-    try {
-      // Simuler des données d'empreinte
-      const empreinteData = `simulated_fingerprint_data_${doigt}_${Date.now()}`;
-      
-      const response = await biometrieAPI.enregistrer({
-        ID_BEN: selectedPatient.id,
-        TYPE_BIOMETRIE: 'empreinte',
-        DATA_BASE64: btoa(empreinteData), // En base64 pour la simulation
-        FORMAT_DATA: 'template/fingerprint',
-        QUALITE: 90,
-        DOIGT: doigt,
-        STATUT: 'complet'
-      });
-      
-      if (response.success) {
-        console.log(`✅ Empreinte ${doigt} enregistrée:`, response);
-        setPatientStats(response.stats);
-      }
-    } catch (err) {
-      console.error('❌ Erreur enregistrement empreinte:', err);
-    }
-  };
-
-  const enregistrerSignature = async (signatureData) => {
-    try {
-      const response = await biometrieAPI.enregistrer({
-        ID_BEN: selectedPatient.id,
-        TYPE_BIOMETRIE: 'signature',
-        DATA_BASE64: signatureData,
-        FORMAT_DATA: 'image/png',
-        QUALITE: 80,
-        STATUT: 'complet'
-      });
-      
-      if (response.success) {
-        console.log('✅ Signature enregistrée:', response);
-        setPatientStats(response.stats);
-      }
-    } catch (err) {
-      console.error('❌ Erreur enregistrement signature:', err);
-    }
-  };
-
-  // Valider l'enrolement
   const handleValidate = async () => {
     setLoading(true);
     setError(null);
-    
+
+    if (!selectedPatient || !selectedPatient.id) {
+      setError('Aucun patient sélectionné');
+      setLoading(false);
+      return;
+    }
+
     try {
-      // Vérifier si tout est complet
-      const empreintesCaptured = Object.keys(empreintes).length >= 2;
+      // Vérification complétude
+      const requiredFingers = DOIGTS_CONFIG.filter(d => d.required);
+      const hasRequiredFingers = requiredFingers.every(finger => 
+        empreintes[finger.code]?.quality >= FINGERPRINT_QUALITY_THRESHOLD
+      );
       
+      const validFingers = Object.values(empreintes).filter(
+        e => e?.quality >= FINGERPRINT_QUALITY_THRESHOLD
+      ).length;
+
       if (!photo) {
-        setError('La photo est requise');
+        setError('Photo d\'identité requise');
+        setLoading(false);
         return;
       }
-      
-      if (!empreintesCaptured) {
-        setError('Au moins 2 empreintes sont requises');
+
+      if (!hasRequiredFingers || validFingers < 2) {
+        setError('Au moins 2 empreintes de qualité (pouces gauche et droit) sont requises');
+        setLoading(false);
         return;
       }
-      
+
       if (!signature) {
-        setError('La signature est requise');
+        setError('Signature requise');
+        setLoading(false);
         return;
       }
-      
-      // Tout est valide
-      setSuccess('Enrolement biométrique complété avec succès !');
-      setActiveStep(Etapes.length - 1);
-      
-    } catch (err) {
-      setError('Erreur lors de la validation');
-      console.error(err);
+
+      // Préparer les données pour la finalisation
+      const enrollmentData = {
+        patientId: selectedPatient.id,
+        biometrics: {
+          photo: photo,
+          fingerprints: empreintes,
+          signature: signature
+        },
+        metadata: {
+          completionDate: new Date().toISOString(),
+          operator: authAPI.getUser()?.username || 'system',
+          location: window.location.hostname,
+          device: navigator.userAgent
+        }
+      };
+
+      // Finaliser l'enrôlement
+      const finalizeResponse = await beneficiairesAPI.finalizeEnrollment(enrollmentData);
+
+      if (finalizeResponse.success) {
+        setSuccess('Enrôlement biométrique finalisé avec succès !');
+        setActiveStep(4);
+        
+        // Générer le certificat
+        await beneficiairesAPI.generateCertificate(selectedPatient.id);
+        
+        // Recharger l'historique
+        await loadEnrollmentHistory();
+      } else {
+        setError('Erreur lors de la finalisation de l\'enrôlement: ' + finalizeResponse.message);
+      }
+    } catch (error) {
+      console.error('Erreur validation:', error);
+      setError('Erreur lors de la validation finale: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Réinitialiser
   const handleReset = () => {
+    if (videoStream) {
+      videoStream.getTracks().forEach(track => track.stop());
+      setVideoStream(null);
+    }
+    
     setActiveStep(0);
     setSelectedPatient(null);
     setPhoto(null);
@@ -355,582 +899,1076 @@ function BiometrieEnrolement() {
     setPatientStats(null);
     setError(null);
     setSuccess(null);
-  };
-
-  // Afficher les données
-  const handleViewData = async (type, doigt = null) => {
-    try {
-      // Dans une implémentation réelle, on récupérerait les données depuis l'API
-      setViewData({
-        type,
-        doigt,
-        data: type === 'photo' ? photo : 
-              type === 'signature' ? signature : 
-              `Données empreinte ${doigt}`
-      });
-      setViewDialog(true);
-    } catch (err) {
-      console.error('Erreur affichage données:', err);
+    setEnrollmentHistory([]);
+    setScanningFinger(null);
+    setScanProgress(0);
+    
+    if (signatureRef.current) {
+      const canvas = signatureRef.current;
+      const context = canvas.getContext('2d');
+      context.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
   };
 
-  // Étape 1: Recherche Patient
-  const renderStep1 = () => (
-    <Box>
-      <Typography variant="h6" gutterBottom>
-        Rechercher un patient
-      </Typography>
-      
-      <Box sx={{ mb: 3 }}>
-        <TextField
-          fullWidth
-          variant="outlined"
-          label="Nom, prénom ou identifiant"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton onClick={handleSearch}>
-                  <SearchIcon />
-                </IconButton>
-              </InputAdornment>
-            )
-          }}
-        />
-      </Box>
-      
-      {loading && (
-        <Box display="flex" justifyContent="center" my={3}>
-          <CircularProgress />
-        </Box>
-      )}
-      
-      {patients.length > 0 && (
-        <List>
-          {patients.map((patient) => (
-            <React.Fragment key={patient.id}>
-              <ListItem 
-                button 
-                onClick={() => handleSelectPatient(patient)}
-                sx={{ 
-                  '&:hover': { backgroundColor: 'action.hover' },
-                  borderRadius: 1
-                }}
-              >
-                <ListItemIcon>
-                  <PersonIcon />
-                </ListItemIcon>
-                <ListItemText
-                  primary={`${patient.nom} ${patient.prenom}`}
-                  secondary={`ID: ${patient.id} • ${patient.sexe || 'N/A'} • ${patient.age || 'N/A'} ans`}
-                />
-                {patient.identifiant && (
-                  <Chip label={patient.identifiant} size="small" />
-                )}
-              </ListItem>
-              <Divider />
-            </React.Fragment>
-          ))}
-        </List>
-      )}
-    </Box>
-  );
+  const handleDownloadCertificate = async () => {
+    try {
+      if (!selectedPatient || !selectedPatient.id) {
+        setError('Aucun patient sélectionné');
+        return;
+      }
 
-  // Étape 2: Capture Photo
-  const renderStep2 = () => (
-    <Box>
-      <Typography variant="h6" gutterBottom>
-        Capture de la photo d'identité
+      const response = await beneficiairesAPI.generateCertificate(selectedPatient.id);
+      if (response.success && response.certificateUrl) {
+        // Créer un certificat PDF simulé
+        const certificateContent = `
+          CERTIFICAT D'ENRÔLEMENT BIOMÉTRIQUE
+          
+          Patient: ${selectedPatient.nom} ${selectedPatient.prenom}
+          ID Patient: ${selectedPatient.id}
+          Date d'enrôlement: ${new Date().toLocaleDateString()}
+          
+          Données enregistrées:
+          - Photo d'identité: ${photo ? '✓' : '✗'}
+          - Empreintes digitales: ${Object.values(empreintes).filter(e => e?.quality >= FINGERPRINT_QUALITY_THRESHOLD).length}/10
+          - Signature: ${signature ? '✓' : '✗'}
+          
+          Certificat généré le: ${new Date().toLocaleString()}
+          Ce certificat atteste que le patient a bien été enrôlé dans le système biométrique.
+        `;
+        
+        const blob = new Blob([certificateContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `certificat_biometrique_${selectedPatient.id}_${new Date().toISOString().split('T')[0]}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        URL.revokeObjectURL(url);
+      } else {
+        setError('Certificat non disponible');
+      }
+    } catch (error) {
+      console.error('Erreur téléchargement certificat:', error);
+      setError('Erreur lors de la génération du certificat');
+    }
+  };
+
+  const handleViewBiometricData = async (type, finger = null) => {
+    try {
+      let data;
+      
+      if (type === 'photo') {
+        data = photo;
+      } else if (type === 'signature') {
+        data = signature;
+      } else if (type === 'empreinte' && finger) {
+        const empreinte = empreintes[finger];
+        data = {
+          finger,
+          quality: empreinte?.quality,
+          timestamp: empreinte?.timestamp,
+          image: empreinte?.image
+        };
+      }
+      
+      setViewData({
+        type,
+        finger,
+        data
+      });
+      setViewDialog(true);
+    } catch (error) {
+      console.error('Erreur affichage données:', error);
+      setError('Erreur lors de l\'affichage des données');
+    }
+  };
+
+  // =============== RENDER FUNCTIONS ===============
+  const renderPatientSearch = () => (
+    <Box sx={{ py: 2 }}>
+      <Typography variant="h5" gutterBottom color="primary" fontWeight={600}>
+        <SearchIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+        Recherche Patient
       </Typography>
       
-      <Box sx={{ mb: 3 }}>
-        {selectedPatient && (
-          <Card sx={{ mb: 2 }}>
-            <CardContent>
-              <Typography variant="subtitle1">
-                Patient: {selectedPatient.nom} {selectedPatient.prenom}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                ID: {selectedPatient.id} • {selectedPatient.sexe || 'N/A'} • {selectedPatient.age || 'N/A'} ans
-              </Typography>
-            </CardContent>
-          </Card>
-        )}
-      </Box>
-      
+      <Typography variant="body1" color="text.secondary" paragraph>
+        Recherchez un patient par nom, prénom, ID ou numéro de téléphone
+      </Typography>
+
       <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <StyledWebcamContainer>
-            <Webcam
-              ref={webcamRef}
-              audio={false}
-              screenshotFormat="image/jpeg"
-              width="100%"
-              videoConstraints={{
-                width: 640,
-                height: 480,
-                facingMode: "user"
-              }}
-            />
-            <CaptureButton
-              variant="contained"
-              startIcon={<CameraIcon />}
-              onClick={capturePhoto}
-            >
-              Prendre la photo
-            </CaptureButton>
-          </StyledWebcamContainer>
-          
-          <Box mt={2}>
-            <Button
-              variant="outlined"
-              onClick={() => setActiveStep(0)}
-              startIcon={<ArrowBackIcon />}
-            >
-              Retour
-            </Button>
-            <Button
-              variant="contained"
-              onClick={() => setActiveStep(2)}
-              disabled={!photo}
-              sx={{ ml: 2 }}
-              endIcon={<FingerprintIcon />}
-            >
-              Continuer
-            </Button>
-          </Box>
-        </Grid>
-        
-        <Grid item xs={12} md={6}>
-          {photo && (
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Photo capturée
-                </Typography>
-                <Box
-                  component="img"
-                  src={photo}
-                  alt="Photo capturée"
-                  sx={{
-                    width: '100%',
-                    maxWidth: 300,
-                    borderRadius: 1,
-                    border: '1px solid #ddd'
-                  }}
-                />
-                <Box mt={2}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<DeleteIcon />}
-                    onClick={() => setPhoto(null)}
-                    size="small"
+        <Grid item xs={12}>
+          <TextField
+            fullWidth
+            variant="outlined"
+            label="Rechercher patient..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setError(null);
+            }}
+            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <QrCodeIcon color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton 
+                    onClick={handleSearch}
+                    disabled={searchTerm.trim().length < 2 || loading}
+                    color="primary"
                   >
-                    Reprendre
-                  </Button>
-                </Box>
-              </CardContent>
-            </Card>
-          )}
-          
-          {patientStats && (
-            <Card sx={{ mt: 2 }}>
-              <CardContent>
-                <Typography variant="subtitle2" gutterBottom>
-                  Progression biométrique
-                </Typography>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box display="flex" alignItems="center">
-                    <PhotoCameraIcon color={photo ? "success" : "disabled"} sx={{ mr: 1 }} />
-                    <Typography>Photo</Typography>
-                  </Box>
-                  <Chip 
-                    label={photo ? "✓ Capturée" : "En attente"} 
-                    color={photo ? "success" : "default"} 
-                    size="small" 
-                  />
-                </Box>
-              </CardContent>
-            </Card>
-          )}
+                    {loading ? <CircularProgress size={24} /> : <SearchIcon />}
+                  </IconButton>
+                </InputAdornment>
+              )
+            }}
+            helperText="Saisissez au moins 2 caractères"
+          />
         </Grid>
+
+        {patients.length > 0 && (
+          <Grid item xs={12}>
+            <StepCard active={true}>
+              <CardContent>
+                <Typography variant="subtitle1" gutterBottom fontWeight={600}>
+                  Résultats de recherche ({patients.length})
+                </Typography>
+                <List dense>
+                  {patients.map((patient) => (
+                    <React.Fragment key={patient.id}>
+                      <ListItem
+                        button
+                        onClick={() => handleSelectPatient(patient)}
+                        sx={{
+                          borderRadius: 1,
+                          mb: 1,
+                          '&:hover': {
+                            backgroundColor: 'action.hover',
+                            transform: 'translateX(4px)',
+                            transition: 'transform 0.2s'
+                          }
+                        }}
+                      >
+                        <ListItemIcon>
+                          <Avatar sx={{ bgcolor: 'primary.main' }}>
+                            {patient.nom?.charAt(0)}{patient.prenom?.charAt(0)}
+                          </Avatar>
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={
+                            <Box display="flex" alignItems="center" gap={1}>
+                              <Typography variant="subtitle1" fontWeight={500}>
+                                {patient.nom} {patient.prenom}
+                              </Typography>
+                              {patient.hasBiometrics && (
+                                <Chip 
+                                  icon={<VerifiedUserIcon />} 
+                                  label="Biométrie" 
+                                  size="small" 
+                                  color="success" 
+                                  variant="outlined"
+                                />
+                              )}
+                            </Box>
+                          }
+                          secondary={
+                            <>
+                              <Typography variant="body2" component="span">
+                                ID: {patient.id} • Tél: {patient.telephone}
+                              </Typography>
+                              <br />
+                              <Typography variant="body2" color="text.secondary">
+                                {patient.dateNaissance ? `${calculateAge(patient.dateNaissance)} ans` : 'Âge non spécifié'} • {patient.sexe || 'Sexe non spécifié'}
+                              </Typography>
+                            </>
+                          }
+                        />
+                        <Chip 
+                          label="Sélectionner" 
+                          color="primary" 
+                          size="small"
+                          sx={{ ml: 2 }}
+                        />
+                      </ListItem>
+                      <Divider variant="inset" component="li" />
+                    </React.Fragment>
+                  ))}
+                </List>
+              </CardContent>
+            </StepCard>
+          </Grid>
+        )}
       </Grid>
     </Box>
   );
 
-  // Étape 3: Capture Empreintes
-  const renderStep3 = () => {
-    const empreintesCaptured = Object.keys(empreintes).length;
-    const mainEmpreintesCaptured = DOIGTS.filter(d => d.main).filter(d => empreintes[d.code]).length;
-    
+  const renderPhotoCapture = () => {
+    if (!selectedPatient) {
+      return (
+        <Box sx={{ py: 4, textAlign: 'center' }}>
+          <Alert severity="error" sx={{ mb: 3 }}>
+            Aucun patient sélectionné. Veuillez d'abord rechercher et sélectionner un patient.
+          </Alert>
+          <Button
+            variant="contained"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => setActiveStep(0)}
+          >
+            Retour à la recherche de patients
+          </Button>
+        </Box>
+      );
+    }
+
     return (
-      <Box>
-        <Typography variant="h6" gutterBottom>
-          Capture des empreintes digitales
+      <Box sx={{ py: 2 }}>
+        <Typography variant="h5" gutterBottom color="primary" fontWeight={600}>
+          <CameraIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+          Capture Photo d'Identité
         </Typography>
-        
-        <Typography variant="body2" color="text.secondary" paragraph>
-          Veuillez capturer au minimum 2 empreintes digitales (recommandé: pouce gauche et pouce droit)
+
+        {selectedPatient && (
+          <Card sx={{ mb: 3, bgcolor: 'background.default' }}>
+            <CardContent>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item>
+                  <Avatar sx={{ width: 60, height: 60, bgcolor: 'primary.main' }}>
+                    {selectedPatient.nom?.charAt(0)}{selectedPatient.prenom?.charAt(0)}
+                  </Avatar>
+                </Grid>
+                <Grid item xs>
+                  <Typography variant="h6">
+                    {selectedPatient.nom} {selectedPatient.prenom}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    ID: {selectedPatient.id} • {selectedPatient.telephone}
+                  </Typography>
+                </Grid>
+                <Grid item>
+                  <StatusBadge status={photo ? 'complete' : 'incomplete'}>
+                    {photo ? '✓ Photo capturée' : '✗ Photo requise'}
+                  </StatusBadge>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        )}
+
+        <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 3 }}>
+          <Tab icon={<CameraIcon />} label="Webcam" />
+          <Tab icon={<PhotoLibraryIcon />} label="Upload fichier" />
+        </Tabs>
+
+        {activeTab === 0 ? (
+          <Grid container spacing={4}>
+            <Grid item xs={12} md={7}>
+              <WebcamContainer>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+                <canvas
+                  ref={canvasRef}
+                  style={{ display: 'none' }}
+                />
+                <CaptureButton
+                  variant="contained"
+                  startIcon={<CameraIcon />}
+                  onClick={capturePhoto}
+                  disabled={loading}
+                >
+                  {loading ? 'Capture en cours...' : 'Prendre la photo'}
+                </CaptureButton>
+                
+                <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
+                  <Tooltip title="Indications photo">
+                    <Alert severity="info" sx={{ maxWidth: 300 }}>
+                      Assurez-vous que le visage est bien visible et éclairé
+                    </Alert>
+                  </Tooltip>
+                </Box>
+              </WebcamContainer>
+            </Grid>
+            
+            <Grid item xs={12} md={5}>
+              <StepCard active={true}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    {photo ? 'Photo capturée' : 'Aperçu'}
+                  </Typography>
+                  
+                  {photo ? (
+                    <Box
+                      component="img"
+                      src={photo}
+                      alt="Photo patient"
+                      sx={{
+                        width: '100%',
+                        borderRadius: 2,
+                        border: '2px solid',
+                        borderColor: 'success.main',
+                        boxShadow: 3
+                      }}
+                    />
+                  ) : (
+                    <Box
+                      sx={{
+                        width: '100%',
+                        height: 300,
+                        bgcolor: 'grey.100',
+                        borderRadius: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'column',
+                        gap: 2
+                      }}
+                    >
+                      <CameraIcon sx={{ fontSize: 64, color: 'grey.400' }} />
+                      <Typography color="text.secondary" align="center">
+                        Aperçu de la photo<br />apparaîtra ici
+                      </Typography>
+                    </Box>
+                  )}
+                </CardContent>
+              </StepCard>
+            </Grid>
+          </Grid>
+        ) : (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <input
+              type="file"
+              accept="image/*"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              style={{ display: 'none' }}
+            />
+            <Button
+              variant="contained"
+              startIcon={<CloudUploadIcon />}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              size="large"
+            >
+              {loading ? 'Chargement...' : 'Choisir un fichier image'}
+            </Button>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              Formats acceptés: JPG, PNG, GIF • Taille max: 5MB
+            </Typography>
+          </Box>
+        )}
+
+        <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => setActiveStep(0)}
+            disabled={loading}
+          >
+            Retour recherche
+          </Button>
+          <Button
+            variant="contained"
+            endIcon={<FingerprintIcon />}
+            onClick={() => setActiveStep(2)}
+            disabled={!photo || loading}
+            sx={{ flexGrow: 1 }}
+          >
+            Continuer vers empreintes
+          </Button>
+        </Box>
+      </Box>
+    );
+  };
+
+  const renderFingerprintCapture = () => {
+    const leftFingers = DOIGTS_CONFIG.filter(d => d.side === 'left');
+    const rightFingers = DOIGTS_CONFIG.filter(d => d.side === 'right');
+    const capturedFingers = Object.values(empreintes).filter(e => e?.quality >= FINGERPRINT_QUALITY_THRESHOLD).length;
+    const totalFingers = DOIGTS_CONFIG.length;
+
+    return (
+      <Box sx={{ py: 2 }}>
+        <Typography variant="h5" gutterBottom color="primary" fontWeight={600}>
+          <FingerprintIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+          Capture Empreintes Digitales
         </Typography>
-        
+
+        <Alert severity="info" sx={{ mb: 3 }}>
+          <strong>Instructions:</strong> Placez chaque doigt sur le scanner selon les indications. Les pouces sont obligatoires.
+        </Alert>
+
         <Grid container spacing={3}>
           <Grid item xs={12} md={8}>
-            <Card sx={{ mb: 3 }}>
-              <CardContent>
-                <Typography variant="subtitle1" gutterBottom>
-                  Main gauche
-                </Typography>
-                <Box display="flex" flexWrap="wrap">
-                  {DOIGTS.filter(d => d.code.includes('gauche')).map((doigt) => (
-                    <DoigtButton
-                      key={doigt.code}
-                      variant="contained"
-                      size="small"
-                      startIcon={<TouchAppIcon />}
-                      captured={empreintes[doigt.code]}
-                      onClick={() => captureEmpreinte(doigt.code)}
-                    >
-                      {doigt.label}
-                    </DoigtButton>
-                  ))}
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={autoSave}
+                      onChange={(e) => setAutoSave(e.target.checked)}
+                      color="primary"
+                    />
+                  }
+                  label="Sauvegarde automatique après chaque capture"
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <StepCard active={true}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom color="primary">
+                      Main gauche
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                      {leftFingers.map((doigt) => {
+                        const empreinte = empreintes[doigt.code];
+                        const isCaptured = empreinte?.quality >= FINGERPRINT_QUALITY_THRESHOLD;
+                        const isScanning = scanningFinger === doigt.code;
+                        
+                        return (
+                          <DoigtButton
+                            key={doigt.code}
+                            variant="contained"
+                            size="large"
+                            startIcon={isCaptured ? <CheckIcon /> : <TouchAppIcon />}
+                            captured={isCaptured}
+                            main={doigt.required}
+                            quality={empreinte?.quality || 0}
+                            onClick={() => isCaptured ? handleViewBiometricData('empreinte', doigt.code) : captureEmpreinte(doigt.code)}
+                            disabled={loading || isScanning || (scanningFinger !== null && scanningFinger !== doigt.code)}
+                            sx={{ flex: '1 0 calc(50% - 12px)', minWidth: 200 }}
+                          >
+                            {isScanning ? (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <CircularProgress size={16} color="inherit" />
+                                Capture... {scanProgress}%
+                              </Box>
+                            ) : (
+                              <>
+                                {doigt.label}
+                                {isCaptured && (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1 }}>
+                                    <CheckIcon sx={{ fontSize: 16 }} />
+                                    {empreinte.quality}%
+                                  </Box>
+                                )}
+                              </>
+                            )}
+                          </DoigtButton>
+                        );
+                      })}
+                    </Box>
+                  </CardContent>
+                </StepCard>
+              </Grid>
+
+              <Grid item xs={12}>
+                <StepCard active={true}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom color="primary">
+                      Main droite
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                      {rightFingers.map((doigt) => {
+                        const empreinte = empreintes[doigt.code];
+                        const isCaptured = empreinte?.quality >= FINGERPRINT_QUALITY_THRESHOLD;
+                        const isScanning = scanningFinger === doigt.code;
+                        
+                        return (
+                          <DoigtButton
+                            key={doigt.code}
+                            variant="contained"
+                            size="large"
+                            startIcon={isCaptured ? <CheckIcon /> : <TouchAppIcon />}
+                            captured={isCaptured}
+                            main={doigt.required}
+                            quality={empreinte?.quality || 0}
+                            onClick={() => isCaptured ? handleViewBiometricData('empreinte', doigt.code) : captureEmpreinte(doigt.code)}
+                            disabled={loading || isScanning || (scanningFinger !== null && scanningFinger !== doigt.code)}
+                            sx={{ flex: '1 0 calc(50% - 12px)', minWidth: 200 }}
+                          >
+                            {isScanning ? (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <CircularProgress size={16} color="inherit" />
+                                Capture... {scanProgress}%
+                              </Box>
+                            ) : (
+                              <>
+                                {doigt.label}
+                                {isCaptured && (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1 }}>
+                                    <CheckIcon sx={{ fontSize: 16 }} />
+                                    {empreinte.quality}%
+                                  </Box>
+                                )}
+                              </>
+                            )}
+                          </DoigtButton>
+                        );
+                      })}
+                    </Box>
+                  </CardContent>
+                </StepCard>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Box sx={{ display: 'flex', gap: 2, pt: 2 }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<ArrowBackIcon />}
+                    onClick={() => setActiveStep(1)}
+                    disabled={loading || scanningFinger !== null}
+                  >
+                    Retour photo
+                  </Button>
+                  <Button
+                    variant="contained"
+                    endIcon={<SignatureIcon />}
+                    onClick={() => setActiveStep(3)}
+                    disabled={capturedFingers < 2 || loading || scanningFinger !== null}
+                    sx={{ flexGrow: 1 }}
+                  >
+                    Continuer vers signature
+                  </Button>
                 </Box>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" gutterBottom>
-                  Main droite
-                </Typography>
-                <Box display="flex" flexWrap="wrap">
-                  {DOIGTS.filter(d => d.code.includes('droit')).map((doigt) => (
-                    <DoigtButton
-                      key={doigt.code}
-                      variant="contained"
-                      size="small"
-                      startIcon={<TouchAppIcon />}
-                      captured={empreintes[doigt.code]}
-                      onClick={() => captureEmpreinte(doigt.code)}
-                    >
-                      {doigt.label}
-                    </DoigtButton>
-                  ))}
-                </Box>
-              </CardContent>
-            </Card>
-            
-            <Box mt={3}>
-              <Button
-                variant="outlined"
-                onClick={() => setActiveStep(1)}
-                startIcon={<ArrowBackIcon />}
-              >
-                Retour
-              </Button>
-              <Button
-                variant="contained"
-                onClick={() => setActiveStep(3)}
-                disabled={empreintesCaptured < 2}
-                sx={{ ml: 2 }}
-                endIcon={<SignatureIcon />}
-              >
-                Continuer
-              </Button>
-            </Box>
+              </Grid>
+            </Grid>
           </Grid>
-          
+
           <Grid item xs={12} md={4}>
-            <Card>
+            <StepCard active={true}>
               <CardContent>
-                <Typography variant="subtitle1" gutterBottom>
-                  Résumé des captures
+                <Typography variant="h6" gutterBottom>
+                  Progression capture
                 </Typography>
-                
-                <Box mb={2}>
-                  <Typography variant="body2" color="text.secondary">
-                    Empreintes capturées: {empreintesCaptured}/10
+
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Empreintes valides: {capturedFingers}/{totalFingers}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Empreintes principales: {mainEmpreintesCaptured}/2
-                  </Typography>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={(capturedFingers / totalFingers) * 100}
+                    sx={{ height: 10, borderRadius: 5 }}
+                    color={
+                      capturedFingers >= 2 ? 'success' : 
+                      capturedFingers > 0 ? 'warning' : 'primary'
+                    }
+                  />
                 </Box>
-                
+
                 <Divider sx={{ my: 2 }} />
-                
+
                 <Typography variant="subtitle2" gutterBottom>
                   Détail par doigt:
                 </Typography>
-                <List dense>
-                  {DOIGTS.map((doigt) => (
-                    <ListItem key={doigt.code}>
-                      <ListItemIcon>
-                        {empreintes[doigt.code] ? (
-                          <CheckIcon color="success" />
-                        ) : (
-                          <CancelIcon color="disabled" />
-                        )}
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary={doigt.label}
-                        primaryTypographyProps={{
-                          variant: 'body2',
-                          color: empreintes[doigt.code] ? 'text.primary' : 'text.disabled'
+                <List dense sx={{ maxHeight: 300, overflow: 'auto' }}>
+                  {DOIGTS_CONFIG.map((doigt) => {
+                    const empreinte = empreintes[doigt.code];
+                    const isCaptured = empreinte?.quality >= FINGERPRINT_QUALITY_THRESHOLD;
+                    const isPoorQuality = empreinte && empreinte.quality < FINGERPRINT_QUALITY_THRESHOLD;
+                    
+                    return (
+                      <ListItem 
+                        key={doigt.code}
+                        sx={{ 
+                          py: 0.5,
+                          bgcolor: isCaptured ? 'success.light' : isPoorQuality ? 'warning.light' : 'transparent',
+                          borderRadius: 1,
+                          mb: 0.5
                         }}
-                      />
-                    </ListItem>
-                  ))}
+                      >
+                        <ListItemIcon sx={{ minWidth: 36 }}>
+                          {isCaptured ? (
+                            <CheckIcon color="success" fontSize="small" />
+                          ) : isPoorQuality ? (
+                            <WarningIcon color="warning" fontSize="small" />
+                          ) : (
+                            <CancelIcon color="disabled" fontSize="small" />
+                          )}
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary={
+                            <Typography 
+                              variant="body2"
+                              fontWeight={doigt.required ? 600 : 400}
+                              color={isCaptured ? 'success.dark' : isPoorQuality ? 'warning.dark' : 'text.primary'}
+                            >
+                              {doigt.label}
+                              {doigt.required && ' *'}
+                            </Typography>
+                          }
+                          secondary={
+                            empreinte && (
+                              <Typography variant="caption" color="text.secondary">
+                                Qualité: {empreinte.quality}%
+                              </Typography>
+                            )
+                          }
+                        />
+                        {isPoorQuality && (
+                          <IconButton
+                            size="small"
+                            onClick={() => retryFingerCapture(doigt.code)}
+                            title="Recommencer la capture"
+                          >
+                            <RefreshIcon fontSize="small" />
+                          </IconButton>
+                        )}
+                      </ListItem>
+                    );
+                  })}
                 </List>
+
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  * Les pouces sont obligatoires (qualité minimale: {FINGERPRINT_QUALITY_THRESHOLD}%)
+                </Alert>
               </CardContent>
-            </Card>
-            
-            {patientStats && (
-              <Card sx={{ mt: 2 }}>
-                <CardContent>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Progression biométrique
-                  </Typography>
-                  <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
-                    <Box display="flex" alignItems="center">
-                      <PhotoCameraIcon color={photo ? "success" : "disabled"} sx={{ mr: 1 }} />
-                      <Typography variant="body2">Photo</Typography>
-                    </Box>
-                    <Chip 
-                      label={photo ? "✓" : "✗"} 
-                      color={photo ? "success" : "default"} 
-                      size="small" 
-                    />
-                  </Box>
-                  <Box display="flex" alignItems="center" justifyContent="space-between">
-                    <Box display="flex" alignItems="center">
-                      <FingerprintIcon color={empreintesCaptured >= 2 ? "success" : "disabled"} sx={{ mr: 1 }} />
-                      <Typography variant="body2">Empreintes</Typography>
-                    </Box>
-                    <Chip 
-                      label={`${empreintesCaptured}/10`} 
-                      color={empreintesCaptured >= 2 ? "success" : "default"} 
-                      size="small" 
-                    />
-                  </Box>
-                </CardContent>
-              </Card>
-            )}
+            </StepCard>
           </Grid>
         </Grid>
       </Box>
     );
   };
 
-  // Étape 4: Capture Signature
-  const renderStep4 = () => (
-    <Box>
-      <Typography variant="h6" gutterBottom>
-        Capture de la signature
+  const renderSignatureCapture = () => (
+    <Box sx={{ py: 2 }}>
+      <Typography variant="h5" gutterBottom color="primary" fontWeight={600}>
+        <CreateIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+        Capture Signature
       </Typography>
-      
-      <Typography variant="body2" color="text.secondary" paragraph>
-        Veuillez signer dans la zone ci-dessous en utilisant la souris ou le doigt (sur écran tactile)
-      </Typography>
-      
+
+      <Alert severity="info" sx={{ mb: 3 }}>
+        Signez dans la zone ci-dessous en utilisant la souris ou le doigt (sur écran tactile)
+      </Alert>
+
       <Grid container spacing={3}>
         <Grid item xs={12} md={8}>
-          <SignatureContainer>
-            <SignatureCanvas
-              ref={signatureRef}
-              penColor="black"
-              backgroundColor="white"
-              canvasProps={{
-                width: 800,
-                height: 300,
-                className: 'signature-canvas'
-              }}
-            />
-          </SignatureContainer>
-          
-          <Box mt={2} display="flex" gap={2}>
+          <StepCard active={true}>
+            <CardContent>
+              <Box
+                sx={{
+                  width: '100%',
+                  height: 300,
+                  border: '2px dashed',
+                  borderColor: 'divider',
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  backgroundColor: 'white',
+                  position: 'relative'
+                }}
+              >
+                <canvas
+                  ref={signatureRef}
+                  width={800}
+                  height={300}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    cursor: 'crosshair',
+                    touchAction: 'none'
+                  }}
+                  onMouseDown={(e) => {
+                    const canvas = signatureRef.current;
+                    if (!canvas) return;
+                    
+                    const ctx = canvas.getContext('2d');
+                    const rect = canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.strokeStyle = '#000000';
+                    ctx.lineWidth = 2;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    
+                    canvas.isDrawing = true;
+                  }}
+                  onMouseMove={(e) => {
+                    const canvas = signatureRef.current;
+                    if (!canvas || !canvas.isDrawing) return;
+                    
+                    const ctx = canvas.getContext('2d');
+                    const rect = canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    ctx.lineTo(x, y);
+                    ctx.stroke();
+                  }}
+                  onMouseUp={() => {
+                    const canvas = signatureRef.current;
+                    if (!canvas) return;
+                    
+                    canvas.isDrawing = false;
+                    ctx.beginPath();
+                  }}
+                  onMouseLeave={() => {
+                    const canvas = signatureRef.current;
+                    if (!canvas) return;
+                    
+                    canvas.isDrawing = false;
+                  }}
+                />
+              </Box>
+
+              <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<RefreshIcon />}
+                  onClick={clearSignature}
+                  disabled={loading}
+                >
+                  Effacer signature
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<SaveIcon />}
+                  onClick={saveSignature}
+                  disabled={loading}
+                >
+                  Enregistrer signature
+                </Button>
+              </Box>
+            </CardContent>
+          </StepCard>
+
+          <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
             <Button
               variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={clearSignature}
-            >
-              Effacer
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<SaveIcon />}
-              onClick={saveSignature}
-            >
-              Enregistrer la signature
-            </Button>
-          </Box>
-          
-          <Box mt={3}>
-            <Button
-              variant="outlined"
-              onClick={() => setActiveStep(2)}
               startIcon={<ArrowBackIcon />}
+              onClick={() => setActiveStep(2)}
+              disabled={loading}
             >
-              Retour
+              Retour empreintes
             </Button>
             <Button
               variant="contained"
-              onClick={handleValidate}
-              disabled={!signature}
-              sx={{ ml: 2 }}
               endIcon={<CheckIcon />}
+              onClick={handleValidate}
+              disabled={!signature || loading}
+              sx={{ flexGrow: 1 }}
             >
-              Valider l'enrolement
+              Valider l'enrôlement
             </Button>
           </Box>
         </Grid>
-        
+
         <Grid item xs={12} md={4}>
-          {signature && (
-            <Card sx={{ mb: 2 }}>
-              <CardContent>
-                <Typography variant="subtitle1" gutterBottom>
-                  Signature capturée
-                </Typography>
+          <StepCard active={true}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Aperçu signature
+              </Typography>
+
+              {signature ? (
                 <Box
                   component="img"
                   src={signature}
                   alt="Signature"
                   sx={{
                     width: '100%',
-                    border: '1px solid #ddd',
-                    borderRadius: 1
+                    border: '2px solid',
+                    borderColor: 'success.main',
+                    borderRadius: 2,
+                    p: 2,
+                    bgcolor: 'white'
                   }}
                 />
-              </CardContent>
-            </Card>
-          )}
-          
-          {patientStats && (
-            <Card>
-              <CardContent>
+              ) : (
+                <Box
+                  sx={{
+                    width: '100%',
+                    height: 200,
+                    border: '2px dashed',
+                    borderColor: 'divider',
+                    borderRadius: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'column',
+                    gap: 1
+                  }}
+                >
+                  <CreateIcon sx={{ fontSize: 48, color: 'grey.400' }} />
+                  <Typography color="text.secondary" align="center">
+                    Signature en attente
+                  </Typography>
+                </Box>
+              )}
+
+              <Box sx={{ mt: 3 }}>
                 <Typography variant="subtitle2" gutterBottom>
-                  Progression biométrique
+                  Progression globale
                 </Typography>
-                <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
-                  <Box display="flex" alignItems="center">
-                    <PhotoCameraIcon color={photo ? "success" : "disabled"} sx={{ mr: 1 }} />
-                    <Typography variant="body2">Photo</Typography>
-                  </Box>
-                  <Chip 
-                    label={photo ? "✓" : "✗"} 
-                    color={photo ? "success" : "default"} 
-                    size="small" 
-                  />
-                </Box>
-                <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
-                  <Box display="flex" alignItems="center">
-                    <FingerprintIcon 
-                      color={Object.keys(empreintes).length >= 2 ? "success" : "disabled"} 
-                      sx={{ mr: 1 }} 
-                    />
-                    <Typography variant="body2">Empreintes</Typography>
-                  </Box>
-                  <Chip 
-                    label={`${Object.keys(empreintes).length}/10`} 
-                    color={Object.keys(empreintes).length >= 2 ? "success" : "default"} 
-                    size="small" 
-                  />
-                </Box>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box display="flex" alignItems="center">
-                    <CreateIcon color={signature ? "success" : "disabled"} sx={{ mr: 1 }} />
-                    <Typography variant="body2">Signature</Typography>
-                  </Box>
-                  <Chip 
-                    label={signature ? "✓" : "✗"} 
-                    color={signature ? "success" : "default"} 
-                    size="small" 
-                  />
-                </Box>
                 
+                <Box sx={{ mb: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography variant="caption">Photo</Typography>
+                    <Typography variant="caption" fontWeight={600}>
+                      {captureProgress.photo}%
+                    </Typography>
+                  </Box>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={captureProgress.photo}
+                    sx={{ height: 6, borderRadius: 3 }}
+                    color={captureProgress.photo === 100 ? 'success' : 'primary'}
+                  />
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography variant="caption">Empreintes</Typography>
+                    <Typography variant="caption" fontWeight={600}>
+                      {captureProgress.empreintes.toFixed(1)}%
+                    </Typography>
+                  </Box>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={captureProgress.empreintes}
+                    sx={{ height: 6, borderRadius: 3 }}
+                    color={captureProgress.empreintes >= 20 ? 'success' : 'warning'}
+                  />
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography variant="caption">Signature</Typography>
+                    <Typography variant="caption" fontWeight={600}>
+                      {captureProgress.signature}%
+                    </Typography>
+                  </Box>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={captureProgress.signature}
+                    sx={{ height: 6, borderRadius: 3 }}
+                    color={captureProgress.signature === 100 ? 'success' : 'primary'}
+                  />
+                </Box>
+
                 <Divider sx={{ my: 2 }} />
-                
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Typography variant="subtitle2">Statut complet:</Typography>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography variant="subtitle2">Complétude:</Typography>
                   <Chip 
-                    label={patientStats?.complet ? "✓ COMPLET" : "INCOMPLET"} 
-                    color={patientStats?.complet ? "success" : "warning"} 
-                    size="small" 
+                    icon={<ShieldIcon />}
+                    label={
+                      captureProgress.photo === 100 && 
+                      captureProgress.empreintes >= 20 && 
+                      captureProgress.signature === 100 
+                        ? "COMPLET" 
+                        : "EN COURS"
+                    }
+                    color={
+                      captureProgress.photo === 100 && 
+                      captureProgress.empreintes >= 20 && 
+                      captureProgress.signature === 100 
+                        ? "success" 
+                        : "warning"
+                    }
+                    variant="filled"
                   />
                 </Box>
-              </CardContent>
-            </Card>
-          )}
+              </Box>
+            </CardContent>
+          </StepCard>
         </Grid>
       </Grid>
     </Box>
   );
 
-  // Étape 5: Validation
-  const renderStep5 = () => (
-    <Box sx={{ textAlign: 'center', py: 4 }}>
+  const renderValidation = () => (
+    <Box sx={{ py: 2, textAlign: 'center' }}>
+      <Typography variant="h4" gutterBottom color="success.main" fontWeight={600}>
+        <CheckIcon sx={{ mr: 2, fontSize: 48, verticalAlign: 'middle' }} />
+        Enrôlement Réussi !
+      </Typography>
+
+      <Typography variant="h6" color="text.secondary" paragraph>
+        Les données biométriques ont été enregistrées avec succès
+      </Typography>
+
       {success && (
-        <Alert severity="success" sx={{ mb: 3 }}>
-          {success}
+        <Alert 
+          severity="success" 
+          sx={{ mb: 4, maxWidth: 600, mx: 'auto' }}
+          icon={<VerifiedUserIcon fontSize="large" />}
+        >
+          <Typography variant="h6">{success}</Typography>
+          <Typography variant="body2">
+            L'enrôlement est maintenant complet et sécurisé
+          </Typography>
         </Alert>
       )}
-      
-      <CheckIcon sx={{ fontSize: 80, color: 'success.main', mb: 2 }} />
-      
-      <Typography variant="h5" gutterBottom>
-        Enrolement biométrique complété avec succès !
-      </Typography>
-      
-      {selectedPatient && (
-        <Card sx={{ maxWidth: 400, mx: 'auto', mt: 3 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Récapitulatif
-            </Typography>
-            
-            <Box textAlign="left">
-              <Typography variant="body1">
-                <strong>Patient:</strong> {selectedPatient.nom} {selectedPatient.prenom}
+
+      <Grid container spacing={3} justifyContent="center">
+        <Grid item xs={12} md={8}>
+          <StepCard active={true}>
+            <CardContent>
+              <Typography variant="h5" gutterBottom color="primary">
+                <ShieldIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                Récapitulatif de l'enrôlement
               </Typography>
-              <Typography variant="body1">
-                <strong>ID Patient:</strong> {selectedPatient.id}
-              </Typography>
-              <Typography variant="body1">
-                <strong>Photo:</strong> {photo ? '✓ Capturée' : '✗ Manquante'}
-              </Typography>
-              <Typography variant="body1">
-                <strong>Empreintes:</strong> {Object.keys(empreintes).length}/10 capturées
-              </Typography>
-              <Typography variant="body1">
-                <strong>Signature:</strong> {signature ? '✓ Capturée' : '✗ Manquante'}
-              </Typography>
-            </Box>
-          </CardContent>
-          
-          <CardActions sx={{ justifyContent: 'center' }}>
-            <Button
-              variant="contained"
-              onClick={handleReset}
-              startIcon={<RefreshIcon />}
-            >
-              Nouvel enrolement
-            </Button>
-          </CardActions>
-        </Card>
-      )}
-      
-      <Box mt={4}>
-        <Button
-          variant="outlined"
-          onClick={() => window.print()}
-          sx={{ mr: 2 }}
-        >
-          Imprimer le certificat
-        </Button>
+
+              {selectedPatient && (
+                <>
+                  <Grid container spacing={3} sx={{ mt: 1 }}>
+                    <Grid item xs={12}>
+                      <Card sx={{ bgcolor: 'primary.light', color: 'primary.contrastText' }}>
+                        <CardContent>
+                          <Grid container spacing={2} alignItems="center">
+                            <Grid item>
+                              <Avatar sx={{ width: 80, height: 80, bgcolor: 'white', color: 'primary.main' }}>
+                                {selectedPatient.nom?.charAt(0)}{selectedPatient.prenom?.charAt(0)}
+                              </Avatar>
+                            </Grid>
+                            <Grid item xs>
+                              <Typography variant="h5" fontWeight={600}>
+                                {selectedPatient.nom} {selectedPatient.prenom}
+                              </Typography>
+                              <Typography variant="body1">
+                                ID Patient: {selectedPatient.id}
+                              </Typography>
+                              <Typography variant="body2">
+                                {selectedPatient.telephone} • {selectedPatient.dateNaissance || 'Date naissance non spécifiée'}
+                              </Typography>
+                            </Grid>
+                          </Grid>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    <Grid item xs={12} md={4}>
+                      <Card>
+                        <CardContent sx={{ textAlign: 'center' }}>
+                          <PhotoCameraIcon sx={{ fontSize: 48, color: 'success.main', mb: 2 }} />
+                          <Typography variant="h6">Photo</Typography>
+                          <Chip 
+                            label="CAPTURÉE" 
+                            color="success" 
+                            sx={{ mt: 1 }}
+                          />
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    <Grid item xs={12} md={4}>
+                      <Card>
+                        <CardContent sx={{ textAlign: 'center' }}>
+                          <FingerprintIcon sx={{ fontSize: 48, color: 'success.main', mb: 2 }} />
+                          <Typography variant="h6">Empreintes</Typography>
+                          <Typography variant="h4" color="success.main" fontWeight={600}>
+                            {Object.values(empreintes).filter(e => e?.quality >= FINGERPRINT_QUALITY_THRESHOLD).length}/10
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    <Grid item xs={12} md={4}>
+                      <Card>
+                        <CardContent sx={{ textAlign: 'center' }}>
+                          <CreateIcon sx={{ fontSize: 48, color: 'success.main', mb: 2 }} />
+                          <Typography variant="h6">Signature</Typography>
+                          <Chip 
+                            label="CAPTURÉE" 
+                            color="success" 
+                            sx={{ mt: 1 }}
+                          />
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    <Grid item xs={12}>
+                      <Divider sx={{ my: 2 }}>
+                        <Typography color="text.secondary">Historique des enrôlements</Typography>
+                      </Divider>
+                      
+                      {enrollmentHistory.length > 0 ? (
+                        <List dense>
+                          {enrollmentHistory.slice(0, 3).map((record, index) => (
+                            <ListItem key={index}>
+                              <ListItemIcon>
+                                <HistoryIcon color="action" />
+                              </ListItemIcon>
+                              <ListItemText
+                                primary={`Enrôlement du ${new Date(record.date).toLocaleDateString()}`}
+                                secondary={`Par ${record.operator} • Statut: ${record.status}`}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      ) : (
+                        <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                          Aucun historique d'enrôlement précédent
+                        </Typography>
+                      )}
+                    </Grid>
+
+                    <Grid item xs={12}>
+                      <Divider sx={{ my: 2 }}>
+                        <Typography color="text.secondary">Certificat d'enrôlement</Typography>
+                      </Divider>
+                      
+                      <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+                        <Button
+                          variant="contained"
+                          startIcon={<DownloadIcon />}
+                          onClick={handleDownloadCertificate}
+                          size="large"
+                        >
+                          Télécharger certificat
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          startIcon={<PrintIcon />}
+                          onClick={() => window.print()}
+                          size="large"
+                        >
+                          Imprimer certificat
+                        </Button>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </>
+              )}
+            </CardContent>
+          </StepCard>
+        </Grid>
+      </Grid>
+
+      <Box sx={{ mt: 4, display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
         <Button
           variant="contained"
+          startIcon={<RefreshIcon />}
+          onClick={handleReset}
+          size="large"
+        >
+          Nouvel enrôlement
+        </Button>
+        <Button
+          variant="outlined"
           onClick={() => window.location.href = '/patients'}
+          size="large"
         >
           Retour à la liste des patients
         </Button>
@@ -938,63 +1976,126 @@ function BiometrieEnrolement() {
     </Box>
   );
 
-  // Rendu principal
+  // =============== MAIN RENDER ===============
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          🎯 Enrolement Biométrique
-        </Typography>
-        
-        <Typography variant="body1" color="text.secondary" paragraph>
-          Capturez les données biométriques du patient (photo, empreintes digitales, signature)
-        </Typography>
-        
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
-        
-        {success && (
-          <Alert severity="success" sx={{ mb: 2 }}>
-            {success}
-          </Alert>
-        )}
-        
-        <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-          {Etapes.map((label) => (
-            <Step key={label}>
-              <StepLabel>{label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
-        
-        <Box sx={{ mt: 3 }}>
-          {activeStep === 0 && renderStep1()}
-          {activeStep === 1 && renderStep2()}
-          {activeStep === 2 && renderStep3()}
-          {activeStep === 3 && renderStep4()}
-          {activeStep === 4 && renderStep5()}
-        </Box>
-        
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-            <CircularProgress />
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      <GradientPaper elevation={0}>
+        <Box sx={{ p: { xs: 2, md: 4 } }}>
+          {/* Header */}
+          <Box sx={{ mb: 4, textAlign: 'center' }}>
+            <Typography variant="h3" gutterBottom fontWeight={700} color="primary">
+              <FingerprintIcon sx={{ mr: 2, fontSize: 48, verticalAlign: 'bottom' }} />
+              Enrôlement Biométrique
+            </Typography>
+            <Typography variant="h6" color="text.secondary">
+              Système sécurisé de capture et validation des données biométriques
+            </Typography>
           </Box>
-        )}
-      </Paper>
-      
-      {/* Dialog pour visualiser les données */}
-      <Dialog open={viewDialog} onClose={() => setViewDialog(false)} maxWidth="md">
-        <DialogTitle>
+
+          {/* Error Display */}
+          {error && (
+            <Alert 
+              severity="error" 
+              sx={{ mb: 3 }} 
+              onClose={() => setError(null)}
+              icon={<ErrorIcon />}
+            >
+              <Typography fontWeight={600}>{error}</Typography>
+            </Alert>
+          )}
+
+          {/* Progress Stepper */}
+          <Box sx={{ mb: 4 }}>
+            <Stepper 
+              activeStep={activeStep} 
+              alternativeLabel
+              sx={{
+                '& .MuiStepLabel-label': {
+                  fontWeight: 600,
+                  fontSize: '0.875rem'
+                }
+              }}
+            >
+              {ETAPES.map((label, index) => (
+                <Step key={label}>
+                  <StepLabel 
+                    StepIconProps={{
+                      sx: {
+                        '&.Mui-completed': {
+                          color: 'success.main',
+                          '& .MuiStepIcon-text': {
+                            fill: 'white'
+                          }
+                        },
+                        '&.Mui-active': {
+                          color: 'primary.main',
+                          '& .MuiStepIcon-text': {
+                            fill: 'white'
+                          }
+                        }
+                      }
+                    }}
+                  >
+                    {label}
+                  </StepLabel>
+                </Step>
+              ))}
+            </Stepper>
+          </Box>
+
+          {/* Main Content */}
+          <Box sx={{ mt: 3 }}>
+            {activeStep === 0 && renderPatientSearch()}
+            {activeStep === 1 && renderPhotoCapture()}
+            {activeStep === 2 && renderFingerprintCapture()}
+            {activeStep === 3 && renderSignatureCapture()}
+            {activeStep === 4 && renderValidation()}
+          </Box>
+
+          {/* Loading Overlay */}
+          {loading && (
+            <Box
+              sx={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 9999
+              }}
+            >
+              <Box sx={{ textAlign: 'center' }}>
+                <CircularProgress size={80} thickness={4} />
+                <Typography variant="h6" sx={{ mt: 3 }}>
+                  Traitement en cours...
+                </Typography>
+              </Box>
+            </Box>
+          )}
+        </Box>
+      </GradientPaper>
+
+      {/* Data View Dialog */}
+      <Dialog 
+        open={viewDialog} 
+        onClose={() => setViewDialog(false)} 
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider' }}>
           Visualisation des données biométriques
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ pt: 3 }}>
           {viewData && (
             <Box>
-              <Typography variant="subtitle1" gutterBottom>
-                Type: {viewData.type} {viewData.doigt && `- ${viewData.doigt}`}
+              <Typography variant="subtitle1" gutterBottom fontWeight={600}>
+                {viewData.type === 'photo' && 'Photo d\'identité'}
+                {viewData.type === 'signature' && 'Signature numérique'}
+                {viewData.type === 'empreinte' && `Empreinte digitale - ${viewData.finger}`}
               </Typography>
               
               {viewData.type === 'photo' || viewData.type === 'signature' ? (
@@ -1002,12 +2103,42 @@ function BiometrieEnrolement() {
                   component="img"
                   src={viewData.data}
                   alt={viewData.type}
-                  sx={{ width: '100%', maxHeight: 400, objectFit: 'contain' }}
+                  sx={{
+                    width: '100%',
+                    maxHeight: 400,
+                    objectFit: 'contain',
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: 'divider'
+                  }}
+                />
+              ) : viewData.data?.image ? (
+                <Box
+                  component="img"
+                  src={viewData.data.image}
+                  alt={`Empreinte ${viewData.finger}`}
+                  sx={{
+                    width: '100%',
+                    maxHeight: 400,
+                    objectFit: 'contain',
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: 'divider'
+                  }}
                 />
               ) : (
-                <Paper sx={{ p: 2, backgroundColor: 'grey.100' }}>
-                  <Typography variant="body2" fontFamily="monospace">
-                    {viewData.data}
+                <Paper sx={{ p: 3, backgroundColor: 'grey.50', borderRadius: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Informations de l'empreinte
+                  </Typography>
+                  <Typography variant="body2">
+                    Doigt: {viewData.finger}
+                  </Typography>
+                  <Typography variant="body2">
+                    Qualité: {viewData.data?.quality || 0}%
+                  </Typography>
+                  <Typography variant="body2">
+                    Date: {viewData.data?.timestamp ? new Date(viewData.data.timestamp).toLocaleString() : 'N/A'}
                   </Typography>
                 </Paper>
               )}

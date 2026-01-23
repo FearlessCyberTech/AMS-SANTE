@@ -1,4001 +1,3880 @@
-// src/components/Prescriptions.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Box,
-  Tabs,
-  Tab,
-  Paper,
-  TextField,
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  IconButton,
-  Chip,
-  Card,
-  CardContent,
-  Typography,
-  Grid,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Alert,
-  CircularProgress,
-  Tooltip,
-  Stack,
-  Divider,
-  Avatar,
-  InputAdornment,
-  Fade,
-  Zoom,
-  Slide,
-  alpha,
-  useTheme,
-  Checkbox,
-  Badge,
-  RadioGroup,
-  Radio,
-  FormControlLabel,
-  FormLabel,
-  LinearProgress
-} from '@mui/material';
+  Card, Row, Col, Button, Modal, Form,
+  Select, Input, Table, Tag, Space, message, Tabs,
+  Descriptions, Tooltip, Spin, Divider, Typography,
+  Checkbox, Alert, Radio, Statistic, Badge, InputNumber,
+  DatePicker, Upload, Popconfirm, Empty, notification,
+  Steps, Result, Collapse, List, Avatar, AutoComplete
+} from 'antd';
 import {
-  Search as SearchIcon,
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Visibility as ViewIcon,
-  Edit as EditIcon,
-  CheckCircle as CheckIcon,
-  Cancel as CancelIcon,
-  Print as PrintIcon,
-  PlayCircle as ExecuteIcon,
-  Assignment as PrescriptionIcon,
-  LocalPharmacy as PharmacyIcon,
-  Science as LabIcon,
-  CameraAlt as RadiologyIcon,
-  Description as ReportIcon,
-  LocalHospital as HospitalIcon,
-  MedicalServices as MedicalIcon,
-  Person as PersonIcon,
-  HealthAndSafety as HealthIcon,
-  Medication as MedicationIcon,
-  Event as EventIcon,
-  Warning as WarningIcon,
-  Done as DoneIcon,
-  MoreVert as MoreIcon,
-  Download as DownloadIcon,
-  FilterList as FilterIcon,
-  Refresh as RefreshIcon,
-  Close as CloseIcon,
-  ChevronRight as ChevronRightIcon,
-  Notifications as NotificationIcon,
-  EditNote as EditNoteIcon
-} from '@mui/icons-material';
-import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
-import QrCodeIcon from '@mui/icons-material/QrCode';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import fr from 'date-fns/locale/fr';
-import api from '../../services/api';
+  FileTextOutlined, MedicineBoxOutlined, SearchOutlined,
+  PlusOutlined, DeleteOutlined, EyeOutlined,
+  PrinterOutlined, CheckCircleOutlined, SyncOutlined,
+  WarningOutlined, UserOutlined, CloseCircleOutlined,
+  DownloadOutlined, HistoryOutlined, CalculatorOutlined,
+  DollarOutlined, ScheduleOutlined, InfoCircleOutlined,
+  LineChartOutlined, FileExcelOutlined, LoadingOutlined,
+  FilePdfOutlined, ClockCircleOutlined, QuestionCircleOutlined,
+  UserAddOutlined, TeamOutlined, MedicineBoxTwoTone,
+  SwapOutlined, UserSwitchOutlined
+} from '@ant-design/icons';
+import moment from 'moment';
+import 'moment/locale/fr';
+import { prescriptionsAPI, beneficiairesAPI, consultationsAPI, prestatairesAPI, centresAPI } from '../../services/api';
 
-// Import de jsQR pour le scan réel
-import jsQR from 'jsqr';
-
-// Import pour générer le QR code
-import QRCode from 'qrcode';
-
-// Import du CSS
-import './Prescriptions.css';
+const { Option } = Select;
+const { TextArea } = Input;
+const { Text } = Typography;
+const { TabPane } = Tabs;
+const { Step } = Steps;
+const { Panel } = Collapse;
 
 const Prescriptions = () => {
-  const theme = useTheme();
-  const printRef = useRef();
-  
-  const [activeTab, setActiveTab] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [loadingData, setLoadingData] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
-  const [remplirDetails, setRemplirDetails] = useState(true);
-  const [hasNewPrescriptions, setHasNewPrescriptions] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editingPrescriptionId, setEditingPrescriptionId] = useState(null);
-  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [confirmAction, setConfirmAction] = useState(null);
-  const [showScanner, setShowScanner] = useState(false);
-  const [scannerError, setScannerError] = useState(null);
-  const [scannedData, setScannedData] = useState(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanProgress, setScanProgress] = useState(0);
-  const [scanFps, setScanFps] = useState(0);
-  const [lastScanTime, setLastScanTime] = useState(0);
-
-  // États pour la liste des prescriptions
-  const [prescriptions, setPrescriptions] = useState([]);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 20,
-    total: 0,
-    totalPages: 0
-  });
-  const [filters, setFilters] = useState({
-    search: '',
-    statut: '',
-    type_prestation: '',
-    date_debut: null,
-    date_fin: null
+  // États principaux
+  const [activeTab, setActiveTab] = useState('saisie');
+  const [loading, setLoading] = useState({
+    patient: false,
+    medicaments: false,
+    prescrire: false,
+    execution: false,
+    impression: false,
+    prestations: false,
+    prestataires: false,
+    consultations: false,
+    centres: false
   });
 
-  // États pour la création de prescription
-  const [patientSearch, setPatientSearch] = useState('');
+  // États pour la saisie de prescription
   const [patient, setPatient] = useState(null);
-  const [patients, setPatients] = useState([]);
-  const [typePrestation, setTypePrestation] = useState('');
-  const [observations, setObservations] = useState('');
-  const [dateValidite, setDateValidite] = useState(null);
-  const [details, setDetails] = useState([]);
-  
-  // États pour les médecins et centres
-  const [medecins, setMedecins] = useState([]);
-  const [selectedMedecin, setSelectedMedecin] = useState('');
+  const [prescriptionForm] = Form.useForm();
+  const [selectedMedicaments, setSelectedMedicaments] = useState([]);
+  const [typePrestation, setTypePrestation] = useState('PHARMACIE');
+  const [searchMedicament, setSearchMedicament] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [affectionCode, setAffectionCode] = useState('');
+  const [affectionDetails, setAffectionDetails] = useState(null);
+  const [consultationInfo, setConsultationInfo] = useState(null);
+  const [centreId, setCentreId] = useState(localStorage.getItem('selectedCentre') || '1');
   const [centres, setCentres] = useState([]);
-  const [selectedCentre, setSelectedCentre] = useState('');
+  const [centreNom, setCentreNom] = useState('');
+  
+  // États pour les prestataires (médecins)
+  const [prestataires, setPrestataires] = useState([]);
+  const [searchPrestataire, setSearchPrestataire] = useState('');
+  const [searchPrestataireResults, setSearchPrestataireResults] = useState([]);
+  const [selectedPrestataire, setSelectedPrestataire] = useState(null);
+  const [modalPrestataires, setModalPrestataires] = useState(false);
+  const [medecinConsultation, setMedecinConsultation] = useState(null);
+  const [showMedecinChangeAlert, setShowMedecinChangeAlert] = useState(false);
 
-  // États pour l'exécution
-  const [prescriptionSearch, setPrescriptionSearch] = useState('');
+  // États pour l'exécution de prescription
+  const [prescriptionNumero, setPrescriptionNumero] = useState('');
   const [selectedPrescription, setSelectedPrescription] = useState(null);
-  const [executionDetails, setExecutionDetails] = useState([]);
+  const [actesExecutes, setActesExecutes] = useState([]);
+  const [prescriptionDetails, setPrescriptionDetails] = useState(null);
+  const [totalFacture, setTotalFacture] = useState(0);
 
-  // États pour les modals
-  const [searchPatientDialog, setSearchPatientDialog] = useState(false);
-  const [searchElementDialog, setSearchElementDialog] = useState(false);
-  const [elementSearch, setElementSearch] = useState('');
-  const [elements, setElements] = useState([]);
+  // États pour la gestion des données
+  const [mesPrescriptions, setMesPrescriptions] = useState([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [validationModalVisible, setValidationModalVisible] = useState(false);
 
-  // États pour la feuille de soins
-  const [showFeuilleSoins, setShowFeuilleSoins] = useState(false);
-  const [prescriptionToPrint, setPrescriptionToPrint] = useState(null);
-  const [printing, setPrinting] = useState(false);
-  const [qrCodeUrl, setQrCodeUrl] = useState(null);
-  const [generatingQrCode, setGeneratingQrCode] = useState(false);
+  // ==================== ORDONNANCE MÉDICALE ====================
+  const [ordonnanceToPrint, setOrdonnanceToPrint] = useState(null);
+  const [printingOrdonnance, setPrintingOrdonnance] = useState(false);
+  const [printModalVisible, setPrintModalVisible] = useState(false);
 
-  // Références pour le scanner
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const animationFrameRef = useRef(null);
-  const streamRef = useRef(null);
-  const scanIntervalRef = useRef(null);
-  const frameCountRef = useRef(0);
-  const lastFpsUpdateRef = useRef(0);
-
-  // Types de prestations disponibles avec couleurs
-  const typesPrestation = [
-    { 
-      value: 'Pharmacie', 
-      label: 'Pharmacie', 
-      icon: <PharmacyIcon />, 
-      color: '#4CAF50',
-      bgColor: alpha('#4CAF50', 0.1)
-    },
-    { 
-      value: 'Biologie', 
-      label: 'Biologie', 
-      icon: <LabIcon />, 
-      color: '#2196F3',
-      bgColor: alpha('#2196F3', 0.1)
-    },
-    { 
-      value: 'Imagerie', 
-      label: 'Imagerie', 
-      icon: <RadiologyIcon />, 
-      color: '#9C27B0',
-      bgColor: alpha('#9C27B0', 0.1)
-    },
-    { 
-      value: 'Consultation', 
-      label: 'Consultation', 
-      icon: <MedicalIcon />, 
-      color: '#FF9800',
-      bgColor: alpha('#FF9800', 0.1)
-    },
-    { 
-      value: 'Hospitalisation', 
-      label: 'Hospitalisation', 
-      icon: <HospitalIcon />, 
-      color: '#F44336',
-      bgColor: alpha('#F44336', 0.1)
-    }
-  ];
-
-  // ==============================
-  // FONCTIONS UTILITAIRES
-  // ==============================
-
-  const formatDate = (date) => {
-    if (!date || !(date instanceof Date) || isNaN(date)) return null;
-    
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    
-    return `${year}-${month}-${day}`;
+  // ==================== FONCTIONS UTILITAIRES ====================
+  const getTypeLabel = (type) => {
+    const typeMap = {
+      'PHARMACIE': 'Pharmacie',
+      'BIOLOGIE': 'Biologie',
+      'IMAGERIE': 'Imagerie Médicale',
+      'HOSPITALISATION': 'Hospitalisation',
+      'CONSULTATION': 'Consultation Spécialisée',
+      'KINESITHERAPIE': 'Kinésithérapie',
+      'INFIRMIER': 'Soins infirmiers'
+    };
+    return typeMap[type] || type;
   };
 
-  const formatDateDisplay = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+  const getExecutantLabel = (type) => {
+    const executantMap = {
+      'PHARMACIE': 'Pharmacien',
+      'BIOLOGIE': 'Biologiste',
+      'IMAGERIE': 'Radiologue',
+      'CONSULTATION': 'Médecin',
+      'HOSPITALISATION': 'Chef de Service',
+      'KINESITHERAPIE': 'Kinésithérapeute',
+      'INFIRMIER': 'Infirmier'
+    };
+    return executantMap[type] || 'Exécutant';
   };
 
-  const getStatusColor = (statut) => {
-    const statusMap = {
-      'En attente': { 
-        color: 'warning', 
-        icon: <WarningIcon />,
-        gradient: 'var(--warning-gradient)'
-      },
-      'En cours': { 
-        color: 'info', 
-        icon: <RefreshIcon />,
-        gradient: 'var(--info-gradient)'
-      },
-      'Executee': { 
-        color: 'success', 
-        icon: <DoneIcon />,
-        gradient: 'var(--success-gradient)'
-      },
-      'Annulee': { 
-        color: 'error', 
-        icon: <CloseIcon />,
-        gradient: 'var(--error-gradient)'
-      },
-      'Partiellement exécutée': { 
-        color: 'secondary', 
-        icon: <CheckIcon />,
-        gradient: 'linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%)'
+  // Fonction pour générer un numéro de prescription unique
+  const generatePrescriptionNumber = () => {
+    const date = moment().format('YYMMDD');
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    return `PRES-${date}-${random}`;
+  };
+
+  // Fonction pour récupérer le nom du centre depuis les informations de consultation
+  const getCentreNameFromConsultation = useCallback(async (consultationData) => {
+    try {
+      if (!consultationData || !consultationData.COD_CEN) return null;
+      
+      const centre = centres.find(c => 
+        c.id === consultationData.COD_CEN || 
+        c.cod_cen === consultationData.COD_CEN
+      );
+      
+      if (centre) {
+        return centre.nom || centre.NOM_CENTRE || `Centre ${consultationData.COD_CEN}`;
       }
-    };
-    return statusMap[statut] || { 
-      color: 'default', 
-      icon: <MoreIcon />,
-      gradient: 'var(--primary-gradient)'
-    };
-  };
-
-  const calculateTotal = () => {
-    return details.reduce((sum, detail) => {
-      return sum + (detail.quantite * detail.prix_unitaire);
-    }, 0);
-  };
-
-  // ==============================
-  // GÉNÉRATION DU QR CODE POUR LA FEUILLE DE SOINS
-  // ==============================
-
-  const generateQrCode = async (prescriptionData) => {
-    if (!prescriptionData || !prescriptionData.NUM_PRESCRIPTION) {
-      console.error('Données de prescription manquantes pour générer le QR code');
+      
+      // Si non trouvé dans le cache, faire un appel API
+      const response = await centresAPI.getById(consultationData.COD_CEN);
+      if (response.success && response.centre) {
+        return response.centre.nom || response.centre.NOM_CENTRE;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Erreur récupération centre:', error);
       return null;
     }
+  }, [centres]);
 
-    try {
-      setGeneratingQrCode(true);
-      
-      // Créer un objet contenant les informations essentielles pour le QR code
-      const qrData = {
-        type: 'PRESCRIPTION_MEDICALE',
-        numero: prescriptionData.NUM_PRESCRIPTION,
-        patient: `${prescriptionData.NOM_BEN} ${prescriptionData.PRE_BEN}`.trim(),
-        date: prescriptionData.DATE_PRESCRIPTION || new Date().toISOString().split('T')[0],
-        centre: prescriptionData.NOM_CENTRE || 'Centre médical',
-        montant: prescriptionData.MONTANT_TOTAL || 0,
-        statut: prescriptionData.STATUT || 'En attente'
-      };
-      
-      // Convertir en JSON string
-      const qrDataString = JSON.stringify(qrData);
-      
-      // Options du QR code
-      const qrOptions = {
-        errorCorrectionLevel: 'H', // Haute correction d'erreur
-        margin: 2,
-        scale: 8,
-        color: {
-          dark: '#000000', // Couleur des modules
-          light: '#FFFFFF' // Couleur de fond
-        }
-      };
-      
-      // Générer le QR code
-      const qrUrl = await QRCode.toDataURL(qrDataString, qrOptions);
-      
-      setQrCodeUrl(qrUrl);
-      return qrUrl;
-    } catch (err) {
-      console.error('❌ Erreur génération QR code:', err);
-      
-      // Générer un QR code de secours avec juste le numéro
-      try {
-        const fallbackUrl = await QRCode.toDataURL(prescriptionData.NUM_PRESCRIPTION, {
-          errorCorrectionLevel: 'M',
-          margin: 1,
-          scale: 6
-        });
-        
-        setQrCodeUrl(fallbackUrl);
-        return fallbackUrl;
-      } catch (fallbackErr) {
-        console.error('❌ Erreur génération QR code de secours:', fallbackErr);
-        return null;
-      }
-    } finally {
-      setGeneratingQrCode(false);
-    }
-  };
+  // ==================== ÉTATS POUR LA SAISIE MANUELLE ====================
+  const [saisieManuelleMode, setSaisieManuelleMode] = useState(false);
+  const [acteManuel, setActeManuel] = useState({
+    LIBELLE: '',
+    QUANTITE: 1,
+    POSOLOGIE: 'À déterminer',
+    DUREE: '7',
+    PRIX_UNITAIRE: 0,
+    TYPE_ELEMENT: 'MEDICAMENT',
+    UNITE: 'boîte(s)'
+  });
+  const [formSaisieManuelle] = Form.useForm();
 
-  // ==============================
-  // FONCTIONS SCANNER AVEC JSQR
-  // ==============================
-
-  const startCamera = async () => {
-    try {
-      setIsScanning(true);
-      setScannerError(null);
-      setScanProgress(0);
-      setScanFps(0);
-      frameCountRef.current = 0;
-      lastFpsUpdateRef.current = Date.now();
-      
-      // Démarrer la barre de progression
-      const progressInterval = setInterval(() => {
-        setScanProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(progressInterval);
-            return 100;
-          }
-          return prev + 5;
-        });
-      }, 100);
-
-      // Demander l'accès à la caméra
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: false 
-      });
-      
-      streamRef.current = stream;
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        
-        // Attendre que la vidéo soit prête
-        await new Promise((resolve) => {
-          if (videoRef.current.readyState >= 3) {
-            resolve();
-          } else {
-            videoRef.current.onloadedmetadata = resolve;
-          }
-        });
-        
-        await videoRef.current.play();
-      }
-      
-      clearInterval(progressInterval);
-      setScanProgress(100);
-      
-      // Démarrer la détection après un court délai
-      setTimeout(() => {
-        detectQRCode();
-      }, 500);
-      
-    } catch (err) {
-      console.error('Erreur caméra:', err);
-      setScannerError(`Impossible d'accéder à la caméra: ${err.message}`);
-      setIsScanning(false);
-      setScanProgress(0);
-      
-      // Suggestions basées sur l'erreur
-      if (err.name === 'NotAllowedError') {
-        setScannerError('Permission caméra refusée. Veuillez autoriser l\'accès à la caméra.');
-      } else if (err.name === 'NotFoundError') {
-        setScannerError('Aucune caméra trouvée. Vérifiez votre périphérique.');
-      } else if (err.name === 'NotReadableError') {
-        setScannerError('Caméra déjà utilisée par une autre application.');
-      }
-    }
-  };
-
-  const stopCamera = () => {
-    // Arrêter l'animation frame
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
+  // Fonction pour basculer entre le mode recherche et le mode manuel
+  const toggleSaisieManuelleMode = () => {
+    setSaisieManuelleMode(!saisieManuelleMode);
+    setSearchMedicament('');
+    setSearchResults([]);
     
-    // Arrêter l'intervalle FPS
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
-    }
-    
-    // Arrêter le flux vidéo
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => {
-        track.stop();
-      });
-      streamRef.current = null;
-    }
-    
-    // Réinitialiser la vidéo
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    
-    setIsScanning(false);
-    setScanProgress(0);
-    setScanFps(0);
-  };
-
-  const detectQRCode = () => {
-    if (!videoRef.current || !canvasRef.current || !isScanning) return;
-    
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
-    
-    // Ajuster la taille du canvas à la vidéo
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    // Dessiner l'image de la vidéo sur le canvas
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // Obtenir les données d'image
-    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-    
-    // Utiliser jsQR pour détecter les QR codes
-    const code = jsQR(imageData.data, imageData.width, imageData.height, {
-      inversionAttempts: 'dontInvert',
-    });
-    
-    // Compter les FPS
-    frameCountRef.current++;
-    const now = Date.now();
-    if (now - lastFpsUpdateRef.current >= 1000) {
-      setScanFps(frameCountRef.current);
-      frameCountRef.current = 0;
-      lastFpsUpdateRef.current = now;
-    }
-    
-    if (code) {
-      // QR code détecté !
-      console.log('✅ QR Code détecté:', {
-        data: code.data,
-        version: code.version,
-        location: code.location
-      });
-      
-      // Dessiner un rectangle autour du QR code pour le feedback visuel
-      context.strokeStyle = '#4CAF50';
-      context.lineWidth = 4;
-      context.beginPath();
-      context.moveTo(code.location.topLeftCorner.x, code.location.topLeftCorner.y);
-      context.lineTo(code.location.topRightCorner.x, code.location.topRightCorner.y);
-      context.lineTo(code.location.bottomRightCorner.x, code.location.bottomRightCorner.y);
-      context.lineTo(code.location.bottomLeftCorner.x, code.location.bottomLeftCorner.y);
-      context.closePath();
-      context.stroke();
-      
-      // Ajouter un texte
-      context.fillStyle = '#4CAF50';
-      context.font = '16px Arial';
-      context.fillText('✓ QR Code détecté', 10, 30);
-      
-      // Traiter les données scannées
-      handleScanSuccess(code.data);
-      
-      // Arrêter la détection
-      stopCamera();
-      
-      // Fermer le modal après un délai
-      setTimeout(() => {
-        setShowScanner(false);
-      }, 1500);
-      
-      return; // Ne pas continuer la détection
-    }
-    
-    // Si aucun code n'est détecté, continuer la détection
-    if (isScanning) {
-      animationFrameRef.current = requestAnimationFrame(detectQRCode);
-    }
-  };
-
-  const handleScanSuccess = (data) => {
-    if (!data || !isScanning) return;
-    
-    console.log('✅ Données scannées:', data);
-    setScannedData(data);
-    setSuccess(`QR Code scanné avec succès: ${data}`);
-    
-    // Essayer de parser le JSON si c'est un QR code généré par notre système
-    try {
-      const parsedData = JSON.parse(data);
-      if (parsedData.type === 'PRESCRIPTION_MEDICALE' && parsedData.numero) {
-        data = parsedData.numero;
-      }
-    } catch (e) {
-      // Ce n'est pas du JSON, on garde la donnée brute
-    }
-    
-    // Mettre à jour le champ de recherche selon l'onglet actif
-    if (activeTab === 2) { // Onglet "Exécuter Prescription"
-      setPrescriptionSearch(data);
-      setTimeout(() => {
-        searchPrescription();
-      }, 500);
-    } 
-    else if (activeTab === 0) { // Onglet "Liste des Prescriptions"
-      setFilters({ ...filters, search: data });
-      setTimeout(() => {
-        loadPrescriptions();
-      }, 500);
-    }
-  };
-
-  const toggleScanner = async () => {
-    if (showScanner) {
-      // Fermer le scanner
-      stopCamera();
-      setShowScanner(false);
-      setScannerError(null);
-      setScannedData(null);
+    if (!saisieManuelleMode) {
+      message.info('Mode saisie manuelle activé');
     } else {
-      // Ouvrir le scanner
-      setShowScanner(true);
-      setScannerError(null);
-      setScannedData(null);
-      
-      // Démarrer la caméra après un court délai pour permettre l'animation
-      setTimeout(() => {
-        startCamera();
-      }, 300);
+      message.info('Mode recherche activé');
     }
   };
 
-  // Mettre à jour les FPS régulièrement
-  useEffect(() => {
-    if (isScanning) {
-      scanIntervalRef.current = setInterval(() => {
-        const now = Date.now();
-        const elapsed = now - lastFpsUpdateRef.current;
-        if (elapsed > 0) {
-          setScanFps(Math.round((frameCountRef.current * 1000) / elapsed));
-          frameCountRef.current = 0;
-          lastFpsUpdateRef.current = now;
-        }
-      }, 1000);
-    }
-    
-    return () => {
-      if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
-      }
-    };
-  }, [isScanning]);
-
-  // Nettoyer à la destruction du composant
-  useEffect(() => {
-    return () => {
-      stopCamera();
-    };
-  }, []);
-
-  // Arrêter la caméra quand le modal est fermé
-  useEffect(() => {
-    if (!showScanner) {
-      stopCamera();
-    }
-  }, [showScanner]);
-
-  // Générer le QR code quand une prescription est sélectionnée pour impression
-  useEffect(() => {
-    if (prescriptionToPrint && prescriptionToPrint.NUM_PRESCRIPTION) {
-      generateQrCode(prescriptionToPrint);
-    } else {
-      setQrCodeUrl(null);
-    }
-  }, [prescriptionToPrint]);
-
-  // ==============================
-  // IMPRESSION FEUILLE DE SOINS AVEC QR CODE
-  // ==============================
-
-  const handlePrintFeuilleSoins = () => {
-    const prescriptionData = prescriptionToPrint || {};
-    const details = prescriptionData.details || [];
-    const patientName = `${prescriptionData.NOM_BEN || 'N/A'} ${prescriptionData.PRE_BEN || ''}`.trim();
-    const numero = prescriptionData.NUM_PRESCRIPTION || 'Non spécifié';
-
-    if (!printRef.current) {
-      console.error('Ref d\'impression non trouvée');
-      setError('Erreur: Contenu d\'impression non disponible');
+  // Fonction pour ajouter un acte saisi manuellement
+  const ajouterActeManuel = () => {
+    if (!acteManuel.LIBELLE || acteManuel.LIBELLE.trim() === '') {
+      message.error('Veuillez saisir un libellé pour l\'acte');
       return;
     }
     
-    setPrinting(true);
+    const prix = parseFloat(acteManuel.PRIX_UNITAIRE) || 0;
+    const quantite = parseInt(acteManuel.QUANTITE) || 1;
     
-    const printContent = printRef.current;
+    if (prix < 0) {
+      message.error('Le prix unitaire ne peut pas être négatif');
+      return;
+    }
+    
+    if (quantite <= 0) {
+      message.error('La quantité doit être supérieure à 0');
+      return;
+    }
+    
+    const nouvelActe = {
+      ...acteManuel,
+      COD_ELEMENT: `MANUEL_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      COD_MED: `MANUEL_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      LIBELLE: acteManuel.LIBELLE.trim(),
+      QUANTITE: quantite,
+      POSOLOGIE: acteManuel.POSOLOGIE || 'À déterminer',
+      DUREE: acteManuel.DUREE || '7',
+      PRIX_UNITAIRE: prix,
+      TYPE_ELEMENT: 'ACTE_MANUEL',
+      REMBOURSABLE: 0,
+      key: `manuel_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      estManuel: true
+    };
+    
+    setSelectedMedicaments([...selectedMedicaments, nouvelActe]);
+    message.success(`${nouvelActe.LIBELLE} ajouté à la prescription (saisie manuelle)`);
+    
+    // Réinitialiser le formulaire de saisie manuelle
+    setActeManuel({
+      LIBELLE: '',
+      QUANTITE: 1,
+      POSOLOGIE: 'À déterminer',
+      DUREE: '7',
+      PRIX_UNITAIRE: 0,
+      TYPE_ELEMENT: 'MEDICAMENT',
+      UNITE: 'boîte(s)'
+    });
+    formSaisieManuelle.resetFields();
+  };
+
+  // Fonction pour vérifier si un acte est manuel
+  const estActeManuel = (acte) => {
+    return acte.estManuel || acte.TYPE_ELEMENT === 'ACTE_MANUEL' || 
+           (acte.COD_ELEMENT && acte.COD_ELEMENT.startsWith('MANUEL_'));
+  };
+
+  // ==================== IMPRESSION D'ORDONNANCE AMÉLIORÉE ====================
+  const handlePrintOrdonnance = () => {
+    if (!ordonnanceToPrint) return;
+    
+    setPrintingOrdonnance(true);
+    
     const printWindow = window.open('', '_blank');
     
     if (!printWindow) {
-      setError('Veuillez autoriser les popups pour imprimer');
-      setPrinting(false);
+      message.error('Veuillez autoriser les fenêtres pop-up pour l\'impression');
+      setPrintingOrdonnance(false);
       return;
     }
     
-    // Extraire le contenu HTML
-    const contentHtml = printContent.innerHTML;
+    const { patient, selectedPrestataire, selectedMedicaments, centreId, centres, typePrestation, affectionCode, numero, observations, urgent } = ordonnanceToPrint;
     
-    // Créer la page d'impression
+    // Trouver le centre actuel
+    const currentCentre = centres.find(c => c.id === centreId || c.cod_cen === centreId) || {};
+    
+    // Calculer le total de la prescription
+    const totalPrescription = selectedMedicaments?.reduce((sum, med) => {
+      const prix = parseFloat(med.PRIX_UNITAIRE) || 0;
+      const quantite = parseInt(med.QUANTITE) || 1;
+      return sum + (prix * quantite);
+    }, 0) || 0;
+    
+    // Générer le numéro de prescription si non fourni
+    const prescriptionNum = numero || generatePrescriptionNumber();
+    
+    // Définir les données pour le QR Code
+    const qrData = {
+      prescriptionNumero: prescriptionNum,
+      patientNom: patient?.nom_complet || '',
+      patientIdentifiant: patient?.numero_carte || patient?.identifiant_national || '',
+      datePrescription: moment().format('DD/MM/YYYY'),
+      medecin: selectedPrestataire?.nom_complet || '',
+      centre: currentCentre.nom || currentCentre.NOM_CENTRE || '',
+      total: totalPrescription,
+      typePrestation: typePrestation
+    };
+    
+    // Générer l'URL du QR Code
+    const generateQRCodeURL = () => {
+      const encodedData = encodeURIComponent(JSON.stringify(qrData));
+      return `https://chart.googleapis.com/chart?chs=80x80&cht=qr&chl=${encodedData}&choe=UTF-8`;
+    };
+    
+    const qrCodeURL = generateQRCodeURL();
+    
+    // Date de validité (par défaut 30 jours)
+    const dateValidite = ordonnanceToPrint.dateValidite || moment().add(30, 'days').format('DD/MM/YYYY');
+    
     printWindow.document.write(`
       <!DOCTYPE html>
       <html lang="fr">
-        <head>
-          <title>Prescription Médicale - ${prescriptionToPrint?.NUM_PRESCRIPTION || 'Prescription'}</title>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>
-            @page {
-              size: A4;
-              margin: 15mm;
-            }
-            
+      <head>
+        <title>Ordonnance Médicale - ${prescriptionNum}</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          @page {
+            size: A4;
+            margin: 15mm 20mm;
+          }
+          
+          body {
+            font-family: 'Arial', 'Helvetica', sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #333;
+            line-height: 1.4;
+            font-size: 13px;
+            position: relative;
+            background-color: white;
+            width: 210mm;
+            min-height: 297mm;
+          }
+          
+          .print-container {
+            position: relative;
+            width: 100%;
+            min-height: 297mm;
+            padding: 20px 25px;
+            box-sizing: border-box;
+            background: linear-gradient(white 98%, #f0f5ff 100%);
+            border: 1px solid #e0e0e0;
+          }
+          
+          .security-watermark {
+            position: absolute;
+            top: 40%;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            opacity: 0.05;
+            transform: rotate(-45deg);
+            font-size: 60px;
+            font-weight: bold;
+            color: #2c5aa0;
+            z-index: 0;
+            pointer-events: none;
+            word-wrap: break-word;
+            max-width: 100%;
+          }
+          
+          .header-section {
+            text-align: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #2c5aa0;
+            position: relative;
+            z-index: 1;
+          }
+          
+          .header-title {
+            color: #2c5aa0;
+            margin: 0 0 10px 0;
+            font-size: 24px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+          }
+          
+          .header-subtitle {
+            color: #666;
+            margin: 0 0 15px 0;
+            font-size: 16px;
+            font-weight: 500;
+          }
+          
+          .prescription-number-container {
+            background: linear-gradient(135deg, #2c5aa0, #1a3a6c);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin: 15px auto;
+            text-align: center;
+            border: 2px solid #2c5aa0;
+            width: 90%;
+            font-weight: bold;
+            font-size: 18px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: relative;
+            z-index: 1;
+          }
+          
+          .prescription-number-label {
+            font-size: 12px;
+            opacity: 0.9;
+            display: block;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+          }
+          
+          .section {
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 1;
+          }
+          
+          .section-title {
+            background-color: #f0f5ff;
+            color: #2c5aa0;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 12px;
+            padding: 8px 15px;
+            border-left: 4px solid #2c5aa0;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+          }
+          
+          .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 15px;
+          }
+          
+          .info-item {
+            display: flex;
+            margin-bottom: 8px;
+          }
+          
+          .info-label {
+            font-weight: bold;
+            color: #000;
+            min-width: 160px;
+            flex-shrink: 0;
+          }
+          
+          .info-value {
+            flex: 1;
+            text-align: left;
+            padding-left: 10px;
+            color: #333;
+            border-bottom: 1px dashed #ddd;
+          }
+          
+          .prescription-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin: 15px 0;
+            font-size: 12px;
+            border: 1px solid #2c5aa0;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+          }
+          
+          .prescription-table th {
+            background: linear-gradient(135deg, #2c5aa0, #1a3a6c);
+            color: white;
+            font-weight: bold;
+            padding: 10px 8px;
+            text-align: left;
+            border-right: 1px solid #3a6ab8;
+          }
+          
+          .prescription-table th:last-child {
+            border-right: none;
+          }
+          
+          .prescription-table td {
+            padding: 8px;
+            border-right: 1px solid #eee;
+            border-bottom: 1px solid #eee;
+          }
+          
+          .prescription-table tr:nth-child(even) {
+            background-color: #f9fafc;
+          }
+          
+          .prescription-table tr:hover {
+            background-color: #f0f7ff;
+          }
+          
+          .total-row {
+            font-weight: bold;
+            background-color: #e8f4ff;
+          }
+          
+          .total-row td {
+            text-align: right;
+            font-size: 13px;
+            padding: 10px 8px;
+            border-top: 2px solid #2c5aa0;
+          }
+          
+          .signature-section {
+            margin-top: 40px;
+            padding-top: 25px;
+            border-top: 2px solid #2c5aa0;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            position: relative;
+            z-index: 1;
+          }
+          
+          .signature-block {
+            flex: 1;
+            text-align: center;
+            padding: 0 20px;
+          }
+          
+          .signature-line {
+            width: 180px;
+            border-bottom: 1px solid #000;
+            height: 20px;
+            margin: 0 auto 8px;
+          }
+          
+          .signature-label {
+            margin: 5px 0 0 0;
+            font-size: 12px;
+            color: #000;
+            font-weight: bold;
+            text-transform: uppercase;
+          }
+          
+          .signature-details {
+            margin: 2px 0 0 0;
+            font-size: 11px;
+            color: #666;
+            line-height: 1.3;
+          }
+          
+          .footer {
+            margin-top: 25px;
+            text-align: center;
+            font-size: 11px;
+            color: #666;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+            position: relative;
+            z-index: 1;
+          }
+          
+          .legal-section {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 11px;
+            color: #666;
+            background-color: #f9f9f9;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+          }
+          
+          .qrcode-container {
+            position: absolute;
+            top: 20px;
+            right: 25px;
+            text-align: center;
+            padding: 8px;
+            border: 1px solid #2c5aa0;
+            border-radius: 8px;
+            background: white;
+            width: 100px;
+            height: 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1;
+          }
+          
+          .qrcode-img {
+            width: 80px;
+            height: 80px;
+          }
+          
+          .qrcode-label {
+            font-size: 9px;
+            color: #2c5aa0;
+            margin-top: 4px;
+            font-weight: bold;
+          }
+          
+          .center-info {
+            position: absolute;
+            top: 20px;
+            left: 25px;
+            font-size: 11px;
+            color: #333;
+            line-height: 1.4;
+            max-width: 220px;
+            background: white;
+            padding: 10px;
+            border: 1px solid #2c5aa0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            z-index: 1;
+          }
+          
+          .diagnosis-box {
+            padding: 12px;
+            background-color: #f9f9f9;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            min-height: 50px;
+            margin-bottom: 15px;
+            line-height: 1.6;
+          }
+          
+          .observations-box {
+            padding: 12px;
+            background-color: #fff9e6;
+            border-radius: 6px;
+            border: 1px solid #ffd166;
+            min-height: 50px;
+            margin-bottom: 15px;
+            line-height: 1.6;
+          }
+          
+          .urgent-badge {
+            position: absolute;
+            top: 20px;
+            right: 140px;
+            background-color: #ff4d4f;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            transform: rotate(15deg);
+            z-index: 1;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          }
+          
+          @media print {
             body {
-              font-family: 'Arial', 'Helvetica', sans-serif;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
               margin: 0;
               padding: 0;
-              color: #333;
-              line-height: 1.4;
-              font-size: 12px;
+              width: 210mm;
+              min-height: 297mm;
             }
             
-            .header {
-              display: flex;
-              justify-content: space-between;
-              align-items: flex-start;
-              border-bottom: 2px solid #2c5aa0;
-              padding-bottom: 15px;
-              margin-bottom: 20px;
-              page-break-after: avoid;
+            .print-container {
+              padding: 0;
+              border: none;
+              box-shadow: none;
             }
             
-            .logo-section {
-              flex: 0 0 25%;
+            .security-watermark {
+              opacity: 0.08;
             }
+          }
+          
+          .text-right {
+            text-align: right;
+          }
+          
+          .text-center {
+            text-align: center;
+          }
+          
+          .text-bold {
+            font-weight: bold;
+          }
+          
+          .empty-field {
+            color: #999;
+            font-style: italic;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-container">
+          <!-- Filigrane de sécurité -->
+          <div class="security-watermark">
+            ORDONNANCE MÉDICALE OFFICIELLE<br>
+            ${currentCentre.nom || currentCentre.NOM_CENTRE || 'CENTRE DE SANTÉ'}
+          </div>
+          
+          <!-- Badge urgent si nécessaire -->
+          ${urgent ? `
+            <div class="urgent-badge">
+              URGENT
+            </div>
+          ` : ''}
+          
+          <!-- QR Code en haut à droite -->
+          <div class="qrcode-container">
+            <div style="font-size: 10px; color: #2c5aa0; margin-bottom: 5px; font-weight: bold;">
+              QR CODE DE VÉRIFICATION
+            </div>
+            <img src="${qrCodeURL}" alt="QR Code Prescription" class="qrcode-img" />
+            <div class="qrcode-label">
+              SCAN POUR VÉRIFIER
+            </div>
+          </div>
+          
+          <!-- Info centre en haut à gauche -->
+          <div class="center-info">
+            <div style="font-weight: bold; margin-bottom: 8px; color: #2c5aa0; font-size: 12px;">
+              ${currentCentre.nom || currentCentre.NOM_CENTRE || 'Centre de santé'}
+            </div>
+            ${currentCentre.adresse || currentCentre.ADRESSE ? `
+              <div style="margin-bottom: 4px;">
+                <strong>Adresse:</strong> ${currentCentre.adresse || currentCentre.ADRESSE}
+              </div>
+            ` : ''}
+            ${currentCentre.telephone || currentCentre.TELEPHONE ? `
+              <div style="margin-bottom: 4px;">
+                <strong>Téléphone:</strong> ${currentCentre.telephone || currentCentre.TELEPHONE}
+              </div>
+            ` : ''}
+            ${currentCentre.email || currentCentre.EMAIL ? `
+              <div style="margin-bottom: 4px;">
+                <strong>Email:</strong> ${currentCentre.email || currentCentre.EMAIL}
+              </div>
+            ` : ''}
+          </div>
+          
+          <!-- En-tête principal -->
+          <div class="header-section">
+            <h1 class="header-title">Ordonnance Médicale</h1>
+            <h2 class="header-subtitle">Prescription Médicale Officielle</h2>
             
-            .logo {
-              max-width: 150px;
-              height: auto;
-            }
+            <div class="prescription-number-container">
+              <span class="prescription-number-label">N° Prescription</span>
+              ${prescriptionNum}
+            </div>
+          </div>
+          
+          <!-- Section Informations du Patient -->
+          <div class="section">
+            <div class="section-title">INFORMATIONS DU PATIENT</div>
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">Nom et Prénom:</span>
+                <span class="info-value">${patient?.nom_complet || 'Non spécifié'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Âge:</span>
+                <span class="info-value">${patient?.age || 'N/A'} ans</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Identifiant:</span>
+                <span class="info-value">${patient?.numero_carte || patient?.identifiant_national || 'Non spécifié'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Sexe:</span>
+                <span class="info-value">${patient?.sexe || 'Non spécifié'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Date de prescription:</span>
+                <span class="info-value">${moment().format('DD/MM/YYYY HH:mm')}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Date de validité:</span>
+                <span class="info-value">${dateValidite}</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Section Informations Médicales -->
+          <div class="section">
+            <div class="section-title">INFORMATIONS MÉDICALES</div>
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">Centre de santé:</span>
+                <span class="info-value">${currentCentre.nom || currentCentre.NOM_CENTRE || 'Non spécifié'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Médecin prescripteur:</span>
+                <span class="info-value">${selectedPrestataire?.nom_complet || 'Non spécifié'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Type de prescription:</span>
+                <span class="info-value">${getTypeLabel(typePrestation)}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Statut:</span>
+                <span class="info-value">${ordonnanceToPrint.statut || 'Valide'}</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Section Diagnostic/Affection -->
+          <div class="section">
+            <div class="section-title">DIAGNOSTIC / AFFECTION</div>
+            <div class="diagnosis-box">
+              ${affectionCode ? `
+                <div style="margin-bottom: 5px;">
+                  <span style="font-weight: bold;">Code CIM:</span> ${affectionCode}
+                </div>
+              ` : ''}
+              ${affectionDetails?.libelle ? `
+                <div style="margin-bottom: 5px;">
+                  <span style="font-weight: bold;">Libellé:</span> ${affectionDetails.libelle}
+                </div>
+              ` : '<br>'}
+            </div>
+          </div>
+          
+          <!-- Section Détails de la Prescription -->
+          <div class="section">
+            <div class="section-title">DÉTAILS DE LA PRESCRIPTION (${selectedMedicaments?.length || 0} actes)</div>
             
-            .title-section {
-              flex: 1;
-              text-align: center;
-            }
+            <table class="prescription-table">
+              <thead>
+                <tr>
+                  <th width="5%">N°</th>
+                  <th width="30%">Désignation</th>
+                  <th width="10%">Quantité</th>
+                  <th width="25%">Posologie</th>
+                  <th width="15%">Prix unitaire</th>
+                  <th width="15%">Montant</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${selectedMedicaments?.length > 0 ? selectedMedicaments.map((med, index) => {
+                  const prixUnitaire = parseFloat(med.PRIX_UNITAIRE) || 0;
+                  const quantite = parseInt(med.QUANTITE) || 1;
+                  const montant = prixUnitaire * quantite;
+                  
+                  return `
+                    <tr>
+                      <td>${index + 1}</td>
+                      <td><strong>${med.LIBELLE || med.libelle || 'Médicament'}</strong><br>
+                        ${med.NOM_GENERIQUE ? `<span style="font-size: 10px; color: #666;">Générique: ${med.NOM_GENERIQUE}</span>` : ''}
+                      </td>
+                      <td>${quantite} ${med.UNITE || 'boîte(s)'}</td>
+                      <td>${med.POSOLOGIE || 'À déterminer'}<br>
+                        ${med.DUREE ? `<span style="font-size: 10px; color: #666;">Durée: ${med.DUREE} jours</span>` : ''}
+                      </td>
+                      <td class="text-right">${prixUnitaire.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA</td>
+                      <td class="text-right text-bold">${montant.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA</td>
+                    </tr>
+                  `;
+                }).join('') : `
+                  <tr>
+                    <td colspan="6" class="text-center" style="padding: 20px; color: #999;">
+                      Aucun médicament prescrit
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+              <tfoot>
+                <tr class="total-row">
+                  <td colspan="5" class="text-right text-bold">TOTAL DE LA PRESCRIPTION</td>
+                  <td class="text-right text-bold">
+                    ${totalPrescription.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
             
-            .title-section h1 {
-              color: #2c5aa0;
-              margin: 0 0 5px 0;
-              font-size: 22px;
-              font-weight: bold;
-            }
+            ${ordonnanceToPrint.modeRemboursement || ordonnanceToPrint.delaiValidite ? `
+              <div style="margin-top: 12px; font-size: 12px; display: flex; justify-content: space-between;">
+                ${ordonnanceToPrint.modeRemboursement ? `
+                  <div>
+                    <strong>Mode de remboursement:</strong> ${ordonnanceToPrint.modeRemboursement}
+                  </div>
+                ` : ''}
+                ${ordonnanceToPrint.delaiValidite ? `
+                  <div>
+                    <strong>Délai de validité:</strong> ${ordonnanceToPrint.delaiValidite}
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
+          </div>
+          
+          <!-- Section Observations -->
+          ${observations ? `
+            <div class="section">
+              <div class="section-title">OBSERVATIONS MÉDICALES</div>
+              <div class="observations-box">
+                ${observations}
+              </div>
+            </div>
+          ` : ''}
+          
+          <!-- Section Signatures -->
+          <div class="signature-section">
+            <div class="signature-block">
+              <div class="signature-line"></div>
+              <div class="signature-label">Médecin Prescripteur</div>
+              <div class="signature-details">
+                ${selectedPrestataire?.nom_complet || 'Nom du médecin'}<br>
+                ${selectedPrestataire?.specialite || 'Spécialité'} - ${selectedPrestataire?.titre || 'Dr.'}
+              </div>
+            </div>
             
-            .title-section h2 {
-              color: #333;
-              margin: 0;
-              font-size: 16px;
-              font-weight: normal;
-            }
+            <div class="signature-block">
+              <div class="signature-line"></div>
+              <div class="signature-label">${getExecutantLabel(typePrestation)}</div>
+              <div class="signature-details">
+                (Signature et cachet)<br>
+                Date d'exécution
+              </div>
+            </div>
             
-            .qrcode-section {
-              flex: 0 0 25%;
-              text-align: right;
-            }
-            
-            .qrcode {
-              max-width: 100px;
-              height: auto;
-              border: 1px solid #ddd;
-              padding: 3px;
-              background: white;
-            }
-            
-            .section {
-              margin-bottom: 20px;
-              page-break-inside: avoid;
-            }
-            
-            .section-title {
-              color: #2c5aa0;
-              font-weight: bold;
-              font-size: 14px;
-              margin-bottom: 8px;
-              padding-bottom: 3px;
-              border-bottom: 1px solid #ddd;
-            }
-            
-            .patient-info, .medical-info {
-              display: grid;
-              grid-template-columns: repeat(2, 1fr);
-              gap: 8px;
-              margin-bottom: 12px;
-            }
-            
-            .info-item {
-              margin-bottom: 3px;
-              font-size: 11px;
-            }
-            
-            .info-label {
-              font-weight: bold;
-              color: #555;
-            }
-            
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 10px 0;
-              font-size: 10px;
-              page-break-inside: avoid;
-            }
-            
-            th {
-              background-color: #f0f5ff;
-              font-weight: bold;
-              padding: 6px;
-              border: 1px solid #ccc;
-              text-align: left;
-            }
-            
-            td {
-              padding: 6px;
-              border: 1px solid #ccc;
-            }
-            
-            .total-row {
-              font-weight: bold;
-              background-color: #f0f7f0;
-            }
-            
-            .total-amount {
-              font-size: 14px;
-              color: #4CAF50;
-              font-weight: bold;
-              text-align: right;
-            }
-            
-            .signature-area {
-              margin-top: 40px;
-              text-align: center;
-            }
-            
-            .signature-line {
-              width: 60%;
-              margin: 0 auto;
-              border-top: 1px solid #000;
-              padding-top: 8px;
-              font-size: 10px;
-            }
-            
-            .footer {
-              margin-top: 25px;
-              text-align: center;
-              font-size: 9px;
-              color: #666;
-              border-top: 1px solid #eee;
-              padding-top: 8px;
-              page-break-before: avoid;
-            }
-            
-            .qr-note {
-              font-size: 9px;
-              color: #666;
-              margin-top: 3px;
-              text-align: center;
-            }
-            
-            @media print {
-              body {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-                margin: 0;
-                padding: 0;
-              }
-              
-              .no-print {
-                display: none !important;
-              }
-              
-              table {
-                page-break-inside: auto;
-              }
-              
-              tr {
-                page-break-inside: avoid;
-                page-break-after: auto;
-              }
-              
-              .header {
-                page-break-before: always;
-                page-break-after: avoid;
-              }
-            }
-            
-            .prescription-number {
-              background-color: #f0f5ff;
-              padding: 8px;
-              border-radius: 4px;
-              margin: 10px 0;
-              text-align: center;
-              border: 1px solid #2c5aa0;
-            }
-            
-            .prescription-number strong {
-              font-size: 14px;
-              color: #2c5aa0;
-            }
-            
-            .watermark {
-              position: fixed;
-              top: 50%;
-              left: 50%;
-              transform: translate(-50%, -50%) rotate(-45deg);
-              font-size: 80px;
-              color: rgba(44, 90, 160, 0.1);
-              z-index: -1;
-              font-weight: bold;
-              pointer-events: none;
-            }
-          </style>
-        </head>
-        <body>
-          ${contentHtml}
-        </body>
+            ${typePrestation === 'PHARMACIE' ? `
+              <div class="signature-block">
+                <div class="signature-line"></div>
+                <div class="signature-label">Pharmacien</div>
+                <div class="signature-details">
+                  (Signature)<br>
+                  N° d'agrément
+                </div>
+              </div>
+            ` : ''}
+          </div>
+          
+          <!-- Section Mentions Légales -->
+          <div class="legal-section">
+            <div style="font-weight: bold; margin-bottom: 8px; color: #2c5aa0;">
+              MENTIONS LÉGALES ET INFORMATIONS
+            </div>
+            <div style="margin-bottom: 6px;">
+              • Document généré électroniquement par le système de gestion AMS - Validité légale assurée
+            </div>
+            <div style="margin-bottom: 6px;">
+              • Date de génération: ${moment().format('DD/MM/YYYY à HH:mm')}
+            </div>
+            <div style="margin-bottom: 6px;">
+              • Prescription urgente: ${urgent ? 'OUI - Priorité absolue' : 'NON'}
+            </div>
+            <div style="margin-bottom: 6px;">
+              • Cette ordonnance est valable jusqu'au: ${dateValidite}
+            </div>
+            <div>
+              • Tout document falsifié est passible de poursuites judiciaires
+            </div>
+          </div>
+          
+          <!-- Footer -->
+          <div class="footer">
+            <div style="margin-bottom: 5px; font-weight: bold; color: #2c5aa0;">
+              ${currentCentre.nom || currentCentre.NOM_CENTRE || 'Centre de santé'} - © PRTS 2025
+            </div>
+            <div style="font-size: 10px; color: #999; margin-bottom: 3px;">
+              Document sécurisé - Référence: ${prescriptionNum}
+            </div>
+            <div style="font-size: 9px; color: #999;">
+              Ce document est officiel et ne peut être reproduit ou utilisé sans autorisation
+            </div>
+          </div>
+        </div>
+        
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 500);
+          };
+          
+          window.onafterprint = function() {
+            window.close();
+          };
+        </script>
+      </body>
       </html>
     `);
     
     printWindow.document.close();
     
-    // Attendre que le contenu soit chargé
-    printWindow.onload = () => {
-      setTimeout(() => {
-        printWindow.focus();
-        printWindow.print();
-        
-        printWindow.onafterprint = () => {
-          printWindow.close();
-          setPrinting(false);
-        };
-        
-        // Fallback pour les navigateurs qui ne déclenchent pas onafterprint
-        setTimeout(() => {
-          if (!printWindow.closed) {
-            printWindow.close();
-          }
-          setPrinting(false);
-        }, 1000);
-      }, 500);
-    };
-  };
-
-  const viewFeuilleSoins = async (prescription) => {
-    try {
-      setLoading(true);
-      
-      const identifier = prescription.NUM_PRESCRIPTION || prescription.COD_PRES;
-      if (!identifier) {
-        setError('Identifiant de prescription manquant');
-        setLoading(false);
-        return;
-      }
-      
-      console.log('🔍 Recherche prescription pour feuille de soins:', identifier);
-      
-      const response = await api.prescriptions.getByNumeroOrId(identifier);
-      
-      console.log('📄 Réponse API feuille de soins:', response);
-      
-      if (response.success) {
-        const prescriptionData = response.prescription || response.data || response;
-        const details = response.details || prescriptionData.details || [];
-        
-        // Détecter si c'est une prescription sans détails
-        const hasDefaultDetailOnly = details.length === 1 && 
-          (details[0].COD_ELEMENT === 'DEFAULT-001' ||
-           details[0].LIBELLE?.includes('Prescription générale sans détails'));
-        
-        const completePrescription = {
-          ...prescription,
-          ...prescriptionData,
-          details: details,
-          hasDefaultDetailOnly: hasDefaultDetailOnly
-        };
-        
-        setPrescriptionToPrint(completePrescription);
-        
-        // Générer le QR code
-        await generateQrCode(completePrescription);
-        
-        setShowFeuilleSoins(true);
-      } else {
-        setError(response.message || 'Impossible de charger les détails de la prescription');
-      }
-    } catch (err) {
-      console.error('❌ Erreur détaillée chargement feuille de soins:', err);
-      
-      if (err.status === 404) {
-        setError(`Prescription non trouvée dans le système`);
-      } else if (err.message?.includes('Network Error')) {
-        setError('Erreur de connexion au serveur');
-      } else {
-        setError(`Erreur lors du chargement: ${err.message || 'Erreur inconnue'}`);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ==============================
-  // CHARGEMENT DES DONNÉES
-  // ==============================
-
-  const loadPrescriptions = async () => {
-    try {
-      setLoading(true);
-      const params = {
-        page: pagination.page,
-        limit: pagination.limit,
-        search: filters.search || '',
-        statut: filters.statut || '',
-        type_prestation: filters.type_prestation || ''
-      };
-
-      if (filters.date_debut && filters.date_debut instanceof Date && !isNaN(filters.date_debut)) {
-        params.date_debut = formatDate(filters.date_debut);
-      }
-
-      if (filters.date_fin && filters.date_fin instanceof Date && !isNaN(filters.date_fin)) {
-        params.date_fin = formatDate(filters.date_fin);
-      }
-
-      const response = await api.prescriptions.getAll(params);
-      
-      if (response.success) {
-        setPrescriptions(response.prescriptions);
-        setPagination(response.pagination);
-      }
-    } catch (err) {
-      setError('Erreur lors du chargement des prescriptions');
-      console.error('Erreur détaillée:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadMedecins = async () => {
-    try {
-      setLoadingData(true);
-      const response = await api.consultations.getMedecins();
-      
-      console.log('🔍 Réponse médecins:', response);
-      
-      if (response.success && response.medecins) {
-        const medecinsList = response.medecins.map(med => ({
-          COD_PRE: med.COD_PRE || med.id,
-          NOM_PRESTATAIRE: med.NOM_PRESTATAIRE || med.nom || med.NOM_COMPLET,
-          PRENOM_PRESTATAIRE: med.PRENOM_PRESTATAIRE || med.prenom,
-          NOM_COMPLET: (med.NOM_PRESTATAIRE || '') + ' ' + (med.PRENOM_PRESTATAIRE || ''),
-          SPECIALITE: med.SPECIALITE || med.specialite || ''
-        }));
-        
-        setMedecins(medecinsList);
-        
-        if (medecinsList.length > 0) {
-          setSelectedMedecin(medecinsList[0].COD_PRE);
-        }
-        
-        console.log('✅ Médecins chargés:', medecinsList);
-      } else {
-        console.warn('⚠️ Aucun médecin trouvé ou réponse API invalide');
-        setMedecins([]);
-      }
-    } catch (err) {
-      console.error('❌ Erreur chargement médecins:', err);
-      
-      const medecinsTest = [
-        { COD_PRE: 1, NOM_PRESTATAIRE: 'Dupont', PRENOM_PRESTATAIRE: 'Jean', SPECIALITE: 'Généraliste' },
-        { COD_PRE: 2, NOM_PRESTATAIRE: 'Martin', PRENOM_PRESTATAIRE: 'Marie', SPECIALITE: 'Pédiatre' },
-        { COD_PRE: 3, NOM_PRESTATAIRE: 'Dubois', PRENOM_PRESTATAIRE: 'Pierre', SPECIALITE: 'Chirurgien' }
-      ];
-      
-      setMedecins(medecinsTest);
-      if (medecinsTest.length > 0) {
-        setSelectedMedecin(medecinsTest[0].COD_PRE);
-      }
-    } finally {
-      setLoadingData(false);
-    }
-  };
-
-  const loadCentres = async () => {
-    try {
-      setLoadingData(true);
-      const response = await api.centres.getAll();
-      if (response.success && response.centres) {
-        setCentres(response.centres);
-        if (response.centres.length > 0) {
-          setSelectedCentre(response.centres[0].COD_CEN);
-        }
-      }
-    } catch (err) {
-      console.error('Erreur chargement centres:', err);
-      setCentres([]);
-    } finally {
-      setLoadingData(false);
-    }
-  };
-
-  const preloadData = async () => {
-    try {
-      console.log('🔍 Préchargement des données pour la création de prescription...');
-      
-      if (medecins.length === 0) {
-        console.log('📋 Chargement des médecins...');
-        await loadMedecins();
-      } else {
-        console.log('✅ Médecins déjà chargés:', medecins.length);
-      }
-      
-      if (centres.length === 0) {
-        console.log('🏥 Chargement des centres...');
-        const centresResponse = await api.centres.getAll();
-        if (centresResponse.success && centresResponse.centres) {
-          setCentres(centresResponse.centres);
-          if (centresResponse.centres.length > 0) {
-            setSelectedCentre(centresResponse.centres[0].COD_CEN);
-          }
-        }
-        console.log('✅ Centres chargés:', centresResponse.centres?.length || 0);
-      }
-      
-      console.log('✅ Préchargement terminé');
-    } catch (error) {
-      console.error('❌ Erreur préchargement données:', error);
-    }
-  };
-
-  useEffect(() => {
-    loadPrescriptions();
-  }, [pagination.page, filters]);
-
-  useEffect(() => {
-    if (activeTab === 1) {
-      preloadData();
-    }
-  }, [activeTab]);
-
-  // ==============================
-  // RECHERCHES
-  // ==============================
-
-  const searchPatients = async () => {
-    if (!patientSearch || patientSearch.trim().length < 2) {
-      setPatients([]);
-      return;
-    }
-    
-    try {
-      const response = await api.prescriptions.searchPatients(patientSearch);
-      if (response.success) {
-        setPatients(response.patients || []);
-      }
-    } catch (err) {
-      console.error('Erreur recherche patients:', err);
-      setPatients([]);
-    }
-  };
-
-  const searchElements = async () => {
-    if (!elementSearch || elementSearch.trim().length < 2) {
-      setElements([]);
-      return;
-    }
-    
-    try {
-      const response = await api.prescriptions.searchMedicalItems(elementSearch);
-      if (response.success) {
-        setElements(response.items || []);
-      }
-    } catch (err) {
-      console.error('Erreur recherche éléments:', err);
-      setElements([]);
-    }
-  };
-
-  // ==============================
-  // GESTION DES ÉLÉMENTS DE PRESCRIPTION
-  // ==============================
-
-  const addElement = (element) => {
-    if (!element.id || String(element.id).trim() === '') {
-      setError('Cet élément n\'a pas de code valide. Veuillez en sélectionner un autre dans la base de données.');
-      setSearchElementDialog(false);
-      return;
-    }
-    
-    const newDetail = {
-      type_element: element.type || 'medicament',
-      cod_element: String(element.id).trim(),
-      libelle: element.libelle || 'Élément non spécifié',
-      quantite: 1,
-      posologie: '',
-      duree_traitement: element.type === 'medicament' ? 7 : null,
-      unite: element.type === 'medicament' ? 'boîte' : 'unité',
-      prix_unitaire: element.prix || 0,
-      remboursable: element.remboursable || 1,
-      taux_prise_en_charge: 80
+    // Fermer la fenêtre après impression
+    printWindow.onafterprint = () => {
+      printWindow.close();
+      setPrintingOrdonnance(false);
+      setOrdonnanceToPrint(null);
     };
     
-    setDetails([...details, newDetail]);
-    setSearchElementDialog(false);
-    setElementSearch('');
-    setElements([]);
+    // Fermeture de sécurité après 3 secondes
+    setTimeout(() => {
+      if (!printWindow.closed) {
+        printWindow.close();
+        setPrintingOrdonnance(false);
+        setOrdonnanceToPrint(null);
+      }
+    }, 3000);
   };
 
-  const updateElement = (index, field, value) => {
-    const newDetails = [...details];
+  // ==================== CHARGEMENT DES DONNÉES ====================
+  const cleanPrescriptionData = (data) => {
+    const cleanedData = { ...data };
     
-    if (field === 'quantite') {
-      newDetails[index].quantite = Math.max(0.1, parseFloat(value) || 1);
-    } else if (field === 'prix_unitaire') {
-      newDetails[index].prix_unitaire = Math.max(0, parseFloat(value) || 0);
-    } else if (field === 'duree_traitement') {
-      newDetails[index].duree_traitement = value ? parseInt(value) : null;
-    } else {
-      newDetails[index][field] = value;
-    }
-    
-    setDetails(newDetails);
-  };
-
-  const removeElement = (index) => {
-    const newDetails = [...details];
-    newDetails.splice(index, 1);
-    setDetails(newDetails);
-  };
-
-  // ==============================
-  // CRÉATION DE PRESCRIPTION
-  // ==============================
-
-  const createPrescription = async () => {
-    if (!patient || !patient.id) {
-      setError('Veuillez sélectionner un patient valide');
-      return;
-    }
-
-    if (!typePrestation) {
-      setError('Veuillez sélectionner le type de prestation');
-      return;
-    }
-
-    // Valider les détails uniquement si on a choisi de les remplir
-    if (remplirDetails) {
-      if (details.length === 0) {
-        setError('Veuillez ajouter au moins un élément à la prescription');
-        return;
-      }
-
-      const invalidDetails = [];
-      details.forEach((detail, index) => {
-        if (!detail.cod_element || detail.cod_element.trim() === '') {
-          invalidDetails.push({
-            index: index + 1,
-            element: detail.libelle,
-            reason: 'Code d\'élément manquant ou invalide'
-          });
-        } else if (typeof detail.cod_element !== 'string') {
-          invalidDetails.push({
-            index: index + 1,
-            element: detail.libelle,
-            reason: 'Code d\'élément doit être une chaîne de caractères'
-          });
-        }
-        
-        if (detail.quantite && (isNaN(parseFloat(detail.quantite)) || parseFloat(detail.quantite) <= 0)) {
-          invalidDetails.push({
-            index: index + 1,
-            element: detail.libelle,
-            reason: 'Quantité invalide'
-          });
-        }
-        
-        if (detail.prix_unitaire && (isNaN(parseFloat(detail.prix_unitaire)) || parseFloat(detail.prix_unitaire) < 0)) {
-          invalidDetails.push({
-            index: index + 1,
-            element: detail.libelle,
-            reason: 'Prix unitaire invalide'
-          });
-        }
-      });
-
-      if (invalidDetails.length > 0) {
-        const errorMessage = `Certains éléments sont invalides:\n${invalidDetails.map(d => 
-          `• Élément ${d.index} (${d.element}): ${d.reason}`
-        ).join('\n')}`;
-        setError(errorMessage);
-        return;
-      }
-    }
-
-    if (!selectedMedecin && typePrestation !== 'Pharmacie') {
-      setError('Veuillez sélectionner un médecin prescripteur');
-      return;
-    }
-
-    if (!selectedCentre) {
-      setError('Veuillez sélectionner un centre de santé');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // DÉFINIR prescriptionData D'ABORD
-      const prescriptionData = {
-        COD_BEN: patient.id,
-        COD_PRE: selectedMedecin || null,
-        COD_CEN: selectedCentre || null,
-        TYPE_PRESTATION: typePrestation,
-        OBSERVATIONS: observations.substring(0, 500) || '',
-        ORIGINE: 'Electronique',
-        DATE_VALIDITE: dateValidite && !isNaN(new Date(dateValidite)) 
-          ? new Date(dateValidite).toISOString().split('T')[0]
-          : null,
-        AVEC_DETAILS: remplirDetails ? 1 : 0
-      };
-
-      // MAINTENANT on peut utiliser prescriptionData
-      if (!remplirDetails) {
-        // Créer un détail par défaut avec les informations minimales
-        prescriptionData.details = [{
-          TYPE_ELEMENT: 'MEDICAMENT',
-          COD_ELEMENT: 'DEFAULT-001',
-          LIBELLE: 'Prescription générale sans détails spécifiés',
-          QUANTITE: 1,
-          POSOLOGIE: 'À déterminer par le prestataire',
-          DUREE_TRAITEMENT: null,
-          UNITE: 'unité',
-          PRIX_UNITAIRE: 0,
-          MONTANT_TOTAL: 0,
-          REMBOURSABLE: 0,
-          TAUX_PRISE_EN_CHARGE: 0,
-          ORDRE: 1
-        }];
-        prescriptionData.MONTANT_TOTAL = 0;
-      } else if (details.length > 0) {
-        // Utiliser les détails fournis par l'utilisateur
-        prescriptionData.details = details.map((d, index) => {
-          const codElement = String(d.cod_element).trim();
-          const libelle = String(d.libelle || 'Élément non spécifié').trim().substring(0, 200);
-          const quantite = Math.max(0.1, parseFloat(d.quantite) || 1);
-          const prixUnitaire = Math.max(0, parseFloat(d.prix_unitaire) || 0);
-          const tauxPriseEnCharge = Math.min(100, Math.max(0, parseFloat(d.taux_prise_en_charge) || 80));
-          const montantTotal = quantite * prixUnitaire;
-          
-          return {
-            TYPE_ELEMENT: String(d.type_element || 'medicament').toUpperCase(),
-            COD_ELEMENT: codElement,
-            LIBELLE: libelle,
-            QUANTITE: quantite,
-            POSOLOGIE: String(d.posologie || '').trim().substring(0, 500),
-            DUREE_TRAITEMENT: d.duree_traitement ? parseInt(d.duree_traitement) : null,
-            UNITE: String(d.unite || 'unité').trim().substring(0, 50),
-            PRIX_UNITAIRE: prixUnitaire,
-            MONTANT_TOTAL: montantTotal,
-            REMBOURSABLE: d.remboursable ? 1 : 0,
-            TAUX_PRISE_EN_CHARGE: tauxPriseEnCharge,
-            ORDRE: index + 1
-          };
-        });
-
-        const montantTotalPrescription = prescriptionData.details.reduce(
-          (sum, detail) => sum + (detail.QUANTITE * detail.PRIX_UNITAIRE), 
-          0
-        );
-        prescriptionData.MONTANT_TOTAL = montantTotalPrescription;
-      } else {
-        // Ce cas ne devrait pas se produire car on a déjà validé remplirDetails && details.length === 0
-        setError('Veuillez ajouter au moins un élément à la prescription');
-        setLoading(false);
-        return;
-      }
-
-      const response = await api.prescriptions.create(prescriptionData);
-      
-      if (response.success) {
-        const successMessage = response.numero 
-          ? `Prescription créée avec succès : ${response.numero}`
-          : response.prescriptionId
-          ? `Prescription créée avec succès (ID: ${response.prescriptionId})`
-          : 'Prescription créée avec succès';
-        
-        setSuccess(successMessage);
-        
-        // Préparer les données pour la feuille de soins
-        const prescriptionWithDetails = {
-          ...prescriptionData,
-          NUM_PRESCRIPTION: response.numero || `PRES-${new Date().getFullYear()}-${response.prescriptionId}`,
-          NOM_BEN: patient.nom,
-          PRE_BEN: patient.prenom,
-          SEX_BEN: patient.sexe,
-          AGE: patient.age,
-          IDENTIFIANT_NATIONAL: patient.identifiant,
-          NOM_CENTRE: centres.find(c => c.COD_CEN === selectedCentre)?.NOM_CENTRE || 'Centre médical',
-          NOM_PRESTATAIRE: medecins.find(m => m.COD_PRE === selectedMedecin)?.NOM_PRESTATAIRE || 'Médecin',
-          PRENOM_PRESTATAIRE: medecins.find(m => m.COD_PRE === selectedMedecin)?.PRENOM_PRESTATAIRE || '',
-          DATE_PRESCRIPTION: new Date().toISOString().split('T')[0],
-          STATUT: 'En attente'
-        };
-        
-        setPrescriptionToPrint(prescriptionWithDetails);
-        
-        // Générer le QR code
-        await generateQrCode(prescriptionWithDetails);
-        
-        // Afficher la feuille de soins
-        setTimeout(() => {
-          setShowFeuilleSoins(true);
-        }, 500);
-        
-        resetCreationForm();
-        loadPrescriptions();
-        
-        setTimeout(() => {
-          setActiveTab(0);
-        }, 2000);
-      } else {
-        let errorMessage = response.message || 'Erreur lors de la création';
-        let errorDetails = '';
-        
-        if (response.message) {
-          if (response.message.includes('Médecin non trouvé')) {
-            errorMessage = 'Aucun médecin actif trouvé';
-            errorDetails = 'Le médecin sélectionné n\'existe pas ou est inactif.';
-          } else if (response.message.includes('Patient non trouvé')) {
-            errorMessage = 'Patient non trouvé';
-            errorDetails = 'Veuillez recharger la liste des patients.';
-          } else if (response.message.includes('COD_ELEMENT')) {
-            errorMessage = 'Erreur de validation des éléments';
-            errorDetails = 'Un ou plusieurs codes d\'éléments sont invalides.';
-          }
-        }
-        
-        const fullErrorMessage = errorDetails ? `${errorMessage}\n\n${errorDetails}` : errorMessage;
-        setError(fullErrorMessage);
-      }
-    } catch (err) {
-      console.error('❌ Erreur création prescription:', err);
-      
-      if (err.message?.includes('Network Error') || err.isNetworkError) {
-        setError('Erreur réseau: Impossible de se connecter au serveur.');
-      } else if (err.status === 401) {
-        setError('Session expirée. Veuillez vous reconnecter.');
-      } else if (err.status === 404) {
-        setError('Service non trouvé. Contactez l\'équipe technique.');
-      } else if (err.status === 500) {
-        setError('Erreur serveur. Veuillez réessayer plus tard.');
-      } else if (err.message?.includes('COD_ELEMENT')) {
-        setError('Erreur de validation des codes d\'éléments.');
-      } else {
-        setError(`Erreur lors de la création: ${err.message || 'Erreur inconnue'}`);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const resetCreationForm = () => {
-    setPatient(null);
-    setPatientSearch('');
-    setTypePrestation('');
-    setObservations('');
-    setDateValidite(null);
-    setDetails([]);
-    setRemplirDetails(true);
-    setIsEditing(false);
-    setEditingPrescriptionId(null);
-    if (medecins.length > 0) {
-      setSelectedMedecin(medecins[0].COD_PRE);
-    }
-    if (centres.length > 0) {
-      setSelectedCentre(centres[0].COD_CEN);
-    }
-  };
-
-  // ==============================
-  // MODIFICATION DES DÉTAILS D'UNE PRESCRIPTION EXISTANTE
-  // ==============================
-
-  const startEditingPrescription = async (prescription) => {
-    try {
-      setLoading(true);
-      
-      const response = await api.prescriptions.getById(prescription.COD_PRES);
-      
-      if (response.success) {
-        const prescriptionData = response.prescription;
-        
-        setEditingPrescriptionId(prescription.COD_PRES);
-        setIsEditing(true);
-        
-        setPatient({
-          id: prescription.COD_BEN,
-          nom: prescription.NOM_BEN,
-          prenom: prescription.PRE_BEN
-        });
-        
-        setTypePrestation(prescription.TYPE_PRESTATION);
-        setObservations(prescription.OBSERVATIONS || '');
-        setDateValidite(prescription.DATE_VALIDITE ? new Date(prescription.DATE_VALIDITE) : null);
-        setSelectedMedecin(prescription.COD_PRE || '');
-        setSelectedCentre(prescription.COD_CEN || '');
-        
-        if (prescriptionData.details && prescriptionData.details.length > 0) {
-          const formattedDetails = prescriptionData.details.map(detail => ({
-            type_element: detail.TYPE_ELEMENT?.toLowerCase() || 'medicament',
-            cod_element: detail.COD_ELEMENT || '',
-            libelle: detail.LIBELLE || '',
-            quantite: detail.QUANTITE || 1,
-            posologie: detail.POSOLOGIE || '',
-            duree_traitement: detail.DUREE_TRAITEMENT || null,
-            unite: detail.UNITE || 'unité',
-            prix_unitaire: detail.PRIX_UNITAIRE || 0,
-            remboursable: detail.REMBOURSABLE || 1,
-            taux_prise_en_charge: detail.TAUX_PRISE_EN_CHARGE || 80
-          }));
-          setDetails(formattedDetails);
-          setRemplirDetails(true);
-        } else {
-          setDetails([]);
-          setRemplirDetails(false);
-        }
-        
-        setActiveTab(1);
-        setSuccess('Vous pouvez maintenant modifier les détails de cette prescription');
-      } else {
-        setError('Impossible de charger les détails de la prescription');
-      }
-    } catch (err) {
-      console.error('❌ Erreur chargement prescription pour édition:', err);
-      setError('Erreur lors du chargement de la prescription pour édition');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updatePrescription = async () => {
-    if (!editingPrescriptionId) {
-      setError('Aucune prescription en cours de modification');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      
-      // DÉFINIR updateData D'ABORD
-      const updateData = {
-        AVEC_DETAILS: remplirDetails ? 1 : 0
-      };
-
-      // MAINTENANT ajouter les détails
-      if (!remplirDetails) {
-        updateData.details = [{
-          TYPE_ELEMENT: 'MEDICAMENT',
-          COD_ELEMENT: 'DEFAULT-001',
-          LIBELLE: 'Prescription générale sans détails spécifiés',
-          QUANTITE: 1,
-          POSOLOGIE: 'À déterminer par le prestataire',
-          DUREE_TRAITEMENT: null,
-          UNITE: 'unité',
-          PRIX_UNITAIRE: 0,
-          MONTANT_TOTAL: 0,
-          REMBOURSABLE: 0,
-          TAUX_PRISE_EN_CHARGE: 0,
-          ORDRE: 1
-        }];
-      } else if (details.length > 0) {
-        updateData.details = details.map((d, index) => {
-          const codElement = String(d.cod_element).trim();
-          const libelle = String(d.libelle || 'Élément non spécifié').trim().substring(0, 200);
-          const quantite = Math.max(0.1, parseFloat(d.quantite) || 1);
-          const prixUnitaire = Math.max(0, parseFloat(d.prix_unitaire) || 0);
-          const tauxPriseEnCharge = Math.min(100, Math.max(0, parseFloat(d.taux_prise_en_charge) || 80));
-          const montantTotal = quantite * prixUnitaire;
-          
-          return {
-            TYPE_ELEMENT: String(d.type_element || 'medicament').toUpperCase(),
-            COD_ELEMENT: codElement,
-            LIBELLE: libelle,
-            QUANTITE: quantite,
-            POSOLOGIE: String(d.posologie || '').trim().substring(0, 500),
-            DUREE_TRAITEMENT: d.duree_traitement ? parseInt(d.duree_traitement) : null,
-            UNITE: String(d.unite || 'unité').trim().substring(0, 50),
-            PRIX_UNITAIRE: prixUnitaire,
-            MONTANT_TOTAL: montantTotal,
-            REMBOURSABLE: d.remboursable ? 1 : 0,
-            TAUX_PRISE_EN_CHARGE: tauxPriseEnCharge,
-            ORDRE: index + 1
-          };
-        });
-      } else {
-        setError('Veuillez ajouter au moins un élément à la prescription');
-        setLoading(false);
-        return;
-      }
-
-      const response = await api.prescriptions.updateDetails(editingPrescriptionId, updateData);
-      
-      if (response.success) {
-        setSuccess('Détails de la prescription mis à jour avec succès');
-        loadPrescriptions();
-        resetCreationForm();
-        setTimeout(() => {
-          setActiveTab(0);
-        }, 2000);
-      } else {
-        setError(response.message || 'Erreur lors de la mise à jour des détails');
-      }
-    } catch (err) {
-      console.error('❌ Erreur mise à jour détails:', err);
-      setError('Erreur lors de la mise à jour des détails de la prescription');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ==============================
-  // EXÉCUTION DE PRESCRIPTION
-  // ==============================
-  
-  const searchPrescription = async () => {
-    if (!prescriptionSearch || prescriptionSearch.trim() === '') {
-      setError('Veuillez entrer un numéro de prescription');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      setSelectedPrescription(null);
-      setExecutionDetails([]);
-      
-      console.log('🔍 Recherche prescription:', prescriptionSearch);
-      
-      const cleanedSearch = prescriptionSearch.trim().toUpperCase();
-      
-      const response = await api.prescriptions.getByNumeroOrId(cleanedSearch);
-      
-      console.log('📄 Réponse API:', response);
-      
-      if (response.success) {
-        if (response.prescription || response.data) {
-          const prescriptionData = response.prescription || response.data;
-          
-          setSelectedPrescription(prescriptionData);
-          
-          const details = response.details || prescriptionData.details || [];
-          
-          console.log('📋 Détails récupérés:', details);
-          
-          if (details.length > 0) {
-            const formattedDetails = details.map(detail => {
-              const quantite = detail.QUANTITE || detail.quantite || 0;
-              const statutExecution = detail.STATUT_EXECUTION || detail.statut_execution || 'A executer';
-              const prixUnitaire = detail.PRIX_UNITAIRE || detail.prix_unitaire || 0;
-              const unite = detail.UNITE || detail.unite || 'unité';
-              const posologie = detail.POSOLOGIE || detail.posologie || '';
-              
-              return {
-                ...detail,
-                COD_PRES_DET: detail.COD_PRES_DET || detail.cod_pres_det || detail.id,
-                LIBELLE: detail.LIBELLE || detail.libelle || 'Élément non spécifié',
-                QUANTITE: quantite,
-                PRIX_UNITAIRE: prixUnitaire,
-                UNITE: unite,
-                POSOLOGIE: posologie,
-                STATUT_EXECUTION: statutExecution,
-                quantite_executee: statutExecution === 'Execute' ? quantite : 0,
-                canExecute: statutExecution !== 'Execute' && statutExecution !== 'Annule'
-              };
-            });
-            
-            setExecutionDetails(formattedDetails);
-            setSuccess(`Prescription trouvée: ${prescriptionData.NUM_PRESCRIPTION || cleanedSearch}`);
-          } else {
-            setError('Prescription trouvée mais aucun détail disponible');
-          }
-        } else {
-          setError('Prescription trouvée mais sans données');
-        }
-      } else {
-        const errorMessage = response.message || 'Prescription non trouvée';
-        setError(`Erreur: ${errorMessage}`);
-      }
-    } catch (err) {
-      console.error('❌ Erreur recherche prescription:', err);
-      
-      if (err.status === 404) {
-        setError(`Prescription "${prescriptionSearch}" non trouvée. Vérifiez le numéro.`);
-      } else if (err.status === 401) {
-        setError('Session expirée. Veuillez vous reconnecter.');
-      } else if (err.status === 500) {
-        setError('Erreur serveur. Veuillez réessayer plus tard.');
-      } else if (err.message?.includes('Network')) {
-        setError('Impossible de joindre le serveur. Vérifiez votre connexion.');
-      } else {
-        setError(`Erreur lors de la recherche: ${err.message || 'Erreur inconnue'}`);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const executePrescription = async () => {
-    if (!selectedPrescription) {
-      setError('Aucune prescription sélectionnée');
-      return;
-    }
-
-    const detailsToExecute = executionDetails
-      .filter(detail => detail.quantite_executee > 0 && detail.canExecute)
-      .map(detail => ({
-        cod_pres_det: detail.COD_PRES_DET,
-        quantite_executee: detail.quantite_executee,
-        libelle: detail.LIBELLE
+    // Nettoyer les détails
+    if (cleanedData.details && Array.isArray(cleanedData.details)) {
+      cleanedData.details = cleanedData.details.map(detail => ({
+        TYPE_ELEMENT: detail.TYPE_ELEMENT || 'MEDICAMENT',
+        COD_ELEMENT: detail.COD_ELEMENT 
+          ? String(detail.COD_ELEMENT).trim() 
+          : detail.COD_MED 
+            ? String(detail.COD_MED).trim() 
+            : `MED${Math.floor(Math.random() * 10000)}`,
+        LIBELLE: detail.LIBELLE || 'Médicament non spécifié',
+        QUANTITE: parseInt(detail.QUANTITE) || 1,
+        POSOLOGIE: detail.POSOLOGIE || 'À déterminer',
+        DUREE_TRAITEMENT: parseInt(detail.DUREE) || 7,
+        PRIX_UNITAIRE: parseFloat(detail.PRIX_UNITAIRE) || 0,
+        REMBOURSABLE: detail.REMBOURSABLE || 0
       }));
-
-    if (detailsToExecute.length === 0) {
-      setError('Veuillez sélectionner au moins un élément à exécuter');
-      return;
     }
-
-    const invalidDetails = detailsToExecute.filter(detail => {
-      const originalDetail = executionDetails.find(d => d.COD_PRES_DET === detail.cod_pres_det);
-      return detail.quantite_executee > (originalDetail?.QUANTITE || 0);
-    });
-
-    if (invalidDetails.length > 0) {
-      setError(`Quantités invalides pour: ${invalidDetails.map(d => d.libelle).join(', ')}`);
-      return;
+    
+    // S'assurer que tous les champs requis sont présents
+    if (!cleanedData.COD_PRESCRIPTEUR) {
+      cleanedData.COD_PRESCRIPTEUR = selectedPrestataire?.id || null;
     }
+    
+    if (!cleanedData.COD_CEN) {
+      cleanedData.COD_CEN = centreId;
+    }
+    
+    return cleanedData;
+  };
 
+  // Charger les centres de santé
+  const loadCentres = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
+      console.log('🔍 Chargement des centres de santé...');
+      const response = await centresAPI.getAll();
+      console.log('📊 Réponse centres:', response);
       
-      console.log('🚀 Exécution prescription:', selectedPrescription.COD_PRES);
-      console.log('📋 Détails à exécuter:', detailsToExecute);
+      if (response.success && Array.isArray(response.centres)) {
+        setCentres(response.centres);
+        console.log(`✅ ${response.centres.length} centres chargés`);
+      } else if (Array.isArray(response)) {
+        setCentres(response);
+        console.log(`✅ ${response.length} centres chargés (format tableau)`);
+      } else {
+        console.warn('⚠️ Aucun centre trouvé ou format de réponse inattendu');
+        setCentres([{ id: '1', nom: 'Centre Principal', cod_cen: '1' }]);
+      }
+    } catch (error) {
+      console.error('❌ Erreur chargement centres:', error);
+      message.error('Erreur lors du chargement des centres de santé');
+      setCentres([{ id: '1', nom: 'Centre Principal', cod_cen: '1' }]);
+    }
+  }, []);
+
+  // Charger les prestataires du centre
+  const loadPrestataires = useCallback(async (searchTerm = '') => {
+    try {
+      setLoading(prev => ({ ...prev, prestataires: true }));
+      console.log(`🔍 Chargement des médecins pour le centre: ${centreId}`);
       
-      const response = await api.prescriptions.execute(
-        selectedPrescription.COD_PRES,
-        {
-          details: detailsToExecute,
-          cod_executant: 1,
-          cod_cen: selectedPrescription.COD_CEN || 1,
-          date_execution: new Date().toISOString().split('T')[0]
+      const filters = {
+        page: 1,
+        limit: 100,
+        type_prestataire: 'MEDECIN',
+        actif: '1',
+        affectation_active: '1',
+        search: searchTerm
+      };
+      
+      const response = await centresAPI.getPrestatairesByCentre(centreId, filters);
+      
+      console.log('📊 Réponse API getPrestatairesByCentre:', response);
+      
+      if (response && response.success && response.prestataires) {
+        const formattedPrestataires = response.prestataires.map(p => {
+          const specialite = p.SPECIALITE || p.specialite || '';
+          const prestataireData = {
+            id: p.id || p.COD_PRE || p.COD_PRESCRIPTEUR || `prest-${Date.now()}`,
+            COD_PRE: p.COD_PRE || p.id || p.COD_PRESCRIPTEUR,
+            NOM_PRESTATAIRE: p.NOM_PRESTATAIRE || p.nom || p.nom_prestataire || 'Nom non spécifié',
+            PRENOM_PRESTATAIRE: p.PRENOM_PRESTATAIRE || p.prenom || p.prenom_prestataire || '',
+            SPECIALITE: specialite,
+            specialite: specialite,
+            TELEPHONE: p.TELEPHONE || p.telephone || p.telephone_prestataire || '',
+            EMAIL: p.EMAIL || p.email || p.email_prestataire || '',
+            COD_CEN: centreId,
+            ACTIF: p.ACTIF !== undefined ? p.ACTIF : (p.actif || (p.statut_actif === 'Actif' ? 1 : 0)),
+            statut_actif: p.statut_actif || (p.ACTIF === 1 ? 'Actif' : 'Inactif'),
+            titre: p.titre || p.TITRE || p.titre_prestataire || 'Dr.',
+            cod_cen: p.cod_cen || p.COD_CEN || p.cod_cen_prestataire || centreId,
+            statut_affectation: p.statut_affectation || p.STATUT_AFFECTATION || 'Actif',
+            date_debut_affectation: p.date_debut_affectation || p.DATE_DEBUT_AFFECTATION,
+            date_fin_affectation: p.date_fin_affectation || p.DATE_FIN_AFFECTATION
+          };
+          
+          prestataireData.nom_complet = `${prestataireData.PRENOM_PRESTATAIRE} ${prestataireData.NOM_PRESTATAIRE}`.trim();
+          
+          if (!prestataireData.nom_complet || prestataireData.nom_complet.trim() === '') {
+            prestataireData.nom_complet = `${prestataireData.titre} ${prestataireData.PRENOM_PRESTATAIRE} ${prestataireData.NOM_PRESTATAIRE}`.trim();
+          }
+          
+          return prestataireData;
+        }).filter(p => {
+          const isActive = p.ACTIF === 1 || p.statut_actif === 'Actif';
+          const hasId = p.id && p.id.toString().trim() !== '';
+          return hasId && isActive;
+        });
+        
+        console.log(`✅ ${formattedPrestataires.length} médecins formatés pour le centre ${centreId}`);
+        
+        setPrestataires(formattedPrestataires);
+        setSearchPrestataireResults(formattedPrestataires);
+        
+        // Si nous avons un médecin de consultation, essayons de le trouver d'abord
+        if (medecinConsultation && formattedPrestataires.length > 0) {
+          const medecinConsultationTrouve = formattedPrestataires.find(p => {
+            if (p.nom_complet && medecinConsultation.nom) {
+              return p.nom_complet.toLowerCase().includes(medecinConsultation.nom.toLowerCase()) ||
+                     medecinConsultation.nom.toLowerCase().includes(p.nom_complet.toLowerCase());
+            }
+            return false;
+          });
+          
+          if (medecinConsultationTrouve && !selectedPrestataire) {
+            setSelectedPrestataire(medecinConsultationTrouve);
+            prescriptionForm.setFieldValue('COD_PRESCRIPTEUR', medecinConsultationTrouve.id);
+            console.log(`👨‍⚕️ Médecin de consultation sélectionné: ${medecinConsultationTrouve.nom_complet}`);
+          }
         }
-      );
-
-      console.log('✅ Réponse exécution:', response);
-
-      if (response.success) {
-        setSuccess('Prescription exécutée avec succès');
         
-        await searchPrescription();
-        loadPrescriptions();
+        // Vérifier si le médecin sélectionné appartient à ce centre
+        if (selectedPrestataire && formattedPrestataires.length > 0) {
+          const currentPrestataire = formattedPrestataires.find(p => 
+            p.id.toString() === selectedPrestataire.id.toString() || 
+            (p.COD_PRE && p.COD_PRE.toString() === selectedPrestataire.COD_PRE?.toString())
+          );
+          
+          if (!currentPrestataire) {
+            setSelectedPrestataire(null);
+            prescriptionForm.setFieldValue('COD_PRESCRIPTEUR', null);
+            message.info('Le médecin sélectionné a été réinitialisé car il n\'est pas affecté à ce centre');
+          }
+        }
         
-        setTimeout(() => {
-          setSelectedPrescription(null);
-          setPrescriptionSearch('');
-          setExecutionDetails([]);
-        }, 2000);
+        // Sélectionner le premier prestataire par défaut si aucun n'est sélectionné
+        if (formattedPrestataires.length > 0 && !selectedPrestataire) {
+          const prestataireActif = formattedPrestataires[0];
+          setSelectedPrestataire(prestataireActif);
+          prescriptionForm.setFieldValue('COD_PRESCRIPTEUR', prestataireActif.id);
+          console.log(`👨‍⚕️ Prestataire par défaut sélectionné: ${prestataireActif.nom_complet}`);
+        } else if (formattedPrestataires.length === 0) {
+          console.warn('⚠️ Aucun médecin trouvé pour ce centre');
+          message.warning('Aucun médecin actif disponible pour ce centre.');
+          
+          setSelectedPrestataire(null);
+          prescriptionForm.setFieldValue('COD_PRESCRIPTEUR', null);
+        }
+        
       } else {
-        setError(response.message || "Erreur lors de l'exécution");
+        console.error('❌ Erreur API centresAPI.getPrestatairesByCentre:', response?.message);
+        setPrestataires([]);
+        setSearchPrestataireResults([]);
+        message.error(response?.message || 'Erreur lors du chargement des médecins');
       }
-    } catch (err) {
-      console.error('❌ Erreur exécution prescription:', err);
-      
-      if (err.response?.data?.message) {
-        setError(`Erreur d'exécution: ${err.response.data.message}`);
-      } else if (err.message?.includes('Network')) {
-        setError('Erreur réseau. Vérifiez votre connexion.');
-      } else {
-        setError("Erreur lors de l'exécution de la prescription");
-      }
+    } catch (error) {
+      console.error('❌ Erreur chargement médecins par centre:', error);
+      message.error('Erreur réseau lors du chargement des médecins');
+      setPrestataires([]);
+      setSearchPrestataireResults([]);
+      setSelectedPrestataire(null);
     } finally {
-      setLoading(false);
+      setLoading(prev => ({ ...prev, prestataires: false }));
+    }
+  }, [centreId, selectedPrestataire, prescriptionForm, medecinConsultation]);
+
+  // Rechercher des prestataires avec filtrage local
+  const searchPrestataires = useCallback((searchTerm) => {
+    setSearchPrestataire(searchTerm);
+    
+    if (!searchTerm || searchTerm.trim().length < 1) {
+      setSearchPrestataireResults(prestataires);
+      return;
+    }
+    
+    try {
+      const searchLower = searchTerm.toLowerCase();
+      const filtered = prestataires.filter(p => {
+        const nomComplet = (p.nom_complet || '').toLowerCase();
+        const nom = (p.nom || '').toLowerCase();
+        const prenom = (p.prenom || '').toLowerCase();
+        const specialite = (p.specialite || '').toLowerCase();
+        const telephone = (p.telephone || '');
+        const titre = (p.titre || '').toLowerCase();
+        
+        return (
+          nomComplet.includes(searchLower) ||
+          nom.includes(searchLower) ||
+          prenom.includes(searchLower) ||
+          specialite.includes(searchLower) ||
+          telephone.includes(searchTerm) ||
+          titre.includes(searchLower) ||
+          `${prenom} ${nom}`.includes(searchLower) ||
+          `${titre} ${prenom} ${nom}`.includes(searchLower)
+        );
+      });
+      
+      setSearchPrestataireResults(filtered);
+    } catch (error) {
+      console.error('❌ Erreur recherche prestataires:', error);
+      setSearchPrestataireResults(prestataires);
+    }
+  }, [prestataires]);
+
+  // Sélectionner un prestataire
+  const selectPrestataire = (prestataire, fromConsultation = false) => {
+    if (!prestataire || !prestataire.id) {
+      message.error('Prestataire invalide');
+      return;
+    }
+    
+    if (!fromConsultation && medecinConsultation && prestataire.id !== medecinConsultation.id) {
+      setShowMedecinChangeAlert(true);
+    }
+    
+    setSelectedPrestataire(prestataire);
+    prescriptionForm.setFieldValue('COD_PRESCRIPTEUR', prestataire.id);
+    
+    if (!fromConsultation) {
+      setModalPrestataires(false);
+      message.success(`Médecin sélectionné: ${prestataire.nom_complet}`);
+    }
+    
+    if (activeTab === 'historique') {
+      loadMesPrescriptions();
     }
   };
 
-  // ==============================
-  // COMPOSANTS RÉUTILISABLES
-  // ==============================
+  // Charger les prescriptions du prestataire
+  const loadMesPrescriptions = useCallback(async () => {
+    if (!selectedPrestataire) {
+      console.warn('⚠️ Aucun prestataire sélectionné pour charger les prescriptions');
+      return;
+    }
+    
+    try {
+      setLoading(prev => ({ ...prev, prestations: true }));
+      console.log(`📋 Chargement prescriptions pour le prestataire: ${selectedPrestataire.id}`);
+      
+      const response = await prescriptionsAPI.getAll({
+        medecin_id: selectedPrestataire.id,
+        centre_id: centreId,
+        limit: 50,
+        sortBy: 'DATE_PRESCRIPTION',
+        sortOrder: 'DESC',
+        include_details: true
+      });
+      
+      console.log('📊 Réponse prescriptions:', response);
+      
+      if (response.success && Array.isArray(response.prescriptions)) {
+        // Pour chaque prescription, récupérer les détails (actes) si non inclus
+        const prescriptionsWithDetails = await Promise.all(
+          response.prescriptions.map(async (prescription) => {
+            try {
+              // Si les détails ne sont pas inclus, les récupérer séparément
+              if (!prescription.details || prescription.details.length === 0) {
+                const detailsResponse = await prescriptionsAPI.getPrescriptionDetails(
+                  prescription.COD_PRES || prescription.id
+                );
+                
+                if (detailsResponse.success && detailsResponse.details) {
+                  prescription.details = detailsResponse.details;
+                } else if (Array.isArray(detailsResponse)) {
+                  prescription.details = detailsResponse;
+                }
+              }
+              
+              // Assurer que details est un tableau
+              prescription.details = prescription.details || [];
+              
+              // Calculer le total de la prescription à partir des détails
+              const total = prescription.details.reduce((sum, detail) => {
+                const prix = parseFloat(detail.PRIX_UNITAIRE) || 0;
+                const quantite = parseInt(detail.QUANTITE) || 1;
+                return sum + (prix * quantite);
+              }, 0);
+              
+              // Ajouter le nombre d'actes pour l'affichage
+              const nombreActes = prescription.details.length;
+              
+              // Retourner une nouvelle prescription avec les données calculées
+              return {
+                ...prescription,
+                details: prescription.details,
+                total: total,
+                nombreActes: nombreActes
+              };
+              
+            } catch (error) {
+              console.error(`❌ Erreur chargement détails prescription ${prescription.COD_PRES}:`, error);
+              return {
+                ...prescription,
+                details: [],
+                total: 0,
+                nombreActes: 0
+              };
+            }
+          })
+        );
+        
+        setMesPrescriptions(prescriptionsWithDetails);
+        console.log(`✅ ${prescriptionsWithDetails.length} prescriptions chargées avec détails`);
+      } else {
+        console.warn('⚠️ Aucune prescription trouvée ou format de réponse inattendu');
+        setMesPrescriptions([]);
+      }
+    } catch (error) {
+      console.error('❌ Erreur chargement prescriptions:', error);
+      message.error('Erreur lors du chargement des prescriptions');
+      setMesPrescriptions([]);
+    } finally {
+      setLoading(prev => ({ ...prev, prestations: false }));
+    }
+  }, [selectedPrestataire, centreId]);
 
-  const StatusChip = ({ statut }) => {
-    const status = getStatusColor(statut);
-    return (
-      <Chip
-        className="status-chip"
-        size="small"
-        label={statut}
-        icon={status.icon}
-        sx={{ 
-          fontWeight: 500,
-          background: status.gradient,
-          color: 'white',
-          '& .MuiChip-icon': { color: 'white' }
-        }}
-      />
+  const loadPrescriptionDetails = async (prescriptionId) => {
+    try {
+      console.log(`🔍 Chargement des détails pour la prescription: ${prescriptionId}`);
+      
+      let details = [];
+      
+      // Méthode 1: Utiliser l'API getPrescriptionDetails
+      try {
+        const response = await prescriptionsAPI.getPrescriptionDetails(prescriptionId);
+        if (response.success && response.details) {
+          details = response.details;
+        } else if (Array.isArray(response)) {
+          details = response;
+        }
+      } catch (error1) {
+        console.warn('⚠️ Méthode getPrescriptionDetails échouée:', error1.message);
+        
+        // Méthode 2: Utiliser getByNumeroOrId
+        try {
+          const response = await prescriptionsAPI.getByNumeroOrId(prescriptionId);
+          if (response.success && response.prescription) {
+            details = response.prescription.details || [];
+          }
+        } catch (error2) {
+          console.warn('⚠️ Méthode getByNumeroOrId échouée:', error2.message);
+        }
+      }
+      
+      console.log(`✅ ${details.length} actes trouvés pour la prescription ${prescriptionId}`);
+      return details;
+    } catch (error) {
+      console.error('❌ Erreur chargement détails:', error);
+      return [];
+    }
+  };
+
+  const handleViewPrescriptionDetails = async (prescription) => {
+    try {
+      setLoading(prev => ({ ...prev, prestations: true }));
+      
+      // Charger les détails de la prescription
+      const details = await loadPrescriptionDetails(
+        prescription.COD_PRES || prescription.id || prescription.NUMERO_PRESCRIPTION
+      );
+      
+      // Mettre à jour la prescription avec les détails
+      const updatedPrescription = {
+        ...prescription,
+        details: details,
+        total: details.reduce((sum, detail) => {
+          const prix = parseFloat(detail.PRIX_UNITAIRE) || 0;
+          const quantite = parseInt(detail.QUANTITE) || 1;
+          return sum + (prix * quantite);
+        }, 0),
+        nombreActes: details.length
+      };
+      
+      setSelectedPrescription(updatedPrescription);
+      setPrescriptionDetails(updatedPrescription);
+      setActiveTab('execution');
+      
+      // Préparer les actes pour l'exécution
+      const initialActes = details.map((detail, index) => ({
+        ...detail,
+        execute: false,
+        quantite_executee: detail.QUANTITE || 1,
+        prix_execute: detail.PRIX_UNITAIRE || 0,
+        key: detail.id || `${detail.COD_ELEMENT}_${index}`
+      }));
+      
+      setActesExecutes(initialActes);
+      calculerTotalExecution();
+      
+      message.success(`Détails de la prescription chargés: ${details.length} actes`);
+    } catch (error) {
+      console.error('❌ Erreur chargement détails prescription:', error);
+      message.error('Erreur lors du chargement des détails de la prescription');
+    } finally {
+      setLoading(prev => ({ ...prev, prestations: false }));
+    }
+  };
+
+  const handlePrintPrescriptionFromHistory = async (prescription) => {
+    try {
+      setLoading(prev => ({ ...prev, prestations: true }));
+      
+      // Charger les détails si non présents
+      let details = prescription.details || [];
+      if (details.length === 0) {
+        details = await loadPrescriptionDetails(
+          prescription.COD_PRES || prescription.id || prescription.NUMERO_PRESCRIPTION
+        );
+      }
+      
+      // Trouver le centre
+      const prescriptionCentreId = prescription.COD_CEN || centreId;
+      const currentCentre = centres.find(c => 
+        c.id === prescriptionCentreId || 
+        c.cod_cen === prescriptionCentreId
+      ) || {};
+      
+      // Préparer les données pour l'ordonnance
+      const ordonnanceData = {
+        numero: prescription.NUMERO_PRESCRIPTION || prescription.id,
+        patient: {
+          nom_complet: `${prescription.PRE_BEN || ''} ${prescription.NOM_BEN || ''}`.trim() || 
+                     `${prescription.prenom || ''} ${prescription.nom || ''}`.trim(),
+          age: prescription.AGE || calculateAge(prescription.DATE_NAISSANCE || prescription.date_naissance),
+          sexe: prescription.SEX_BEN || prescription.sexe,
+          numero_carte: prescription.IDENTIFIANT_NATIONAL || prescription.numero_carte,
+          identifiant_national: prescription.IDENTIFIANT_NATIONAL
+        },
+        selectedPrestataire: {
+          nom_complet: prescription.NOM_MEDECIN || prescription.medecin_nom,
+          specialite: prescription.SPECIALITE || prescription.medecin_specialite,
+          titre: prescription.TITRE || 'Dr.'
+        },
+        selectedMedicaments: details.map(detail => ({
+          ...detail,
+          estManuel: estActeManuel(detail),
+          // S'assurer que tous les champs nécessaires sont présents
+          LIBELLE: detail.LIBELLE || detail.libelle || 'Acte non spécifié',
+          QUANTITE: detail.QUANTITE || 1,
+          POSOLOGIE: detail.POSOLOGIE || 'À déterminer',
+          PRIX_UNITAIRE: detail.PRIX_UNITAIRE || 0,
+          UNITE: detail.UNITE || 'boîte(s)'
+        })),
+        centreId: prescriptionCentreId,
+        centres: centres,
+        typePrestation: prescription.TYPE_PRESTATION,
+        affectionCode: prescription.COD_AFF,
+        urgent: prescription.URGENT || false,
+        dateValidite: prescription.DATE_VALIDITE,
+        statut: prescription.STATUT,
+        observations: prescription.OBSERVATIONS,
+        modeRemboursement: prescription.MODE_REMBOURSEMENT,
+        delaiValidite: prescription.DELAI_VALIDITE,
+        nombreActes: details.length,
+        total: details.reduce((sum, med) => {
+          const prix = parseFloat(med.PRIX_UNITAIRE) || 0;
+          const quantite = parseInt(med.QUANTITE) || 1;
+          return sum + (prix * quantite);
+        }, 0)
+      };
+      
+      setOrdonnanceToPrint(ordonnanceData);
+      setPrintModalVisible(true);
+      
+    } catch (error) {
+      console.error('❌ Erreur préparation ordonnance:', error);
+      message.error('Erreur lors de la préparation de l\'ordonnance');
+    } finally {
+      setLoading(prev => ({ ...prev, prestations: false }));
+    }
+  };
+
+  // Rechercher le patient par numéro de carte
+  const searchPatient = async (cardNumber) => {
+    if (!cardNumber || cardNumber.trim().length < 3) {
+      message.warning('Veuillez entrer un numéro de carte valide (min 3 caractères)');
+      return;
+    }
+    
+    setLoading(prev => ({ ...prev, patient: true }));
+    try {
+      console.log('🔍 Recherche patient par carte:', cardNumber);
+      
+      let patientData = null;
+      
+      try {
+        const response = await consultationsAPI.searchByCard(cardNumber);
+        console.log('📊 Réponse searchByCard:', response);
+        
+        if (response.success && Array.isArray(response.patients) && response.patients.length > 0) {
+          patientData = response.patients[0];
+        } else if (Array.isArray(response) && response.length > 0) {
+          patientData = response[0];
+        }
+      } catch (error1) {
+        console.warn('⚠️ searchByCard a échoué:', error1.message);
+        
+        try {
+          const response = await beneficiairesAPI.searchAdvanced(cardNumber, {}, 1);
+          console.log('📊 Réponse searchAdvanced:', response);
+          
+          if (response.success && Array.isArray(response.beneficiaires) && response.beneficiaires.length > 0) {
+            patientData = response.beneficiaires[0];
+          }
+        } catch (error2) {
+          console.warn('⚠️ searchAdvanced a échoué:', error2.message);
+        }
+      }
+      
+      if (patientData) {
+        console.log('✅ Patient trouvé:', patientData);
+        
+        const formattedPatient = {
+          id: patientData.ID_BEN || patientData.COD_BEN || patientData.id,
+          COD_BEN: patientData.ID_BEN || patientData.COD_BEN || patientData.id,
+          nom: patientData.NOM_BEN || patientData.nom || patientData.NOM,
+          prenom: patientData.PRE_BEN || patientData.prenom || patientData.PRENOM,
+          nom_complet: `${patientData.PRE_BEN || patientData.prenom || ''} ${patientData.NOM_BEN || patientData.nom || ''}`.trim(),
+          identifiant_national: patientData.IDENTIFIANT_NATIONAL || patientData.identifiant_national,
+          numero_carte: patientData.NUMERO_CARTE || patientData.numero_carte || cardNumber,
+          date_naissance: patientData.NAI_BEN || patientData.date_naissance,
+          age: patientData.AGE || calculateAge(patientData.NAI_BEN || patientData.date_naissance),
+          sexe: patientData.SEX_BEN || patientData.sexe,
+          telephone: patientData.TELEPHONE || patientData.telephone || patientData.TELEPHONE_MOBILE,
+          groupe_sanguin: patientData.GROUPE_SANGUIN || patientData.groupe_sanguin,
+          rhesus: patientData.RHESUS || patientData.rhesus
+        };
+        
+        setPatient(formattedPatient);
+        
+        prescriptionForm.setFieldsValue({
+          COD_BEN: formattedPatient.COD_BEN,
+          NOM_BEN: formattedPatient.nom_complet,
+          IDENTIFIANT_NATIONAL: formattedPatient.identifiant_national
+        });
+        
+        if (formattedPatient.id) {
+          await checkConsultationRecente(formattedPatient.id);
+        }
+        
+        message.success(`Patient trouvé: ${formattedPatient.nom_complet}`);
+      } else {
+        message.warning('Aucun patient trouvé avec ce numéro de carte');
+        setPatient(null);
+        setMedecinConsultation(null);
+        setShowMedecinChangeAlert(false);
+      }
+    } catch (error) {
+      console.error('❌ Erreur recherche patient:', error);
+      message.error('Erreur lors de la recherche du patient');
+      setPatient(null);
+      setMedecinConsultation(null);
+      setShowMedecinChangeAlert(false);
+    } finally {
+      setLoading(prev => ({ ...prev, patient: false }));
+    }
+  };
+
+  // Vérifier si le patient a une consultation récente et récupérer le médecin
+  const checkConsultationRecente = async (patientId) => {
+    try {
+      setLoading(prev => ({ ...prev, consultations: true }));
+      const response = await consultationsAPI.getByPatientId(patientId);
+      
+      if (response.success && Array.isArray(response.consultations) && response.consultations.length > 0) {
+        const sortedConsultations = response.consultations.sort((a, b) => 
+          new Date(b.DATE_CONSULTATION || b.date_consultation) - new Date(a.DATE_CONSULTATION || a.date_consultation)
+        );
+        
+        const derniereConsultation = sortedConsultations[0];
+        const nomMedecin = derniereConsultation.NOM_MEDECIN || derniereConsultation.nom_medecin || derniereConsultation.medecin;
+        
+        // Récupérer le nom du centre depuis la consultation
+        if (derniereConsultation.COD_CEN) {
+          const centreNom = await getCentreNameFromConsultation(derniereConsultation);
+          if (centreNom) {
+            setCentreNom(centreNom);
+          }
+        }
+        
+        if (nomMedecin) {
+          const medecinConsultationObj = {
+            nom: nomMedecin,
+            date_consultation: derniereConsultation.DATE_CONSULTATION || derniereConsultation.date_consultation,
+            type_consultation: derniereConsultation.TYPE_CONSULTATION || derniereConsultation.type_consultation
+          };
+          
+          setMedecinConsultation(medecinConsultationObj);
+          
+          if (prestataires.length > 0) {
+            const medecinTrouve = prestataires.find(p => 
+              p.nom_complet && p.nom_complet.toLowerCase().includes(nomMedecin.toLowerCase()) ||
+              (p.nom && p.nom.toLowerCase().includes(nomMedecin.toLowerCase()))
+            );
+            
+            if (medecinTrouve) {
+              selectPrestataire(medecinTrouve, true);
+              message.info(`Médecin de la consultation automatiquement sélectionné: ${medecinTrouve.nom_complet}`);
+            } else {
+              message.warning(`Le médecin de la consultation (${nomMedecin}) n'est pas dans la liste des médecins du centre. Veuillez en sélectionner un manuellement.`);
+            }
+          }
+        }
+        
+        setConsultationInfo({
+          date: derniereConsultation.DATE_CONSULTATION || derniereConsultation.date_consultation,
+          type: derniereConsultation.TYPE_CONSULTATION || derniereConsultation.type_consultation,
+          medecin: nomMedecin,
+          montant: derniereConsultation.MONTANT_CONSULTATION || derniereConsultation.montant
+        });
+      } else {
+        setConsultationInfo(null);
+        setMedecinConsultation(null);
+      }
+    } catch (error) {
+      console.error('❌ Erreur vérification consultation:', error);
+      setConsultationInfo(null);
+      setMedecinConsultation(null);
+    } finally {
+      setLoading(prev => ({ ...prev, consultations: false }));
+    }
+  };
+
+  // Rechercher des médicaments
+  const searchMedicaments = async (searchTerm) => {
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setLoading(prev => ({ ...prev, medicaments: true }));
+    try {
+      const response = await prescriptionsAPI.searchMedicalItems(searchTerm);
+      
+      if (response.success && Array.isArray(response.items)) {
+        setSearchResults(response.items);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('❌ Erreur recherche médicaments:', error);
+      message.error('Erreur lors de la recherche des médicaments');
+      setSearchResults([]);
+    } finally {
+      setLoading(prev => ({ ...prev, medicaments: false }));
+    }
+  };
+
+  // Rechercher une affection par code
+  const searchAffection = async (code) => {
+    if (!code || code.trim().length === 0) return;
+    
+    try {
+      if (code.length >= 3) {
+        setAffectionDetails({
+          code: code,
+          libelle: 'Affection diagnostiquée',
+          categorie: 'Maladie',
+          gravite: 'Moyenne',
+          remboursable: true
+        });
+      } else {
+        setAffectionDetails(null);
+      }
+    } catch (error) {
+      console.error('❌ Erreur recherche affection:', error);
+    }
+  };
+
+  // ==================== GESTION DES PRESCRIPTIONS ====================
+
+  // Ajouter un médicament à la prescription
+  const ajouterMedicament = (medicament) => {
+    if (!medicament) return;
+    
+    const medicamentExistant = selectedMedicaments.find(m => m.COD_MED === medicament.COD_MED);
+    
+    if (medicamentExistant) {
+      const updatedMedicaments = selectedMedicaments.map(m => 
+        m.COD_MED === medicament.COD_MED 
+          ? { ...m, QUANTITE: (parseInt(m.QUANTITE) || 1) + 1 }
+          : m
+      );
+      setSelectedMedicaments(updatedMedicaments);
+      message.info(`${medicament.libelle || medicament.NOM_COMMERCIAL} - Quantité augmentée`);
+    } else {
+      const nouveauMedicament = {
+        ...medicament,
+        QUANTITE: 1,
+        POSOLOGIE: '1 comprimé matin et soir',
+        DUREE: '7',
+        TYPE_ELEMENT: 'MEDICAMENT',
+        COD_ELEMENT: medicament.COD_MED || medicament.id || `MED${Date.now()}`,
+        COD_MED: medicament.COD_MED || medicament.id || `MED${Date.now()}`,
+        LIBELLE: medicament.libelle || medicament.NOM_COMMERCIAL || 'Médicament non spécifié',
+        PRIX_UNITAIRE: medicament.PRIX_UNITAIRE || medicament.prix || 0,
+        REMBOURSABLE: medicament.REMBOURSABLE || 0,
+        key: `${medicament.COD_MED || medicament.id || `MED${Date.now()}`}_${Date.now()}_${Math.random()}`
+      };
+      
+      setSelectedMedicaments([...selectedMedicaments, nouveauMedicament]);
+      message.success(`${nouveauMedicament.LIBELLE} ajouté à la prescription`);
+    }
+    
+    setSearchMedicament('');
+    setSearchResults([]);
+  };
+
+  // Supprimer un médicament de la prescription
+  const supprimerMedicament = (key) => {
+    const medicament = selectedMedicaments.find(m => m.key === key);
+    if (medicament) {
+      setSelectedMedicaments(selectedMedicaments.filter(m => m.key !== key));
+      message.warning(`${medicament.LIBELLE} retiré de la prescription`);
+    }
+  };
+
+  // Mettre à jour les détails d'un médicament
+  const updateMedicament = (key, field, value) => {
+    setSelectedMedicaments(prev => 
+      prev.map(med => 
+        med.key === key ? { ...med, [field]: value } : med
+      )
     );
   };
 
-  const LoadingSpinner = () => (
-    <Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}>
-      <div className="pulse-loader">
-        <div></div>
-        <div></div>
-      </div>
-    </Box>
-  );
+  // Calculer le total de la prescription
+  const calculerTotal = () => {
+    return selectedMedicaments.reduce((total, med) => {
+      const prix = parseFloat(med.PRIX_UNITAIRE) || 0;
+      const quantite = parseInt(med.QUANTITE) || 1;
+      return total + (prix * quantite);
+    }, 0);
+  };
 
-  // ==============================
-  // RENDU PRINCIPAL
-  // ==============================
+  // Valider et créer la prescription
+  const validerPrescription = async () => {
+    try {
+      if (!patient) {
+        message.error('Veuillez d\'abord rechercher un patient');
+        return;
+      }
+      
+      if (!selectedPrestataire) {
+        message.error('Veuillez sélectionner un médecin prescripteur');
+        return;
+      }
+      
+      if (selectedMedicaments.length === 0) {
+        message.error('Veuillez ajouter au moins un médicament ou acte');
+        return;
+      }
+      
+      if (!affectionCode) {
+        message.error('Le code affectation est obligatoire');
+        return;
+      }
+      
+      setValidationModalVisible(true);
+    } catch (error) {
+      console.error('❌ Erreur validation:', error);
+      message.error('Erreur lors de la validation');
+    }
+  };
+
+  // Confirmer la création de la prescription
+  const confirmerPrescription = async () => {
+    setLoading(prev => ({ ...prev, prescrire: true }));
+    
+    try {
+      // Générer un numéro de prescription
+      const prescriptionNum = generatePrescriptionNumber();
+      
+      const rawData = {
+        COD_BEN: patient.COD_BEN,
+        COD_PRESCRIPTEUR: selectedPrestataire.id,
+        NOM_MEDECIN: selectedPrestataire.nom_complet,
+        TYPE_PRESTATION: typePrestation,
+        COD_AFF: affectionCode,
+        ORIGINE: 'Electronique',
+        STATUT: 'En attente',
+        DATE_VALIDITE: moment().add(30, 'days').format('YYYY-MM-DD'),
+        COD_CEN: centreId,
+        NUMERO_PRESCRIPTION: prescriptionNum,
+        details: selectedMedicaments
+      };
+      
+      const prescriptionData = cleanPrescriptionData(rawData);
+      
+      console.log('📤 Données de prescription envoyées:', JSON.stringify(prescriptionData, null, 2));
+      
+      const response = await prescriptionsAPI.create(prescriptionData);
+      
+      console.log('📥 Réponse création prescription:', response);
+      
+      if (response.success) {
+        const numeroPrescription = response.data?.numero || response.prescriptionId || response.id || prescriptionNum;
+        message.success(`Prescription créée avec succès! Numéro: ${numeroPrescription}`);
+        
+        // Préparer les données pour l'ordonnance
+        const ordonnanceData = {
+          numero: numeroPrescription,
+          patient,
+          selectedPrestataire,
+          selectedMedicaments,
+          centreId,
+          centres,
+          typePrestation,
+          affectionCode,
+          urgent: false,
+          dateValidite: moment().add(30, 'days').format('DD/MM/YYYY'),
+          statut: 'Validée',
+          nombreActes: selectedMedicaments.length,
+          total: calculerTotal()
+        };
+        
+        setOrdonnanceToPrint(ordonnanceData);
+        resetPrescriptionForm();
+        setPrintModalVisible(true);
+      } else {
+        message.error(response.message || 'Erreur lors de la création de la prescription');
+      }
+    } catch (error) {
+      console.error('❌ Erreur création prescription:', error);
+      
+      if (error.response?.data?.message) {
+        message.error(`Erreur: ${error.response.data.message}`);
+      } else if (error.message.includes('COD_ELEMENT')) {
+        message.error('Erreur: Le code élément des médicaments est invalide. Veuillez vérifier les données.');
+      } else {
+        message.error('Erreur lors de la création de la prescription');
+      }
+    } finally {
+      setLoading(prev => ({ ...prev, prescrire: false }));
+      setValidationModalVisible(false);
+    }
+  };
+
+  // Réinitialiser le formulaire de prescription
+  const resetPrescriptionForm = () => {
+    setPatient(null);
+    setSelectedMedicaments([]);
+    setAffectionCode('');
+    setAffectionDetails(null);
+    setConsultationInfo(null);
+    setMedecinConsultation(null);
+    setShowMedecinChangeAlert(false);
+    setCentreNom('');
+    prescriptionForm.resetFields();
+  };
+
+  // ==================== EXÉCUTION DE PRESCRIPTION ====================
+
+  // Rechercher une prescription par numéro
+  const searchPrescription = async () => {
+    if (!prescriptionNumero || prescriptionNumero.trim().length === 0) {
+      message.warning('Veuillez entrer un numéro de prescription');
+      return;
+    }
+    
+    setLoading(prev => ({ ...prev, execution: true }));
+    try {
+      console.log('🔍 Recherche prescription:', prescriptionNumero);
+      
+      const response = await prescriptionsAPI.getByNumeroOrId(prescriptionNumero);
+      
+      if (response.success && response.prescription) {
+        const prescription = response.prescription;
+        console.log('✅ Prescription trouvée:', prescription);
+        
+        setSelectedPrescription(prescription);
+        setPrescriptionDetails(prescription);
+        
+        const details = prescription.details || [];
+        const initialActes = details.map((detail, index) => ({
+          ...detail,
+          execute: false,
+          quantite_executee: detail.QUANTITE || 1,
+          prix_execute: detail.PRIX_UNITAIRE || 0,
+          key: detail.id || `${detail.COD_ELEMENT}_${index}_${Math.random()}`
+        }));
+        
+        setActesExecutes(initialActes);
+        calculerTotalExecution();
+        
+        message.success(`Prescription trouvée - Patient: ${prescription.NOM_BEN || 'Inconnu'} - ${details.length} actes`);
+      } else {
+        message.error(response.message || 'Prescription non trouvée');
+        setSelectedPrescription(null);
+        setPrescriptionDetails(null);
+        setActesExecutes([]);
+      }
+    } catch (error) {
+      console.error('❌ Erreur recherche prescription:', error);
+      message.error('Erreur lors de la recherche de la prescription');
+      setSelectedPrescription(null);
+      setPrescriptionDetails(null);
+      setActesExecutes([]);
+    } finally {
+      setLoading(prev => ({ ...prev, execution: false }));
+    }
+  };
+
+  // Gérer l'exécution d'un acte
+  const toggleActeExecution = (key, execute) => {
+    setActesExecutes(prev => 
+      prev.map(acte => 
+        acte.key === key ? { ...acte, execute } : acte
+      )
+    );
+  };
+
+  // Mettre à jour les détails d'exécution d'un acte
+  const updateActeExecution = (key, field, value) => {
+    setActesExecutes(prev => 
+      prev.map(acte => 
+        acte.key === key ? { ...acte, [field]: value } : acte
+      )
+    );
+    
+    setTimeout(() => calculerTotalExecution(), 0);
+  };
+
+  // Calculer le total de la facture d'exécution
+  const calculerTotalExecution = () => {
+    const total = actesExecutes.reduce((sum, acte) => {
+      if (acte.execute) {
+        const quantite = parseInt(acte.quantite_executee) || 0;
+        const prix = parseFloat(acte.prix_execute) || 0;
+        return sum + (quantite * prix);
+      }
+      return sum;
+    }, 0);
+    
+    setTotalFacture(total);
+    return total;
+  };
+
+  // Valider l'exécution de la prescription
+  const validerExecution = async () => {
+    try {
+      if (!selectedPrescription) {
+        message.error('Aucune prescription sélectionnée');
+        return;
+      }
+      
+      if (!selectedPrestataire) {
+        message.error('Veuillez sélectionner un médecin exécutant');
+        return;
+      }
+      
+      const actesAExecuter = actesExecutes.filter(acte => acte.execute);
+      if (actesAExecuter.length === 0) {
+        message.error('Veuillez sélectionner au moins un acte à exécuter');
+        return;
+      }
+      
+      setLoading(prev => ({ ...prev, execution: true }));
+      
+      const executionData = {
+        prescriptionId: selectedPrescription.COD_PRES || selectedPrescription.id,
+        prestataire_id: selectedPrestataire.id,
+        prestataire_nom: selectedPrestataire.nom_complet,
+        actes: actesAExecuter.map(acte => ({
+          COD_ELEMENT: acte.COD_ELEMENT,
+          LIBELLE: acte.LIBELLE,
+          QUANTITE: acte.quantite_executee,
+          PRIX_UNITAIRE: acte.prix_execute,
+          REMBOURSABLE: acte.REMBOURSABLE
+        })),
+        total: totalFacture,
+        date_execution: moment().format('YYYY-MM-DD HH:mm:ss'),
+        centre_id: centreId
+      };
+      
+      console.log('📤 Données d\'exécution:', executionData);
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      message.success('Exécution enregistrée avec succès!');
+      setModalVisible(true);
+      
+    } catch (error) {
+      console.error('❌ Erreur exécution:', error);
+      message.error('Erreur lors de l\'exécution de la prescription');
+    } finally {
+      setLoading(prev => ({ ...prev, execution: false }));
+    }
+  };
+
+  // ==================== COLONNES DES TABLES ====================
+
+  const medicamentsColumns = [
+    {
+      title: 'Médicament/Acte',
+      dataIndex: 'libelle',
+      key: 'libelle',
+      render: (text, record) => (
+        <div>
+          <div><strong>{text || record.NOM_COMMERCIAL || 'Non spécifié'}</strong></div>
+          {record.NOM_GENERIQUE && (
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              Générique: {record.NOM_GENERIQUE}
+            </div>
+          )}
+          {record.FORME_PHARMACEUTIQUE && (
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              Forme: {record.FORME_PHARMACEUTIQUE} {record.DOSAGE ? `- ${record.DOSAGE}` : ''}
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      title: 'Prix unitaire',
+      dataIndex: 'PRIX_UNITAIRE',
+      key: 'PRIX_UNITAIRE',
+      align: 'right',
+      render: (prix) => (
+        <span style={{ fontWeight: 'bold' }}>
+          {parseFloat(prix || 0).toLocaleString('fr-FR')} XAF
+        </span>
+      )
+    },
+    {
+      title: 'Remboursable',
+      dataIndex: 'REMBOURSABLE',
+      key: 'REMBOURSABLE',
+      align: 'center',
+      render: (remboursable) => (
+        <Tag color={remboursable ? 'green' : 'red'}>
+          {remboursable ? 'OUI' : 'NON'}
+        </Tag>
+      )
+    },
+    {
+      title: 'Action',
+      key: 'action',
+      align: 'center',
+      render: (_, record) => (
+        <Button
+          type="primary"
+          size="small"
+          icon={<PlusOutlined />}
+          onClick={() => ajouterMedicament(record)}
+        >
+          Ajouter
+        </Button>
+      )
+    }
+  ];
+
+  const prescriptionMedicamentsColumns = [
+    {
+      title: 'Désignation',
+      dataIndex: 'LIBELLE',
+      key: 'LIBELLE',
+      width: 200
+    },
+    {
+      title: 'Posologie',
+      dataIndex: 'POSOLOGIE',
+      key: 'POSOLOGIE',
+      width: 150,
+      render: (text, record) => (
+        <Input
+          value={text}
+          onChange={(e) => updateMedicament(record.key, 'POSOLOGIE', e.target.value)}
+          placeholder="Ex: 1 comprimé matin et soir"
+        />
+      )
+    },
+    {
+      title: 'Durée',
+      dataIndex: 'DUREE',
+      key: 'DUREE',
+      width: 100,
+      render: (text, record) => (
+        <Input
+          value={text}
+          onChange={(e) => updateMedicament(record.key, 'DUREE', e.target.value)}
+          placeholder="Ex: 7 jours"
+        />
+      )
+    },
+    {
+      title: 'Quantité',
+      dataIndex: 'QUANTITE',
+      key: 'QUANTITE',
+      width: 100,
+      render: (text, record) => (
+        <InputNumber
+          min={1}
+          max={99}
+          value={text}
+          onChange={(value) => updateMedicament(record.key, 'QUANTITE', value)}
+          style={{ width: '100%' }}
+        />
+      )
+    },
+    {
+      title: 'Prix unitaire',
+      dataIndex: 'PRIX_UNITAIRE',
+      key: 'PRIX_UNITAIRE',
+      width: 120,
+      render: (prix) => `${parseFloat(prix || 0).toLocaleString('fr-FR')} XAF`
+    },
+    {
+      title: 'Total',
+      key: 'total',
+      width: 120,
+      render: (_, record) => {
+        const prix = parseFloat(record.PRIX_UNITAIRE) || 0;
+        const quantite = parseInt(record.QUANTITE) || 1;
+        return (
+          <span style={{ fontWeight: 'bold', color: '#1890ff' }}>
+            {(prix * quantite).toLocaleString('fr-FR')} XAF
+          </span>
+        );
+      }
+    },
+    {
+      title: 'Action',
+      key: 'action',
+      width: 80,
+      render: (_, record) => (
+        <Button
+          danger
+          type="text"
+          icon={<DeleteOutlined />}
+          onClick={() => supprimerMedicament(record.key)}
+          size="small"
+        />
+      )
+    }
+  ];
+
+  const prestatairesColumns = [
+    {
+      title: 'Médecin',
+      dataIndex: 'nom_complet',
+      key: 'nom_complet',
+      render: (text, record) => (
+        <div>
+          <div><strong>{text}</strong></div>
+          <div style={{ fontSize: '12px', color: '#666' }}>
+            {record.titre || 'Dr.'} {record.prenom} {record.nom}
+          </div>
+        </div>
+      )
+    },
+    {
+      title: 'Spécialité',
+      dataIndex: 'specialite',
+      key: 'specialite',
+      width: 150,
+      render: (specialite) => specialite || 'Non spécifié'
+    },
+    {
+      title: 'Contact',
+      key: 'contact',
+      width: 150,
+      render: (_, record) => (
+        <div>
+          <div>{record.telephone || 'Non renseigné'}</div>
+          <div style={{ fontSize: '12px', color: '#666' }}>
+            {record.email || ''}
+          </div>
+        </div>
+      )
+    },
+    {
+      title: 'Statut',
+      key: 'statut',
+      width: 100,
+      render: (_, record) => (
+        <Tag color={record.statut_affectation === 'Actif' ? 'green' : 'orange'}>
+          {record.statut_affectation || 'Actif'}
+        </Tag>
+      )
+    },
+    {
+      title: 'Action',
+      key: 'action',
+      width: 100,
+      render: (_, record) => (
+        <Button
+          type={selectedPrestataire?.id === record.id ? 'default' : 'primary'}
+          size="small"
+          onClick={() => selectPrestataire(record)}
+          disabled={selectedPrestataire?.id === record.id}
+        >
+          {selectedPrestataire?.id === record.id ? 'Sélectionné' : 'Sélectionner'}
+        </Button>
+      )
+    }
+  ];
+
+  const executionColumns = [
+    {
+      title: 'Exécuter',
+      dataIndex: 'execute',
+      key: 'execute',
+      width: 80,
+      render: (checked, record) => (
+        <Checkbox
+          checked={checked}
+          onChange={(e) => toggleActeExecution(record.key, e.target.checked)}
+        />
+      )
+    },
+    {
+      title: 'Acte/Médicament',
+      dataIndex: 'LIBELLE',
+      key: 'LIBELLE',
+      width: 200
+    },
+    {
+      title: 'Quantité prescrite',
+      dataIndex: 'QUANTITE',
+      key: 'QUANTITE',
+      width: 120,
+      align: 'center'
+    },
+    {
+      title: 'Quantité à exécuter',
+      key: 'quantite_executee',
+      width: 150,
+      render: (_, record) => (
+        <InputNumber
+          min={1}
+          max={record.QUANTITE || 99}
+          value={record.quantite_executee}
+          onChange={(value) => updateActeExecution(record.key, 'quantite_executee', value)}
+          style={{ width: '100%' }}
+          disabled={!record.execute}
+        />
+      )
+    },
+    {
+      title: 'Prix unitaire',
+      key: 'prix_execute',
+      width: 150,
+      render: (_, record) => (
+        <InputNumber
+          min={0}
+          step={100}
+          value={record.prix_execute}
+          onChange={(value) => updateActeExecution(record.key, 'prix_execute', value)}
+          style={{ width: '100%' }}
+          formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
+          parser={value => value.replace(/\s/g, '')}
+          disabled={!record.execute}
+        />
+      )
+    },
+    {
+      title: 'Sous-total',
+      key: 'sous_total',
+      width: 120,
+      render: (_, record) => {
+        if (!record.execute) return '-';
+        const quantite = parseInt(record.quantite_executee) || 0;
+        const prix = parseFloat(record.prix_execute) || 0;
+        return (
+          <span style={{ fontWeight: 'bold', color: '#52c41a' }}>
+            {(quantite * prix).toLocaleString('fr-FR')} XAF
+          </span>
+        );
+      }
+    }
+  ];
+
+  // ==================== EFFETS ====================
+
+  useEffect(() => {
+    console.log('🏥 Composant Prescriptions monté');
+    console.log('📍 Centre ID stocké:', localStorage.getItem('selectedCentre'));
+    console.log('📍 Centre ID état:', centreId);
+    loadCentres();
+  }, [loadCentres]);
+
+  useEffect(() => {
+    console.log('🔄 Centre changé ou prestataires à charger:', centreId);
+    if (centreId) {
+      loadPrestataires();
+    }
+  }, [centreId, loadPrestataires]);
+
+  useEffect(() => {
+    if (activeTab === 'historique' && selectedPrestataire) {
+      loadMesPrescriptions();
+    }
+  }, [activeTab, selectedPrestataire, loadMesPrescriptions]);
+
+  useEffect(() => {
+    if (affectionCode) {
+      searchAffection(affectionCode);
+    } else {
+      setAffectionDetails(null);
+    }
+  }, [affectionCode]);
+
+  // Effet pour mettre à jour le nom du centre
+  useEffect(() => {
+    if (centreId && centres.length > 0) {
+      const centre = centres.find(c => c.id === centreId || c.cod_cen === centreId);
+      if (centre) {
+        setCentreNom(centre.nom || centre.NOM_CENTRE || `Centre ${centreId}`);
+      }
+    }
+  }, [centreId, centres]);
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-      <Box 
-        className="prescriptions-container"
-        sx={{ 
-          p: { xs: 2, md: 3 },
-          minHeight: '100vh'
-        }}
-      >
-        {/* Header avec effet glassmorphism */}
-        <Box 
-          className="glass-header hover-lift"
-          sx={{ 
-            mb: 4,
-            p: 3,
-            borderRadius: 3,
-            color: 'white',
-            position: 'relative',
-            overflow: 'hidden'
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-              <Avatar className="halo-avatar" sx={{ bgcolor: 'rgba(255,255,255,0.2)' }}>
-                <PrescriptionIcon />
-              </Avatar>
-              <Box>
-                <Typography variant="h4" sx={{ fontWeight: 600 }} className="typewriter-title">
-                  Gestion des Prescriptions
-                </Typography>
-                <Typography variant="body1" sx={{ opacity: 0.9, mt: 0.5 }}>
-                  Créez, gérez et exécutez les prescriptions médicales
-                </Typography>
-              </Box>
-            </Box>
-            <Badge 
-              className="notification-badge"
-              color="error" 
-              variant="dot"
-              invisible={!hasNewPrescriptions}
+    <div style={{ padding: '20px', background: '#f0f2f5', minHeight: '100vh' }}>
+      <Card
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <MedicineBoxOutlined style={{ marginRight: 8, fontSize: '20px', color: '#1890ff' }} />
+            <span>Gestion des Prescriptions Médicales</span>
+          </div>
+        }
+        extra={
+          <Space>
+            <Select
+              value={centreId}
+              onChange={(value) => {
+                console.log('🏥 Centre changé:', value);
+                setCentreId(value);
+                localStorage.setItem('selectedCentre', value);
+                loadPrestataires();
+              }}
+              style={{ width: 200 }}
+              placeholder="Sélectionner un centre"
+              loading={centres.length === 0}
             >
-              <IconButton className="glow-on-hover" sx={{ color: 'white' }}>
-                <NotificationIcon />
-              </IconButton>
-            </Badge>
-          </Box>
-        </Box>
-
-        {/* Messages d'alerte */}
-        <Fade in={!!error}>
-          <Alert 
-            severity="error" 
-            sx={{ 
-              mb: 2, 
-              borderRadius: 2,
-              animation: 'slide-in-right 0.3s ease-out'
-            }}
-            onClose={() => setError(null)}
-            icon={<WarningIcon />}
-          >
-            {error}
-          </Alert>
-        </Fade>
-
-        <Fade in={!!success}>
-          <Alert 
-            severity="success" 
-            sx={{ 
-              mb: 2, 
-              borderRadius: 2,
-              animation: 'slide-in-right 0.3s ease-out'
-            }}
-            onClose={() => setSuccess(null)}
-            icon={<CheckIcon />}
-          >
-            {success}
-          </Alert>
-        </Fade>
-
-        {/* Tabs */}
-        <Paper 
-          className="prescription-card"
-          sx={{ 
-            mb: 4, 
-            borderRadius: 3,
-            overflow: 'hidden'
-          }}
+              {centres.map(centre => (
+                <Option key={centre.id || centre.cod_cen} value={centre.id || centre.cod_cen}>
+                  {centre.nom || centre.NOM_CENTRE || `Centre ${centre.id || centre.cod_cen}`}
+                </Option>
+              ))}
+            </Select>
+            
+            <Button
+              icon={<SyncOutlined />}
+              onClick={() => loadPrestataires()}
+              loading={loading.prestataires}
+              style={{ marginLeft: 8 }}
+              title="Rafraîchir la liste des médecins"
+            />
+            
+            <Button
+              type={selectedPrestataire ? 'default' : 'primary'}
+              icon={<TeamOutlined />}
+              onClick={() => setModalPrestataires(true)}
+              loading={loading.prestataires}
+            >
+              {selectedPrestataire ? 
+                `Dr. ${selectedPrestataire.nom_complet.split(' ')[0]}` : 
+                'Choisir médecin'}
+            </Button>
+          </Space>
+        }
+      >
+        <Tabs 
+          activeKey={activeTab} 
+          onChange={setActiveTab}
+          type="card"
+          animated
         >
-          <Tabs 
-            value={activeTab} 
-            onChange={(e, v) => setActiveTab(v)}
-            variant="fullWidth"
-            sx={{
-              '& .MuiTab-root': {
-                py: 2,
-                fontWeight: 600,
-                fontSize: '0.95rem',
-                transition: 'var(--transition-smooth)',
-                '&.Mui-selected': {
-                  color: '#667eea',
-                  transform: 'translateY(-2px)'
-                }
-              },
-              '& .MuiTabs-indicator': {
-                height: 3,
-                background: 'var(--primary-gradient)'
-              }
-            }}
+          {/* TAB 1: SAISIE DE PRESCRIPTION */}
+          <TabPane 
+            tab={
+              <span>
+                <FileTextOutlined />
+                Saisie de Prescription
+              </span>
+            } 
+            key="saisie"
           >
-            <Tab 
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} className="hover-lift">
-                  <PrescriptionIcon />
-                  Liste des Prescriptions
-                </Box>
-              } 
-            />
-            <Tab 
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} className="hover-lift">
-                  {isEditing ? <EditNoteIcon /> : <AddIcon />}
-                  {isEditing ? 'Modifier Détails' : 'Nouvelle Prescription'}
-                </Box>
-              } 
-            />
-            <Tab 
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} className="hover-lift">
-                  <ExecuteIcon />
-                  Exécuter Prescription
-                </Box>
-              } 
-            />
-          </Tabs>
-        </Paper>
-
-        {/* TAB 1: Liste des prescriptions */}
-        {activeTab === 0 && (
-          <Slide direction="right" in={activeTab === 0}>
-            <Box>
-              {/* Filtres */}
-              <Card 
-                className="prescription-card info-card"
-                sx={{ 
-                  mb: 4, 
-                  borderRadius: 3
-                }}
-              >
-                <CardContent>
-                  <Box className="info-card-icon">
-                    <FilterIcon sx={{ fontSize: 40, color: '#667eea' }} />
-                  </Box>
-                  <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} md={3}>
-                      <TextField
-                        className="animated-input"
-                        fullWidth
-                        label="Rechercher..."
-                        value={filters.search}
-                        onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                        InputProps={{
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <SearchIcon className="glow-on-hover" />
-                            </InputAdornment>
-                          ),
-                          endAdornment: (
-                            <InputAdornment position="end">
-                              <IconButton
-                                onClick={toggleScanner}
-                                className="glow-on-hover"
-                                sx={{ color: '#667eea' }}
-                                title="Scanner un QR Code"
-                                size="small"
-                              >
-                                <QrCodeScannerIcon />
-                              </IconButton>
-                            </InputAdornment>
-                          ),
-                          sx: { borderRadius: 2 }
-                        }}
-                        variant="outlined"
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={2}>
-                      <FormControl fullWidth variant="outlined" sx={{ borderRadius: 2 }}>
-                        <InputLabel>Statut</InputLabel>
-                        <Select
-                          value={filters.statut}
-                          label="Statut"
-                          onChange={(e) => setFilters({ ...filters, statut: e.target.value })}
-                          sx={{ borderRadius: 2 }}
-                        >
-                          <MenuItem value="">Tous</MenuItem>
-                          <MenuItem value="En attente">En attente</MenuItem>
-                          <MenuItem value="En cours">En cours</MenuItem>
-                          <MenuItem value="Executee">Exécutée</MenuItem>
-                          <MenuItem value="Annulee">Annulée</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12} md={2}>
-                      <FormControl fullWidth variant="outlined" sx={{ borderRadius: 2 }}>
-                        <InputLabel>Type</InputLabel>
-                        <Select
-                          value={filters.type_prestation}
-                          label="Type"
-                          onChange={(e) => setFilters({ ...filters, type_prestation: e.target.value })}
-                          sx={{ borderRadius: 2 }}
-                        >
-                          <MenuItem value="">Tous</MenuItem>
-                          {typesPrestation.map(type => (
-                            <MenuItem key={type.value} value={type.value}>
-                              {type.label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12} md={2}>
-                      <DatePicker
-                        label="Date début"
-                        value={filters.date_debut}
-                        onChange={(date) => setFilters({ ...filters, date_debut: date })}
-                        renderInput={(params) => (
-                          <TextField 
-                            {...params} 
-                            className="animated-input"
-                            fullWidth 
-                            variant="outlined" 
-                            sx={{ borderRadius: 2 }}
-                          />
-                        )}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={2}>
-                      <DatePicker
-                        label="Date fin"
-                        value={filters.date_fin}
-                        onChange={(date) => setFilters({ ...filters, date_fin: date })}
-                        renderInput={(params) => (
-                          <TextField 
-                            {...params} 
-                            className="animated-input"
-                            fullWidth 
-                            variant="outlined" 
-                            sx={{ borderRadius: 2 }}
-                          />
-                        )}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={1}>
-                      <Button
-                        className="gradient-button"
-                        fullWidth
-                        variant="contained"
-                        onClick={loadPrescriptions}
-                        disabled={loading}
-                        sx={{
-                          height: '56px',
-                          borderRadius: 2,
-                          '&:hover': {
-                            transform: 'translateY(-3px)'
+            <Form
+              form={prescriptionForm}
+              layout="vertical"
+              onFinish={validerPrescription}
+            >
+              {/* ALERTE CHANGEMENT DE MÉDECIN */}
+              {showMedecinChangeAlert && medecinConsultation && selectedPrestataire && (
+                <Alert
+                  message="Attention: Changement de médecin"
+                  description={
+                    <div>
+                      <div>Vous avez changé de médecin prescripteur.</div>
+                      <div style={{ marginTop: 8 }}>
+                        <strong>Médecin de la consultation:</strong> {medecinConsultation.nom}
+                      </div>
+                      <div>
+                        <strong>Médecin sélectionné:</strong> {selectedPrestataire.nom_complet}
+                      </div>
+                    </div>
+                  }
+                  type="warning"
+                  showIcon
+                  action={
+                    <Space>
+                      <Button 
+                        size="small" 
+                        type="primary"
+                        icon={<SwapOutlined />}
+                        onClick={() => {
+                          if (prestataires.length > 0) {
+                            const medecinConsultationTrouve = prestataires.find(p => 
+                              p.nom_complet && p.nom_complet.toLowerCase().includes(medecinConsultation.nom.toLowerCase())
+                            );
+                            if (medecinConsultationTrouve) {
+                              selectPrestataire(medecinConsultationTrouve, true);
+                              setShowMedecinChangeAlert(false);
+                            }
                           }
                         }}
                       >
-                        {loading ? <CircularProgress size={24} color="inherit" /> : <FilterIcon />}
+                        Revenir au médecin de la consultation
                       </Button>
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-
-              {/* Tableau des prescriptions */}
-              {loading ? (
-                <LoadingSpinner />
-              ) : (
-                <Card 
-                  className="prescription-card"
-                  sx={{ 
-                    borderRadius: 3,
-                    overflow: 'hidden'
-                  }}
-                >
-                  <TableContainer>
-                    <Table>
-                      <TableHead sx={{ 
-                        bgcolor: alpha('#667eea', 0.05),
-                        '& th': { fontWeight: 600 }
-                      }}>
-                        <TableRow>
-                          <TableCell>Numéro</TableCell>
-                          <TableCell>Patient</TableCell>
-                          <TableCell>Type</TableCell>
-                          <TableCell>Date</TableCell>
-                          <TableCell>Statut</TableCell>
-                          <TableCell>Montant</TableCell>
-                          <TableCell>Détails</TableCell>
-                          <TableCell>Actions</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {prescriptions.map((prescription) => {
-                          const hasDetails = prescription.NB_DETAILS > 0 || 
-                                            (prescription.details && prescription.details.length > 0);
-                          
-                          return (
-                            <TableRow 
-                              key={prescription.COD_PRES}
-                              className="animated-table-row"
-                              hover
-                            >
-                              <TableCell>
-                                <Typography variant="body2" fontWeight="bold" className="text-gradient">
-                                  {prescription.NUM_PRESCRIPTION}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <Box>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                                    <Avatar className="halo-avatar" sx={{ width: 32, height: 32, bgcolor: alpha('#667eea', 0.1) }}>
-                                      <PersonIcon fontSize="small" />
-                                    </Avatar>
-                                    <Typography variant="body2">
-                                      {prescription.NOM_BEN} {prescription.PRE_BEN}
-                                    </Typography>
-                                  </Box>
-                                  <Typography variant="caption" color="text.secondary">
-                                    {prescription.IDENTIFIANT_NATIONAL} • {prescription.AGE} ans
-                                  </Typography>
-                                </Box>
-                              </TableCell>
-                              <TableCell>
-                                {(() => {
-                                  const type = typesPrestation.find(t => t.value === prescription.TYPE_PRESTATION);
-                                  return (
-                                    <Chip
-                                      size="small"
-                                      label={prescription.TYPE_PRESTATION}
-                                      icon={type?.icon}
-                                      sx={{
-                                        bgcolor: type?.bgColor,
-                                        color: type?.color,
-                                        fontWeight: 500
-                                      }}
-                                      className="status-chip"
-                                    />
-                                  );
-                                })()}
-                              </TableCell>
-                              <TableCell>
-                                <Typography variant="body2">
-                                  {formatDateDisplay(prescription.DATE_PRESCRIPTION)}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <StatusChip statut={prescription.STATUT} />
-                              </TableCell>
-                              <TableCell>
-                                <Typography variant="body2" fontWeight="bold" color="success.main">
-                                  {prescription.MONTANT_TOTAL?.toLocaleString('fr-FR')} FCFA
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <Chip
-                                  size="small"
-                                  label={hasDetails ? "Complets" : "À compléter"}
-                                  color={hasDetails ? "success" : "warning"}
-                                  variant="outlined"
-                                  sx={{ fontWeight: 500 }}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <Stack direction="row" spacing={1}>
-                                  {!hasDetails && (
-                                    <Tooltip title="Ajouter/modifier les détails">
-                                      <IconButton 
-                                        size="small"
-                                        className="glow-on-hover"
-                                        onClick={() => startEditingPrescription(prescription)}
-                                        color="primary"
-                                      >
-                                        <EditIcon />
-                                      </IconButton>
-                                    </Tooltip>
-                                  )}
-                                  
-                                  {prescription.STATUT === 'En attente' && (
-                                    <Tooltip title="Exécuter">
-                                      <IconButton 
-                                        size="small" 
-                                        className="glow-on-hover"
-                                        onClick={() => {
-                                          setPrescriptionSearch(prescription.NUM_PRESCRIPTION);
-                                          setActiveTab(2);
-                                        }}
-                                      >
-                                        <ExecuteIcon />
-                                      </IconButton>
-                                    </Tooltip>
-                                  )}
-                                </Stack>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Card>
+                      <Button 
+                        size="small" 
+                        onClick={() => setShowMedecinChangeAlert(false)}
+                      >
+                        Garder ce médecin
+                      </Button>
+                    </Space>
+                  }
+                  style={{ marginBottom: 16 }}
+                />
               )}
 
-              {/* Pagination */}
-              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="body2" color="text.secondary">
-                  {pagination.total} prescriptions au total
-                </Typography>
-                <Stack direction="row" spacing={1}>
-                  <Button
-                    variant="outlined"
-                    disabled={pagination.page === 1}
-                    onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
-                    startIcon={<ChevronRightIcon sx={{ transform: 'rotate(180deg)' }} />}
-                    sx={{ borderRadius: 2 }}
-                    className="hover-lift"
-                  >
-                    Précédent
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    disabled={pagination.page >= pagination.totalPages}
-                    onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
-                    endIcon={<ChevronRightIcon />}
-                    sx={{ borderRadius: 2 }}
-                    className="hover-lift"
-                  >
-                    Suivant
-                  </Button>
-                </Stack>
-              </Box>
-            </Box>
-          </Slide>
-        )}
-
-        {/* TAB 2: Création/Modification de prescription */}
-        {activeTab === 1 && (
-          <Slide direction="right" in={activeTab === 1}>
-            <Box className="mobile-slide-in">
-              <Grid container spacing={3}>
-                {/* Informations Patient */}
-                <Grid item xs={12} md={8}>
-                  <Card 
-                    className="prescription-card hover-lift"
-                    sx={{ 
-                      borderRadius: 3
-                    }}
-                  >
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }} className="text-gradient">
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <PersonIcon />
-                          Informations Patient
-                        </Box>
-                      </Typography>
-                      <Grid container spacing={3}>
-                        <Grid item xs={12} md={6}>
-                          <Box sx={{ display: 'flex', gap: 1 }}>
-                            <TextField
-                              className="animated-input"
-                              fullWidth
-                              label="Rechercher patient"
-                              value={patientSearch}
-                              onChange={(e) => setPatientSearch(e.target.value)}
-                              onKeyPress={(e) => e.key === 'Enter' && searchPatients()}
-                              InputProps={{
-                                startAdornment: (
-                                  <InputAdornment position="start">
-                                    <SearchIcon />
-                                  </InputAdornment>
-                                ),
-                                sx: { borderRadius: 2 }
-                              }}
-                              variant="outlined"
-                              disabled={isEditing}
-                            />
-                            <Button
-                              className="gradient-button"
-                              variant="contained"
-                              onClick={() => setSearchPatientDialog(true)}
-                              sx={{ borderRadius: 2 }}
-                              disabled={isEditing}
-                            >
-                              Rechercher
-                            </Button>
-                          </Box>
-                          {patient && (
-                            <Box 
-                              className="prescription-card"
-                              sx={{ 
-                                mt: 2, 
-                                p: 2, 
-                                borderRadius: 2,
-                                bgcolor: alpha('#4CAF50', 0.05),
-                                border: `1px solid ${alpha('#4CAF50', 0.2)}`
-                              }}
-                            >
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                                <Avatar className="halo-avatar" sx={{ bgcolor: alpha('#4CAF50', 0.1) }}>
-                                  <PersonIcon />
-                                </Avatar>
-                                <Box>
-                                  <Typography variant="subtitle1" fontWeight={600}>
-                                    {patient.nom} {patient.prenom}
-                                  </Typography>
-                                  <Typography variant="body2" color="text.secondary">
-                                    {patient.sexe === 'M' ? 'Homme' : 'Femme'} • {patient.age} ans
-                                  </Typography>
-                                </Box>
-                              </Box>
-                              <Typography variant="caption" display="block" color="text.secondary">
-                                ID: {patient.identifiant}
-                              </Typography>
-                              {!isEditing && (
-                                <Button
-                                  size="small"
-                                  color="error"
-                                  onClick={() => setPatient(null)}
-                                  sx={{ mt: 1 }}
-                                  className="hover-lift"
-                                >
-                                  Changer de patient
-                                </Button>
-                              )}
-                            </Box>
+              {/* SECTION PRESTATAIRE */}
+              <Card
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <TeamOutlined style={{ marginRight: 8 }} />
+                    <span>Médecin Prescripteur</span>
+                    {medecinConsultation && selectedPrestataire && selectedPrestataire.nom_complet.includes(medecinConsultation.nom) && (
+                      <Tag color="green" style={{ marginLeft: 8 }}>
+                        <UserSwitchOutlined /> Médecin de la consultation
+                      </Tag>
+                    )}
+                  </div>
+                }
+                style={{ marginBottom: 16 }}
+                size="small"
+              >
+                {selectedPrestataire ? (
+                  <Alert
+                    message={
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <strong>Médecin sélectionné:</strong> {selectedPrestataire.nom_complet}
+                          {medecinConsultation && selectedPrestataire.nom_complet.includes(medecinConsultation.nom) && (
+                            <Tag color="green" style={{ marginLeft: 8 }}>
+                              Médecin de la consultation
+                            </Tag>
                           )}
-                        </Grid>
-
-                        <Grid item xs={12} md={6}>
-                          <FormControl fullWidth variant="outlined" sx={{ borderRadius: 2 }}>
-                            <InputLabel>Type de prestation</InputLabel>
-                            <Select
-                              value={typePrestation}
-                              label="Type de prestation"
-                              onChange={(e) => setTypePrestation(e.target.value)}
-                              sx={{ borderRadius: 2 }}
-                              className="animated-input"
-                              disabled={isEditing}
-                            >
-                              {typesPrestation.map(type => (
-                                <MenuItem key={type.value} value={type.value}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    {type.icon}
-                                    {type.label}
-                                  </Box>
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        </Grid>
-
-                        <Grid item xs={12} md={6}>
-                          <DatePicker
-                            label="Date de validité"
-                            value={dateValidite}
-                            onChange={setDateValidite}
-                            renderInput={(params) => (
-                              <TextField 
-                                {...params} 
-                                className="animated-input"
-                                fullWidth 
-                                variant="outlined" 
-                                sx={{ borderRadius: 2 }}
-                            />
-                            )}
-                          />
-                        </Grid>
-
-                        <Grid item xs={12}>
-                          <TextField
-                            className="animated-input"
-                            fullWidth
-                            multiline
-                            rows={3}
-                            label="Observations"
-                            value={observations}
-                            onChange={(e) => setObservations(e.target.value)}
-                            variant="outlined"
-                            sx={{ borderRadius: 2 }}
-                          />
-                        </Grid>
-                      </Grid>
-                    </CardContent>
-                  </Card>
-                </Grid>
-
-                {/* Informations Médicales */}
-                <Grid item xs={12} md={4}>
-                  <Card 
-                    className="prescription-card hover-lift"
-                    sx={{ 
-                      borderRadius: 3
-                    }}
-                  >
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }} className="text-gradient">
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <MedicalIcon />
-                          Informations Médicales
-                        </Box>
-                      </Typography>
-                      
-                      <Grid container spacing={2}>
-                        <Grid item xs={12}>
-                          <Box sx={{ mb: 2 }}>
-                            <FormControl component="fieldset" fullWidth>
-                              <FormLabel component="legend" sx={{ mb: 1, fontWeight: 500 }}>
-                                Renseigner les détails de la prescription ?
-                              </FormLabel>
-                              <RadioGroup
-                                row
-                                value={remplirDetails}
-                                onChange={(e) => setRemplirDetails(e.target.value === 'true')}
-                              >
-                                <FormControlLabel 
-                                  value={true} 
-                                  control={<Radio />} 
-                                  label="Oui" 
-                                />
-                                <FormControlLabel 
-                                  value={false} 
-                                  control={<Radio />} 
-                                  label="Non" 
-                                />
-                              </RadioGroup>
-                            </FormControl>
-                            
-                            {!remplirDetails && (
-                              <Alert severity="info" sx={{ mt: 2, borderRadius: 2 }}>
-                                La prescription sera créée sans détails. Vous pourrez les ajouter ultérieurement.
-                              </Alert>
-                            )}
-                          </Box>
-                        </Grid>
-
-                        <Grid item xs={12}>
-                          <Box sx={{ mb: 2 }}>
-                            <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                              Médecin prescripteur
-                            </Typography>
-                            
-                            {loadingData ? (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 2, border: '1px dashed #ccc', borderRadius: 2 }}>
-                                <div className="wave-loader">
-                                  <div></div>
-                                  <div></div>
-                                  <div></div>
-                                </div>
-                                <Typography variant="body2">Chargement des médecins...</Typography>
-                              </Box>
-                            ) : medecins.length === 0 ? (
-                              <Alert severity="warning" sx={{ borderRadius: 2, mb: 1 }}>
-                                Aucun médecin disponible. Vérifiez la base de données.
-                              </Alert>
-                            ) : (
-                              <FormControl fullWidth variant="outlined" sx={{ borderRadius: 2 }}>
-                                <InputLabel id="medecin-label">Médecin prescripteur</InputLabel>
-                                <Select
-                                  className="animated-input"
-                                  labelId="medecin-label"
-                                  value={selectedMedecin || ''}
-                                  label="Médecin prescripteur"
-                                  onChange={(e) => {
-                                    console.log('Médecin sélectionné:', e.target.value);
-                                    setSelectedMedecin(e.target.value);
-                                  }}
-                                  sx={{ borderRadius: 2 }}
-                                >
-                                  <MenuItem value="">
-                                    <em>Sélectionner un médecin...</em>
-                                  </MenuItem>
-                                  {medecins.map((med, index) => {
-                                    const label = `${med.NOM_PRESTATAIRE || 'Médecin'} ${med.PRENOM_PRESTATAIRE || ''}${med.SPECIALITE ? ` - ${med.SPECIALITE}` : ''}`;
-                                    
-                                    return (
-                                      <MenuItem key={med.COD_PRE || `med-${index}`} value={med.COD_PRE || ''}>
-                                        {label}
-                                      </MenuItem>
-                                    );
-                                  })}
-                                </Select>
-                              </FormControl>
-                            )}
-                            
-                            {selectedMedecin && (
-                              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                                Médecin sélectionné: {selectedMedecin}
-                              </Typography>
-                            )}
-                          </Box>
-                        </Grid>
-
-                        <Grid item xs={12}>
-                          <FormControl fullWidth variant="outlined" sx={{ borderRadius: 2 }}>
-                            <InputLabel>Centre de santé</InputLabel>
-                            <Select
-                              className="animated-input"
-                              value={selectedCentre || ''}
-                              label="Centre de santé"
-                              onChange={(e) => setSelectedCentre(e.target.value)}
-                              disabled={loadingData || centres.length === 0}
-                              sx={{ borderRadius: 2 }}
-                            >
-                              <MenuItem value="">
-                                <em>Aucun centre sélectionné</em>
-                              </MenuItem>
-                              {centres.map(centre => (
-                                <MenuItem key={centre.COD_CEN} value={centre.COD_CEN}>
-                                  {centre.NOM_CENTRE} 
-                                  {centre.TYPE_CENTRE && ` - ${centre.TYPE_CENTRE}`}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        </Grid>
-                      </Grid>
-                    </CardContent>
-                  </Card>
-                </Grid>
-
-                {/* Éléments de la prescription (affichés uniquement si remplirDetails est true) */}
-                {remplirDetails && (
-                  <Grid item xs={12}>
-                    <Card 
-                      className="prescription-card hover-lift"
-                      sx={{ 
-                        borderRadius: 3
-                      }}
-                    >
-                      <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                          <Typography variant="h6" sx={{ fontWeight: 600 }} className="text-gradient">
-                            Éléments de la prescription
-                          </Typography>
-                          <Button
-                            className="gradient-button"
-                            variant="contained"
-                            startIcon={<AddIcon />}
-                            onClick={() => setSearchElementDialog(true)}
-                            disabled={!patient}
-                            sx={{
-                              borderRadius: 2
-                            }}
+                        </div>
+                        <div>
+                          <Button 
+                            size="small" 
+                            icon={<TeamOutlined />}
+                            onClick={() => setModalPrestataires(true)}
                           >
-                            Rechercher un élément
+                            Changer
                           </Button>
-                        </Box>
+                        </div>
+                      </div>
+                    }
+                    description={
+                      <Descriptions size="small" column={2}>
+                        <Descriptions.Item label="Spécialité">
+                          {selectedPrestataire.specialite}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Contact">
+                          {selectedPrestataire.telephone || 'Non renseigné'}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Centre">
+                          {centreNom || `Centre ${centreId}`}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Statut">
+                          <Tag color={selectedPrestataire.statut_affectation === 'Actif' ? 'green' : 'orange'}>
+                            {selectedPrestataire.statut_affectation || 'Actif'}
+                          </Tag>
+                        </Descriptions.Item>
+                      </Descriptions>
+                    }
+                    type="info"
+                    showIcon
+                  />
+                ) : (
+                  <Alert
+                    message="Aucun médecin sélectionné"
+                    description="Veuillez sélectionner un médecin prescripteur pour continuer"
+                    type="warning"
+                    showIcon
+                    action={
+                      <Button 
+                        type="primary" 
+                        size="small" 
+                        icon={<TeamOutlined />}
+                        onClick={() => setModalPrestataires(true)}
+                      >
+                        Sélectionner un médecin
+                      </Button>
+                    }
+                  />
+                )}
+              </Card>
 
-                        {details.length === 0 ? (
-                          <Alert 
-                            severity="info" 
-                            sx={{ 
-                              borderRadius: 2,
-                              bgcolor: alpha('#2196F3', 0.05)
-                            }}
-                            icon={<PrescriptionIcon />}
-                          >
-                            Aucun élément ajouté. Cliquez sur "Rechercher un élément" pour commencer.
-                          </Alert>
-                        ) : (
-                          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
-                            <Table>
-                              <TableHead sx={{ bgcolor: alpha('#667eea', 0.05), '& th': { fontWeight: 600 } }}>
-                                <TableRow>
-                                  <TableCell>Type</TableCell>
-                                  <TableCell>Libellé</TableCell>
-                                  <TableCell>Quantité</TableCell>
-                                  <TableCell>Posologie</TableCell>
-                                  <TableCell>Durée (jours)</TableCell>
-                                  <TableCell>Prix unitaire (FCFA)</TableCell>
-                                  <TableCell>Montant (FCFA)</TableCell>
-                                  <TableCell>Actions</TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {details.map((detail, index) => (
-                                  <TableRow key={index} className="animated-table-row">
-                                    <TableCell>
-                                      <Chip
-                                        className="status-chip"
-                                        size="small"
-                                        label={detail.type_element === 'medicament' ? 'Médicament' : 'Acte'}
-                                        color={detail.type_element === 'medicament' ? 'primary' : 'secondary'}
-                                        sx={{ fontWeight: 500 }}
-                                      />
-                                    </TableCell>
-                                    <TableCell>{detail.libelle}</TableCell>
-                                    <TableCell>
-                                      <TextField
-                                        className="animated-input"
-                                        type="number"
-                                        size="small"
-                                        value={detail.quantite}
-                                        onChange={(e) => updateElement(index, 'quantite', e.target.value)}
-                                        inputProps={{ min: 0.1, step: 0.5 }}
-                                        sx={{ width: 80, borderRadius: 1 }}
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      <TextField
-                                        className="animated-input"
-                                        size="small"
-                                        value={detail.posologie}
-                                        onChange={(e) => updateElement(index, 'posologie', e.target.value)}
-                                        sx={{ width: 150, borderRadius: 1 }}
-                                        placeholder="Ex: 1 comprimé matin et soir"
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      <TextField
-                                        className="animated-input"
-                                        type="number"
-                                        size="small"
-                                        value={detail.duree_traitement || ''}
-                                        onChange={(e) => updateElement(index, 'duree_traitement', e.target.value)}
-                                        sx={{ width: 80, borderRadius: 1 }}
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      <TextField
-                                        className="animated-input"
-                                        type="number"
-                                        size="small"
-                                        value={detail.prix_unitaire}
-                                        onChange={(e) => updateElement(index, 'prix_unitaire', e.target.value)}
-                                        sx={{ width: 100, borderRadius: 1 }}
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      <Typography fontWeight="bold" color="success.main">
-                                        {(detail.quantite * detail.prix_unitaire).toLocaleString('fr-FR')} FCFA
-                                      </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                      <IconButton
-                                        size="small"
-                                        color="error"
-                                        onClick={() => removeElement(index)}
-                                        className="glow-on-hover"
-                                      >
-                                        <DeleteIcon />
-                                      </IconButton>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </Grid>
+              {/* ÉTAPE 1: INFORMATION PATIENT */}
+              <Card
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <UserOutlined style={{ marginRight: 8 }} />
+                    <span>Étape 1: Identification du Patient</span>
+                  </div>
+                }
+                style={{ marginBottom: 16 }}
+                size="small"
+              >
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Form.Item
+                      label="Numéro de carte du patient"
+                      required
+                    >
+                      <Input.Search
+                        placeholder="Entrez le numéro de la carte d'assurance"
+                        enterButton={<SearchOutlined />}
+                        size="large"
+                        onSearch={searchPatient}
+                        loading={loading.patient}
+                        allowClear
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item
+                      label="Type de prestation"
+                      required
+                      initialValue="PHARMACIE"
+                    >
+                      <Select
+                        value={typePrestation}
+                        onChange={setTypePrestation}
+                        size="large"
+                      >
+                        <Option value="PHARMACIE">Pharmacie</Option>
+                        <Option value="BIOLOGIE">Biologie</Option>
+                        <Option value="IMAGERIE">Imagerie Médicale</Option>
+                        <Option value="HOSPITALISATION">Hospitalisation</Option>
+                        <Option value="CONSULTATION">Consultation Spécialisée</Option>
+                        <Option value="KINESITHERAPIE">Kinésithérapie</Option>
+                        <Option value="INFIRMIER">Soins infirmiers</Option>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                </Row>
+
+                {patient && (
+                  <Alert
+                    message="Informations du Patient"
+                    description={
+                      <Descriptions size="small" column={3}>
+                        <Descriptions.Item label="Nom">
+                          <strong>{patient.nom_complet}</strong>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Identifiant National">
+                          {patient.identifiant_national || 'Non renseigné'}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Âge/Sexe">
+                          {patient.age || 'N/A'} ans / {patient.sexe || 'N/A'}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Groupe Sanguin">
+                          {patient.groupe_sanguin || 'Non renseigné'} {patient.rhesus || ''}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Téléphone">
+                          {patient.telephone || 'Non renseigné'}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Numéro Carte">
+                          {patient.numero_carte || 'Non renseigné'}
+                        </Descriptions.Item>
+                      </Descriptions>
+                    }
+                    type="success"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
                 )}
 
-                {/* Boutons de soumission */}
-                <Grid item xs={12}>
-                  <Card 
-                    className="prescription-card"
-                    sx={{ 
-                      borderRadius: 3
-                    }}
-                  >
-                    <CardContent>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Box>
-                          <Typography variant="body2" color="text.secondary">
-                            Total de la prescription
-                          </Typography>
-                          <Typography variant="h5" fontWeight="bold" color="success.main" className="text-gradient">
-                            {calculateTotal().toLocaleString('fr-FR')} FCFA
-                          </Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', gap: 2 }}>
-                          <Button
-                            variant="outlined"
-                            color="error"
-                            onClick={resetCreationForm}
-                            disabled={loading}
-                            sx={{ borderRadius: 2 }}
-                            className="hover-lift"
-                          >
-                            Annuler
-                          </Button>
-                          {isEditing ? (
-                            <Button
-                              className="gradient-button success-button"
-                              variant="contained"
-                              startIcon={<CheckIcon />}
-                              onClick={() => {
-                                setConfirmAction('update');
-                                setConfirmDialogOpen(true);
-                              }}
-                              disabled={loading}
-                              sx={{
-                                borderRadius: 2
-                              }}
-                            >
-                              {loading ? (
-                                <CircularProgress size={20} color="inherit" />
-                              ) : (
-                                'Mettre à jour les détails'
-                              )}
-                            </Button>
-                          ) : (
-                            <Button
-                              className="gradient-button success-button"
-                              variant="contained"
-                              startIcon={<CheckIcon />}
-                              onClick={() => {
-                                setConfirmAction('create');
-                                setConfirmDialogOpen(true);
-                              }}
-                              disabled={loading || (remplirDetails && details.length === 0)}
-                              sx={{
-                                borderRadius: 2
-                              }}
-                            >
-                              {loading ? (
-                                <CircularProgress size={20} color="inherit" />
-                              ) : (
-                                'Terminer et Imprimer'
-                              )}
-                            </Button>
-                          )}
-                        </Box>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              </Grid>
-            </Box>
-          </Slide>
-        )}
-
-        {/* TAB 3: Exécution de prescription */}
-        {activeTab === 2 && (
-          <Slide direction="right" in={activeTab === 2}>
-            <Box className="mobile-slide-in">
-              {/* Recherche de prescription */}
-              <Card 
-                className="prescription-card"
-                sx={{ 
-                  mb: 4, 
-                  borderRadius: 3
-                }}
-              >
-                <CardContent>
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }} className="text-gradient">
-                    Recherche de prescription à exécuter
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                    <TextField
-                      className="animated-input"
-                      fullWidth
-                      label="Numéro de prescription"
-                      value={prescriptionSearch}
-                      onChange={(e) => {
-                        setPrescriptionSearch(e.target.value);
-                        setError(null);
-                        setSuccess(null);
-                      }}
-                      onKeyPress={(e) => e.key === 'Enter' && searchPrescription()}
-                      placeholder="PRES-2024-00001 ou PRES202400001"
-                      helperText="Format: PRES-YYYY-NNNNN ou PRESYYYYNNNNN"
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <SearchIcon className="glow-on-hover" />
-                          </InputAdornment>
-                        ),
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <IconButton
-                              onClick={toggleScanner}
-                              className="glow-on-hover"
-                              sx={{ color: '#667eea' }}
-                              title="Scanner un QR Code"
-                            >
-                              <QrCodeScannerIcon />
-                            </IconButton>
-                          </InputAdornment>
-                        ),
-                        sx: { borderRadius: 2 }
-                      }}
-                      variant="outlined"
-                      error={!!error && error.includes('Prescription')}
-                    />
-                    <Button
-                      className="gradient-button"
-                      variant="contained"
-                      startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <SearchIcon />}
-                      onClick={searchPrescription}
-                      disabled={loading || !prescriptionSearch.trim()}
-                      sx={{
-                        borderRadius: 2,
-                        minWidth: '120px'
-                      }}
-                    >
-                      {loading ? 'Recherche...' : 'Rechercher'}
-                    </Button>
-                  </Box>
-                  
-                  {selectedPrescription && (
-                    <Alert 
-                      severity="info" 
-                      sx={{ mt: 2, borderRadius: 2 }}
-                      icon={<CheckIcon />}
-                    >
-                      Prescription trouvée: {selectedPrescription.NUM_PRESCRIPTION} - 
-                      Statut: {selectedPrescription.STATUT}
-                    </Alert>
-                  )}
-                </CardContent>
+                {consultationInfo && (
+                  <Alert
+                    message="Dernière consultation"
+                    description={
+                      <div>
+                        <div><strong>Date:</strong> {moment(consultationInfo.date).format('DD/MM/YYYY HH:mm')}</div>
+                        <div><strong>Type:</strong> {consultationInfo.type}</div>
+                        <div><strong>Médecin:</strong> {consultationInfo.medecin}</div>
+                        <div><strong>Montant:</strong> {consultationInfo.montant?.toLocaleString('fr-FR')} XAF</div>
+                        {medecinConsultation && (
+                          <div style={{ marginTop: 8 }}>
+                            <Tag color="blue">
+                              <UserSwitchOutlined /> Ce médecin a été automatiquement sélectionné
+                            </Tag>
+                          </div>
+                        )}
+                      </div>
+                    }
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
+                )}
               </Card>
 
-              {/* Détails de la prescription à exécuter */}
-              {selectedPrescription && (
-                <Zoom in={!!selectedPrescription}>
-                  <Card 
-                    className="prescription-card hover-lift"
-                    sx={{ 
-                      borderRadius: 3
-                    }}
-                  >
-                    <CardContent>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-                        <Box>
-                          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }} className="text-gradient">
-                            Prescription #{selectedPrescription.NUM_PRESCRIPTION}
-                          </Typography>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                            <Typography component="span" variant="body2" color="text.secondary">
-                              Patient: {selectedPrescription.NOM_BEN} {selectedPrescription.PRE_BEN}
-                            </Typography>
-                            <Typography component="span" variant="body2" color="text.secondary">
-                              •
-                            </Typography>
-                            <Typography component="span" variant="body2" color="text.secondary">
-                              Type: {selectedPrescription.TYPE_PRESTATION}
-                            </Typography>
-                            <Typography component="span" variant="body2" color="text.secondary">
-                              •
-                            </Typography>
-                            <Typography component="span" variant="body2" color="text.secondary">
-                              Statut:
-                            </Typography>
-                            <StatusChip statut={selectedPrescription.STATUT} />
-                          </Box>
-                        </Box>
+              {/* ÉTAPE 2: CODE AFFECTATION */}
+              <Card
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <InfoCircleOutlined style={{ marginRight: 8 }} />
+                    <span>Étape 2: Code Affectation</span>
+                  </div>
+                }
+                style={{ marginBottom: 16 }}
+                size="small"
+              >
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Form.Item
+                      label="Code Affectation (Obligatoire)"
+                      required
+                      rules={[{ required: true, message: 'Le code affectation est obligatoire' }]}
+                    >
+                      <Input
+                        placeholder="Entrez le code d'affection (ex: J00, A01, etc.)"
+                        value={affectionCode}
+                        onChange={(e) => setAffectionCode(e.target.value.toUpperCase())}
+                        size="large"
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    {affectionDetails && (
+                      <Alert
+                        message={`Affection: ${affectionDetails.libelle}`}
+                        description={
+                          <div>
+                            <div><strong>Catégorie:</strong> {affectionDetails.categorie}</div>
+                            <div><strong>Gravité:</strong> {affectionDetails.gravite}</div>
+                            <div><strong>Remboursable:</strong> {affectionDetails.remboursable ? 'Oui' : 'Non'}</div>
+                          </div>
+                        }
+                        type="info"
+                        showIcon
+                      />
+                    )}
+                  </Col>
+                </Row>
+              </Card>
+
+              {/* ÉTAPE 3: AJOUT DES MÉDICAMENTS */}
+              <Card
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <MedicineBoxOutlined style={{ marginRight: 8 }} />
+                    <span>Étape 3: Prescription Médicale</span>
+                    <Tag color="blue" style={{ marginLeft: 8 }}>
+                      {selectedMedicaments.length} acte(s)
+                    </Tag>
+                    <Tag color={saisieManuelleMode ? "orange" : "blue"} style={{ marginLeft: 8 }}>
+                      {saisieManuelleMode ? "Mode Saisie Manuelle" : "Mode Recherche"}
+                    </Tag>
+                  </div>
+                }
+                style={{ marginBottom: 16 }}
+                size="small"
+              >
+                <Row gutter={16}>
+                  <Col span={24}>
+                    <Form.Item label={
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>
+                          {saisieManuelleMode ? "Saisie manuelle d'acte" : "Recherche de médicaments ou actes"}
+                        </span>
                         <Button
-                          variant="outlined"
-                          startIcon={<PrintIcon />}
-                          onClick={() => viewFeuilleSoins(selectedPrescription)}
-                          sx={{ borderRadius: 2 }}
-                          className="hover-lift"
+                          type="dashed"
+                          size="small"
+                          icon={saisieManuelleMode ? <SearchOutlined /> : <FileTextOutlined />}
+                          onClick={toggleSaisieManuelleMode}
                         >
-                          Voir feuille de soins
+                          {saisieManuelleMode ? "Passer en mode recherche" : "Saisir manuellement"}
                         </Button>
-                      </Box>
-
-                      <Divider className="animated-divider" sx={{ my: 3 }} />
-
-                      <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 2 }} className="text-gradient">
-                        Éléments à exécuter
-                      </Typography>
-                      
-                      {executionDetails.length === 0 ? (
-                        <Alert severity="warning" sx={{ borderRadius: 2 }}>
-                          Aucun détail disponible pour cette prescription ou tous les éléments sont déjà exécutés.
-                        </Alert>
+                      </div>
+                    }>
+                      {saisieManuelleMode ? (
+                        <Form
+                          form={formSaisieManuelle}
+                          layout="vertical"
+                          onFinish={ajouterActeManuel}
+                        >
+                          <Row gutter={8}>
+                            <Col span={12}>
+                              <Form.Item
+                                label="Libellé de l'acte"
+                                rules={[{ required: true, message: 'Le libellé est obligatoire' }]}
+                              >
+                                <Input
+                                  placeholder="Ex: Consultation spécialisée, Radio pulmonaire..."
+                                  value={acteManuel.LIBELLE}
+                                  onChange={(e) => setActeManuel({...acteManuel, LIBELLE: e.target.value})}
+                                  size="large"
+                                />
+                              </Form.Item>
+                            </Col>
+                            <Col span={6}>
+                              <Form.Item label="Quantité">
+                                <InputNumber
+                                  min={1}
+                                  max={999}
+                                  value={acteManuel.QUANTITE}
+                                  onChange={(value) => setActeManuel({...acteManuel, QUANTITE: value})}
+                                  style={{ width: '100%' }}
+                                />
+                              </Form.Item>
+                            </Col>
+                            <Col span={6}>
+                              <Form.Item label="Unité">
+                                <Select
+                                  value={acteManuel.UNITE}
+                                  onChange={(value) => setActeManuel({...acteManuel, UNITE: value})}
+                                  style={{ width: '100%' }}
+                                >
+                                  <Option value="boîte(s)">boîte(s)</Option>
+                                  <Option value="flacon(s)">flacon(s)</Option>
+                                  <Option value="ampoule(s)">ampoule(s)</Option>
+                                  <Option value="comprimé(s)">comprimé(s)</Option>
+                                  <Option value="sachet(s)">sachet(s)</Option>
+                                  <Option value="unité(s)">unité(s)</Option>
+                                  <Option value="séance(s)">séance(s)</Option>
+                                  <Option value="examen(s)">examen(s)</Option>
+                                  <Option value="acte(s)">acte(s)</Option>
+                                </Select>
+                              </Form.Item>
+                            </Col>
+                          </Row>
+                          <Row gutter={8}>
+                            <Col span={12}>
+                              <Form.Item label="Posologie">
+                                <Input
+                                  placeholder="Ex: 1 comprimé matin et soir"
+                                  value={acteManuel.POSOLOGIE}
+                                  onChange={(e) => setActeManuel({...acteManuel, POSOLOGIE: e.target.value})}
+                                />
+                              </Form.Item>
+                            </Col>
+                            <Col span={6}>
+                              <Form.Item label="Durée (jours)">
+                                <InputNumber
+                                  min={1}
+                                  max={365}
+                                  value={acteManuel.DUREE}
+                                  onChange={(value) => setActeManuel({...acteManuel, DUREE: value})}
+                                  style={{ width: '100%' }}
+                                />
+                              </Form.Item>
+                            </Col>
+                            <Col span={6}>
+                              <Form.Item label="Prix unitaire (FCFA)">
+                                <InputNumber
+                                  min={0}
+                                  step={100}
+                                  value={acteManuel.PRIX_UNITAIRE}
+                                  onChange={(value) => setActeManuel({...acteManuel, PRIX_UNITAIRE: value})}
+                                  style={{ width: '100%' }}
+                                  formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
+                                  parser={value => value.replace(/\s/g, '')}
+                                />
+                              </Form.Item>
+                            </Col>
+                          </Row>
+                          <Row>
+                            <Col span={24} style={{ textAlign: 'right' }}>
+                              <Space>
+                                <Button onClick={() => {
+                                  setActeManuel({
+                                    LIBELLE: '',
+                                    QUANTITE: 1,
+                                    POSOLOGIE: 'À déterminer',
+                                    DUREE: '7',
+                                    PRIX_UNITAIRE: 0,
+                                    TYPE_ELEMENT: 'MEDICAMENT',
+                                    UNITE: 'boîte(s)'
+                                  });
+                                  formSaisieManuelle.resetFields();
+                                }}>
+                                  Réinitialiser
+                                </Button>
+                                <Button type="primary" htmlType="submit" icon={<PlusOutlined />}>
+                                  Ajouter cet acte
+                                </Button>
+                              </Space>
+                            </Col>
+                          </Row>
+                        </Form>
                       ) : (
-                        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
-                          <Table>
-                            <TableHead sx={{ bgcolor: alpha('#667eea', 0.05), '& th': { fontWeight: 600 } }}>
-                              <TableRow>
-                                <TableCell width="50px">Exécuter</TableCell>
-                                <TableCell>Libellé</TableCell>
-                                <TableCell>Quantité prescrite</TableCell>
-                                <TableCell>Quantité exécutée</TableCell>
-                                <TableCell>Quantité restante</TableCell>
-                                <TableCell>Statut</TableCell>
-                                <TableCell>Prix unitaire</TableCell>
-                                <TableCell>Montant</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {executionDetails.map((detail, index) => {
-                                const quantiteRestante = detail.QUANTITE - (detail.quantite_executee || 0);
-                                const montant = (detail.quantite_executee || 0) * detail.PRIX_UNITAIRE;
-                                
-                                return (
-                                  <TableRow key={detail.COD_PRES_DET} className="animated-table-row">
-                                    <TableCell>
-                                      <Checkbox
-                                        checked={detail.quantite_executee > 0}
-                                        onChange={(e) => {
-                                          const newDetails = [...executionDetails];
-                                          if (e.target.checked) {
-                                            newDetails[index].quantite_executee = detail.QUANTITE;
-                                          } else {
-                                            newDetails[index].quantite_executee = 0;
-                                          }
-                                          setExecutionDetails(newDetails);
-                                        }}
-                                        disabled={!detail.canExecute}
-                                        color="primary"
-                                        className="glow-on-hover"
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      <Box>
-                                        <Typography variant="body2">{detail.LIBELLE}</Typography>
-                                        {detail.POSOLOGIE && (
-                                          <Typography variant="caption" color="text.secondary" display="block">
-                                            Posologie: {detail.POSOLOGIE}
-                                          </Typography>
-                                        )}
-                                      </Box>
-                                    </TableCell>
-                                    <TableCell>{detail.QUANTITE} {detail.UNITE}</TableCell>
-                                    <TableCell>
-                                      <TextField
-                                        className="animated-input"
-                                        type="number"
-                                        size="small"
-                                        value={detail.quantite_executee || 0}
-                                        onChange={(e) => {
-                                          const value = parseFloat(e.target.value) || 0;
-                                          const max = detail.QUANTITE;
-                                          const quantite = Math.min(max, Math.max(0, value));
-                                          
-                                          const newDetails = [...executionDetails];
-                                          newDetails[index].quantite_executee = quantite;
-                                          setExecutionDetails(newDetails);
-                                        }}
-                                        inputProps={{ 
-                                          min: 0, 
-                                          max: detail.QUANTITE,
-                                          step: detail.UNITE === 'comprimé' ? 1 : 0.5
-                                        }}
-                                        sx={{ width: 100, borderRadius: 1 }}
-                                        disabled={!detail.canExecute}
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      <Typography 
-                                        variant="body2" 
-                                        color={quantiteRestante === 0 ? "success.main" : "text.secondary"}
-                                        fontWeight={quantiteRestante === 0 ? "bold" : "normal"}
-                                      >
-                                        {quantiteRestante} {detail.UNITE}
-                                      </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                      <Chip
-                                        className="status-chip"
-                                        size="small"
-                                        label={detail.STATUT_EXECUTION}
-                                        color={detail.STATUT_EXECUTION === 'Execute' ? 'success' : 'warning'}
-                                        sx={{ fontWeight: 500 }}
-                                      />
-                                    </TableCell>
-                                    <TableCell>{detail.PRIX_UNITAIRE?.toLocaleString('fr-FR')} FCFA</TableCell>
-                                    <TableCell>
-                                      <Typography fontWeight="bold" color="success.main">
-                                        {montant.toLocaleString('fr-FR')} FCFA
-                                      </Typography>
-                                    </TableCell>
-                                  </TableRow>
-                                );
-                              })}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
+                        <Input.Search
+                          placeholder="Recherchez un médicament par nom commercial, générique ou code"
+                          enterButton={<SearchOutlined />}
+                          size="large"
+                          value={searchMedicament}
+                          onChange={(e) => {
+                            setSearchMedicament(e.target.value);
+                            searchMedicaments(e.target.value);
+                          }}
+                          loading={loading.medicaments}
+                          style={{ marginBottom: 16 }}
+                        />
                       )}
+                    </Form.Item>
+                  </Col>
+                </Row>
 
-                      {executionDetails.length > 0 && (
-                        <Box sx={{ mt: 3, p: 2, borderRadius: 2, bgcolor: alpha('#4CAF50', 0.05) }} className="prescription-card">
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Box>
-                              <Typography variant="body2" color="text.secondary">
-                                Total à exécuter
-                              </Typography>
-                              <Typography variant="h6" fontWeight="bold" color="success.main" className="text-gradient">
-                                {executionDetails
-                                  .reduce((sum, detail) => sum + (detail.quantite_executee * detail.PRIX_UNITAIRE), 0)
-                                  .toLocaleString('fr-FR')} FCFA
-                              </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', gap: 2 }}>
-                              <Button
-                                variant="outlined"
-                                color="error"
-                                onClick={() => {
-                                  setSelectedPrescription(null);
-                                  setPrescriptionSearch('');
-                                  setExecutionDetails([]);
-                                  setError(null);
-                                  setSuccess(null);
-                                }}
-                                disabled={loading}
-                                sx={{ borderRadius: 2 }}
-                                className="hover-lift"
-                              >
-                                Annuler
-                              </Button>
-                              <Button
-                                className="gradient-button success-button"
-                                variant="contained"
-                                startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <ExecuteIcon />}
-                                onClick={executePrescription}
-                                disabled={loading || executionDetails.every(d => d.quantite_executee === 0)}
-                                sx={{
-                                  borderRadius: 2
-                                }}
-                              >
-                                {loading ? 'Exécution en cours...' : "Valider l'exécution"}
-                              </Button>
-                            </Box>
-                          </Box>
-                        </Box>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Zoom>
-              )}
-            </Box>
-          </Slide>
-        )}
+                {!saisieManuelleMode && searchResults.length > 0 && (
+                  <div style={{ marginBottom: 24 }}>
+                    <Alert
+                      message={`${searchResults.length} résultat(s) trouvé(s)`}
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 8 }}
+                    />
+                    <Table
+                      columns={medicamentsColumns}
+                      dataSource={searchResults}
+                      pagination={{ pageSize: 5 }}
+                      size="small"
+                      rowKey="COD_MED"
+                    />
+                  </div>
+                )}
 
-        {/* MODAL DU SCANNER JSQR */}
-        <Dialog
-          open={showScanner}
-          onClose={toggleScanner}
-          maxWidth="md"
-          fullWidth
-          PaperProps={{
-            className: 'prescription-card',
-            sx: { 
-              borderRadius: 3,
-              maxWidth: '700px'
-            }
-          }}
-        >
-          <DialogTitle sx={{ fontWeight: 600 }} className="text-gradient">
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <QrCodeScannerIcon />
-              Scanner un QR Code
-            </Box>
-          </DialogTitle>
-          <DialogContent>
-            <Box sx={{ pt: 2, position: 'relative' }}>
-              {scannerError ? (
-                <Alert 
-                  severity="error" 
-                  sx={{ mb: 2, borderRadius: 2 }}
-                  onClose={() => setScannerError(null)}
+                <Divider orientation="left">
+                  <strong>Prescription en cours</strong>
+                  <Tag color="blue" style={{ marginLeft: 8 }}>
+                    {selectedMedicaments.length} acte(s)
+                  </Tag>
+                  {selectedMedicaments.filter(estActeManuel).length > 0 && (
+                    <Tag color="orange" style={{ marginLeft: 8 }}>
+                      {selectedMedicaments.filter(estActeManuel).length} manuel(s)
+                    </Tag>
+                  )}
+                </Divider>
+
+                {selectedMedicaments.length > 0 ? (
+                  <Table
+                    columns={prescriptionMedicamentsColumns}
+                    dataSource={selectedMedicaments}
+                    pagination={false}
+                    size="small"
+                    rowClassName={(record) => estActeManuel(record) ? 'acte-manuel-row' : ''}
+                    summary={() => (
+                      <Table.Summary.Row style={{ background: '#fafafa' }}>
+                        <Table.Summary.Cell index={0} colSpan={5} align="right">
+                          <div>
+                            <strong>Total de la prescription ({selectedMedicaments.length} actes):</strong>
+                            {selectedMedicaments.filter(estActeManuel).length > 0 && (
+                              <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
+                                dont {selectedMedicaments.filter(estActeManuel).length} acte(s) saisi(s) manuellement
+                              </div>
+                            )}
+                          </div>
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell index={1} align="right">
+                          <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#1890ff' }}>
+                            {calculerTotal().toLocaleString('fr-FR')} XAF
+                          </span>
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell index={2} />
+                      </Table.Summary.Row>
+                    )}
+                  />
+                ) : (
+                  <Empty
+                    description={
+                      <div>
+                        <div style={{ marginBottom: 8 }}>Aucun médicament ajouté à la prescription</div>
+                        <div style={{ fontSize: '12px', color: '#666' }}>
+                          {saisieManuelleMode ? 
+                            "Utilisez le formulaire ci-dessus pour ajouter un acte manuellement" : 
+                            "Recherchez des médicaments ou passez en mode saisie manuelle"}
+                        </div>
+                      </div>
+                    }
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  />
+                )}
+              </Card>
+
+              {/* BOUTONS D'ACTION */}
+              <div style={{ textAlign: 'center', marginTop: 24 }}>
+                <Space size="large">
+                  <Button
+                    size="large"
+                    onClick={resetPrescriptionForm}
+                    disabled={!patient && selectedMedicaments.length === 0}
+                  >
+                    <CloseCircleOutlined /> Annuler
+                  </Button>
+                  <Button
+                    type="primary"
+                    size="large"
+                    htmlType="submit"
+                    loading={loading.prescrire}
+                    disabled={!patient || !selectedPrestataire || selectedMedicaments.length === 0}
+                    icon={<CheckCircleOutlined />}
+                  >
+                    Terminer la prescription ({selectedMedicaments.length} actes)
+                  </Button>
+                </Space>
+              </div>
+            </Form>
+          </TabPane>
+
+          {/* TAB 2: EXÉCUTION DE PRESCRIPTION */}
+          <TabPane 
+            tab={
+              <span>
+                <CheckCircleOutlined />
+                Exécution de Prescription
+              </span>
+            } 
+            key="execution"
+          >
+            <Card
+              title={
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <CalculatorOutlined style={{ marginRight: 8 }} />
+                  <span>Exécution de Prescription</span>
+                </div>
+              }
+            >
+              {/* INFORMATION PRESTATAIRE */}
+              {selectedPrestataire ? (
+                <Alert
+                  message={`Médecin exécutant: ${selectedPrestataire.nom_complet}`}
+                  description={`Spécialité: ${selectedPrestataire.specialite} | Centre: ${centreNom || `Centre ${centreId}`}`}
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 16 }}
                   action={
                     <Button 
-                      color="inherit" 
                       size="small" 
-                      onClick={startCamera}
+                      onClick={() => setModalPrestataires(true)}
                     >
-                      Réessayer
+                      Changer
                     </Button>
                   }
-                >
-                  {scannerError}
-                </Alert>
-              ) : null}
-              
-              {/* Barre de progression du scan */}
-              {scanProgress < 100 && (
-                <Box sx={{ mb: 2 }}>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={scanProgress}
-                    sx={{ 
-                      height: 8, 
-                      borderRadius: 4,
-                      mb: 1
-                    }}
-                  />
-                  <Typography variant="caption" color="text.secondary" align="center" display="block">
-                    Initialisation de la caméra... {scanProgress}%
-                  </Typography>
-                </Box>
-              )}
-              
-              <Box 
-                sx={{ 
-                  width: '100%',
-                  minHeight: '400px',
-                  backgroundColor: '#000',
-                  borderRadius: 2,
-                  overflow: 'hidden',
-                  position: 'relative',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center'
-                }}
-              >
-                {/* Lecteur vidéo */}
-                <video
-                  ref={videoRef}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover'
-                  }}
-                  playsInline
-                  muted
                 />
-                
-                {/* Canvas pour la détection */}
-                <canvas
-                  ref={canvasRef}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    display: 'none'
-                  }}
-                />
-                
-                {/* Cadre de scan */}
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    width: '250px',
-                    height: '250px',
-                    border: '3px solid #667eea',
-                    borderRadius: 2,
-                    boxShadow: '0 0 0 1000px rgba(0, 0, 0, 0.5)',
-                    zIndex: 10
-                  }}
-                >
-                  {/* Coin supérieur gauche */}
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      top: -3,
-                      left: -3,
-                      width: '30px',
-                      height: '30px',
-                      borderTop: '6px solid #4CAF50',
-                      borderLeft: '6px solid #4CAF50',
-                      borderTopLeftRadius: '8px'
-                    }}
-                  />
-                  {/* Coin supérieur droit */}
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      top: -3,
-                      right: -3,
-                      width: '30px',
-                      height: '30px',
-                      borderTop: '6px solid #4CAF50',
-                      borderRight: '6px solid #4CAF50',
-                      borderTopRightRadius: '8px'
-                    }}
-                  />
-                  {/* Coin inférieur gauche */}
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      bottom: -3,
-                      left: -3,
-                      width: '30px',
-                      height: '30px',
-                      borderBottom: '6px solid #4CAF50',
-                      borderLeft: '6px solid #4CAF50',
-                      borderBottomLeftRadius: '8px'
-                    }}
-                  />
-                  {/* Coin inférieur droit */}
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      bottom: -3,
-                      right: -3,
-                      width: '30px',
-                      height: '30px',
-                      borderBottom: '6px solid #4CAF50',
-                      borderRight: '6px solid #4CAF50',
-                      borderBottomRightRadius: '8px'
-                    }}
-                  />
-                </Box>
-                
-                {/* Indicateur de scan */}
-                {isScanning && (
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      transform: 'translate(-50%, -50%)',
-                      textAlign: 'center',
-                      zIndex: 20,
-                      width: '100%'
-                    }}
-                  >
-                    <Typography 
-                      variant="body1" 
-                      sx={{ 
-                        color: 'white', 
-                        backgroundColor: 'rgba(0,0,0,0.7)',
-                        padding: '8px 16px',
-                        borderRadius: 2,
-                        mb: 1
-                      }}
+              ) : (
+                <Alert
+                  message="Aucun médecin sélectionné"
+                  description="Veuillez sélectionner un médecin exécutant pour pouvoir exécuter des prescriptions"
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  action={
+                    <Button 
+                      type="primary" 
+                      size="small"
+                      onClick={() => setModalPrestataires(true)}
                     >
-                      ⬆️ Pointez la caméra vers le QR Code ⬆️
-                    </Typography>
-                    
-                    {scanFps > 0 && (
-                      <Typography 
-                        variant="caption" 
-                        sx={{ 
-                          color: '#4CAF50', 
-                          backgroundColor: 'rgba(0,0,0,0.7)',
-                          padding: '4px 8px',
-                          borderRadius: 1,
-                          display: 'inline-block'
-                        }}
-                      >
-                        📊 {scanFps} FPS
-                      </Typography>
-                    )}
-                  </Box>
-                )}
-              </Box>
-              
-              {scannedData && (
-                <Alert 
-                  severity="success" 
-                  sx={{ mt: 2, borderRadius: 2 }}
-                  icon={<CheckIcon />}
-                >
-                  <Typography variant="body2">
-                    QR Code scanné: <strong>{scannedData}</strong>
-                  </Typography>
-                  <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
-                    Les données ont été automatiquement copiées dans le champ de recherche.
-                  </Typography>
-                </Alert>
+                      Sélectionner un médecin
+                    </Button>
+                  }
+                />
               )}
-              
-              <Box sx={{ mt: 3, textAlign: 'center' }}>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Placez le QR Code dans le cadre ci-dessus
-                </Typography>
-                <Typography variant="caption" display="block" color="text.secondary">
-                  La détection est automatique. Assurez-vous que le code est bien éclairé.
-                </Typography>
-                
-                <Box sx={{ mt: 2, display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
-                  <Button
-                    variant="outlined"
-                    color="secondary"
-                    onClick={() => {
-                      if (isScanning) {
-                        stopCamera();
-                      } else {
-                        startCamera();
-                      }
-                    }}
-                    sx={{ borderRadius: 2 }}
-                    startIcon={isScanning ? <CloseIcon /> : <RefreshIcon />}
-                  >
-                    {isScanning ? 'Arrêter le scan' : 'Redémarrer le scan'}
-                  </Button>
-                  
-                  <Button
-                    variant="outlined"
-                    onClick={() => {
-                      // Simuler un scan pour la démonstration (optionnel)
-                      handleScanSuccess(`PRES-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(5, '0')}`);
-                    }}
-                    sx={{ borderRadius: 2 }}
-                    startIcon={<QrCodeScannerIcon />}
-                  >
-                    Scanner de test
-                  </Button>
-                </Box>
-              </Box>
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ p: 2 }}>
-            <Button 
-              onClick={toggleScanner}
-              sx={{ borderRadius: 2 }}
-              className="hover-lift"
-            >
-              Fermer
-            </Button>
-          </DialogActions>
-        </Dialog>
 
-        {/* Modal de recherche de patients */}
-        <Dialog 
-          open={searchPatientDialog} 
-          onClose={() => setSearchPatientDialog(false)} 
-          maxWidth="md" 
-          fullWidth
-          PaperProps={{
-            className: 'prescription-card',
-            sx: { borderRadius: 3 }
-          }}
-        >
-          <DialogTitle sx={{ fontWeight: 600 }} className="text-gradient">
-            Rechercher un patient
-          </DialogTitle>
-          <DialogContent>
-            <Box sx={{ pt: 2 }}>
-              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                <TextField
-                  className="animated-input"
-                  fullWidth
-                  label="Nom, prénom, identifiant ou téléphone"
-                  value={patientSearch}
-                  onChange={(e) => setPatientSearch(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && searchPatients()}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon />
-                      </InputAdornment>
-                    ),
-                    sx: { borderRadius: 2 }
-                  }}
-                  variant="outlined"
+              {/* RECHERCHE DE PRESCRIPTION */}
+              <Row gutter={16} style={{ marginBottom: 24 }}>
+                <Col span={18}>
+                  <Input.Search
+                    placeholder="Entrez le numéro de prescription (ex: PRES-YYMMDD-1234) ou l'ID"
+                    enterButton={<SearchOutlined />}
+                    size="large"
+                    value={prescriptionNumero}
+                    onChange={(e) => setPrescriptionNumero(e.target.value)}
+                    onSearch={searchPrescription}
+                    loading={loading.execution}
+                  />
+                </Col>
+                <Col span={6}>
+                  <Button
+                    type="dashed"
+                    block
+                    size="large"
+                    icon={<HistoryOutlined />}
+                    onClick={() => setActiveTab('historique')}
+                  >
+                    Voir l'historique
+                  </Button>
+                </Col>
+              </Row>
+
+              {selectedPrescription && (
+                <>
+                  {/* INFORMATIONS DE LA PRESCRIPTION */}
+                  <Card
+                    title="Détails de la prescription"
+                    size="small"
+                    style={{ marginBottom: 24 }}
+                    extra={
+                      <Space>
+                        <Tag color={
+                          selectedPrescription.STATUT === 'Validée' ? 'green' :
+                          selectedPrescription.STATUT === 'En attente' ? 'orange' :
+                          selectedPrescription.STATUT === 'Exécutée' ? 'blue' : 'default'
+                        }>
+                          {selectedPrescription.STATUT}
+                        </Tag>
+                        <Tag color="blue">
+                          {selectedPrescription.nombreActes || selectedPrescription.details?.length || 0} actes
+                        </Tag>
+                      </Space>
+                    }
+                  >
+                    <Descriptions bordered column={2} size="small">
+                      <Descriptions.Item label="Numéro">
+                        <strong>{selectedPrescription.NUMERO_PRESCRIPTION || 'N/A'}</strong>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Date prescription">
+                        {selectedPrescription.DATE_PRESCRIPTION ? 
+                          moment(selectedPrescription.DATE_PRESCRIPTION).format('DD/MM/YYYY HH:mm') : 
+                          'Non spécifiée'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Patient">
+                        {selectedPrescription.NOM_BEN || 'Inconnu'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Médecin prescripteur">
+                        {selectedPrescription.NOM_MEDECIN || 'Non spécifié'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Type">
+                        {selectedPrescription.TYPE_PRESTATION || 'Non spécifié'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Nombre d'actes">
+                        <strong>{selectedPrescription.nombreActes || selectedPrescription.details?.length || 0}</strong>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Montant total">
+                        <strong>{selectedPrescription.total ? selectedPrescription.total.toLocaleString('fr-FR') : '0'} XAF</strong>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Origine">
+                        {selectedPrescription.ORIGINE === 'Electronique' ? (
+                          <Tag color="blue">Électronique</Tag>
+                        ) : (
+                          <Tag color="orange">Manuelle</Tag>
+                        )}
+                      </Descriptions.Item>
+                    </Descriptions>
+                  </Card>
+
+                  {/* TABLEAU D'EXÉCUTION */}
+                  <Card
+                    title={
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>Actes à exécuter ({actesExecutes.filter(a => a.execute).length}/{actesExecutes.length})</span>
+                        <div>
+                          <Tag color="green" style={{ fontSize: '16px' }}>
+                            Total: {totalFacture.toLocaleString('fr-FR')} XAF
+                          </Tag>
+                        </div>
+                      </div>
+                    }
+                    size="small"
+                    style={{ marginBottom: 24 }}
+                  >
+                    {selectedPrescription.ORIGINE === 'Electronique' ? (
+                      <Table
+                        columns={executionColumns}
+                        dataSource={actesExecutes}
+                        pagination={false}
+                        size="small"
+                        rowKey="key"
+                        summary={() => (
+                          <Table.Summary.Row style={{ background: '#f0f0f0', fontWeight: 'bold' }}>
+                            <Table.Summary.Cell index={0} colSpan={5} align="right">
+                              TOTAL ({actesExecutes.filter(a => a.execute).length} actes exécutés):
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={1} align="right">
+                              <span style={{ color: '#52c41a', fontSize: '16px' }}>
+                                {totalFacture.toLocaleString('fr-FR')} XAF
+                              </span>
+                            </Table.Summary.Cell>
+                          </Table.Summary.Row>
+                        )}
+                      />
+                    ) : (
+                      <Alert
+                        message="Prescription Manuelle"
+                        description="Pour les prescriptions manuelles, veuillez saisir manuellement les actes à facturer."
+                        type="warning"
+                        showIcon
+                        style={{ marginBottom: 16 }}
+                      />
+                    )}
+                    
+                    <div style={{ marginTop: 24, textAlign: 'right' }}>
+                      <Button
+                        type="primary"
+                        size="large"
+                        onClick={validerExecution}
+                        loading={loading.execution}
+                        icon={<CheckCircleOutlined />}
+                        disabled={!selectedPrestataire || actesExecutes.filter(a => a.execute).length === 0}
+                      >
+                        {selectedPrestataire ? 
+                          `Valider l'exécution (${actesExecutes.filter(a => a.execute).length} actes)` : 
+                          'Sélectionnez un médecin'}
+                      </Button>
+                    </div>
+                  </Card>
+                </>
+              )}
+
+              {!selectedPrescription && !loading.execution && (
+                <Empty
+                  description={
+                    <div>
+                      <div style={{ marginBottom: 16 }}>
+                        Entrez un numéro de prescription pour commencer l'exécution
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        Exemples: PRES-${moment().format('YYMMDD')}-1234 ou 456
+                      </div>
+                    </div>
+                  }
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
                 />
-                <Button 
-                  className="gradient-button"
-                  variant="contained" 
-                  onClick={searchPatients}
-                  sx={{ borderRadius: 2 }}
-                >
-                  Rechercher
-                </Button>
-              </Box>
-              
-              <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400, borderRadius: 2 }}>
-                <Table stickyHeader>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 600 }}>Nom</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Prénom</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Sexe</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Âge</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Identifiant</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {patients.map((p) => (
-                      <TableRow key={p.id} hover className="animated-table-row">
-                        <TableCell>{p.nom}</TableCell>
-                        <TableCell>{p.prenom}</TableCell>
-                        <TableCell>{p.sexe === 'M' ? 'Homme' : 'Femme'}</TableCell>
-                        <TableCell>{p.age} ans</TableCell>
-                        <TableCell>{p.identifiant}</TableCell>
-                        <TableCell>
+              )}
+            </Card>
+          </TabPane>
+
+          {/* TAB 3: HISTORIQUE DES PRESCRIPTIONS */}
+          <TabPane 
+            tab={
+              <span>
+                <HistoryOutlined />
+                Historique des Prescriptions
+                {mesPrescriptions.length > 0 && (
+                  <Badge count={mesPrescriptions.length} style={{ marginLeft: 8 }} />
+                )}
+              </span>
+            } 
+            key="historique"
+          >
+            <Card
+              title={
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <HistoryOutlined style={{ marginRight: 8 }} />
+                  <span>Historique des prescriptions</span>
+                  {selectedPrestataire && (
+                    <Tag color="blue" style={{ marginLeft: 8 }}>
+                      Médecin: {selectedPrestataire.nom_complet}
+                    </Tag>
+                  )}
+                  <Tag color="green" style={{ marginLeft: 8 }}>
+                    Total: {mesPrescriptions.reduce((sum, p) => sum + (p.nombreActes || p.details?.length || 0), 0)} actes
+                  </Tag>
+                </div>
+              }
+              extra={
+                <Space>
+                  <Button
+                    icon={<SyncOutlined />}
+                    onClick={loadMesPrescriptions}
+                    loading={loading.prestations}
+                  >
+                    Actualiser
+                  </Button>
+                  <Button
+                    icon={<TeamOutlined />}
+                    onClick={() => setModalPrestataires(true)}
+                  >
+                    Changer médecin
+                  </Button>
+                </Space>
+              }
+            >
+              {selectedPrestataire ? (
+                mesPrescriptions.length > 0 ? (
+                  <List
+                    itemLayout="vertical"
+                    dataSource={mesPrescriptions}
+                    renderItem={(prescription) => (
+                      <List.Item
+                        key={prescription.COD_PRES || prescription.id}
+                        actions={[
                           <Button
-                            className="gradient-button"
-                            size="small"
-                            variant="contained"
-                            onClick={() => {
-                              setPatient(p);
-                              setSearchPatientDialog(false);
-                            }}
-                            sx={{ borderRadius: 2 }}
+                            type="link"
+                            icon={<EyeOutlined />}
+                            onClick={() => handleViewPrescriptionDetails(prescription)}
+                            loading={loading.prestations}
                           >
-                            Sélectionner
+                            Voir détails
+                          </Button>,
+                          <Button
+                            type="link"
+                            icon={<PrinterOutlined />}
+                            onClick={() => handlePrintPrescriptionFromHistory(prescription)}
+                            loading={loading.prestations}
+                          >
+                            Imprimer Ordonnance
                           </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ p: 2 }}>
-            <Button 
-              onClick={() => setSearchPatientDialog(false)}
-              sx={{ borderRadius: 2 }}
-              className="hover-lift"
-            >
-              Fermer
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* Modal de recherche d'éléments médicaux */}
-        <Dialog 
-          open={searchElementDialog} 
-          onClose={() => setSearchElementDialog(false)} 
-          maxWidth="lg" 
-          fullWidth
-          PaperProps={{
-            className: 'prescription-card',
-            sx: { borderRadius: 3 }
-          }}
-        >
-          <DialogTitle sx={{ fontWeight: 600 }} className="text-gradient">
-            Rechercher un médicament ou un acte
-          </DialogTitle>
-          <DialogContent>
-            <Box sx={{ pt: 2 }}>
-              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                <TextField
-                  className="animated-input"
-                  fullWidth
-                  label="Nom du médicament ou libellé de l'acte"
-                  value={elementSearch}
-                  onChange={(e) => setElementSearch(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && searchElements()}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <MedicationIcon />
-                      </InputAdornment>
-                    ),
-                    sx: { borderRadius: 2 }
-                  }}
-                  variant="outlined"
-                />
-                <Button 
-                  className="gradient-button"
-                  variant="contained" 
-                  onClick={searchElements}
-                  sx={{ borderRadius: 2 }}
-                >
-                  Rechercher
-                </Button>
-              </Box>
-              
-              <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400, borderRadius: 2 }}>
-                <Table stickyHeader>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Libellé</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Forme/Détails</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Prix (FCFA)</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Remboursable</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {elements.map((element) => (
-                      <TableRow key={`${element.type}-${element.id}`} hover className="animated-table-row">
-                        <TableCell>
-                          <Chip
-                            className="status-chip"
-                            size="small"
-                            label={element.type === 'medicament' ? 'Médicament' : 'Acte'}
-                            color={element.type === 'medicament' ? 'primary' : 'secondary'}
-                            sx={{ fontWeight: 500 }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">{element.libelle}</Typography>
-                          {element.libelle_complet && (
-                            <Typography variant="caption" color="text.secondary">
-                              {element.libelle_complet}
-                            </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {element.type === 'medicament' ? (
-                            <Box>
-                              <Typography variant="caption">{element.forme}</Typography>
-                              {element.dosage && (
-                                <Typography variant="caption" display="block">
-                                  Dosage: {element.dosage}
-                                </Typography>
+                        ]}
+                      >
+                        <List.Item.Meta
+                          avatar={
+                            <Avatar
+                              style={{
+                                backgroundColor: prescription.STATUT === 'Exécutée' ? '#52c41a' :
+                                  prescription.STATUT === 'Validée' ? '#1890ff' :
+                                  prescription.STATUT === 'En attente' ? '#faad14' : '#f5222d'
+                              }}
+                            >
+                              {(prescription.TYPE_PRESTATION || 'P').charAt(0)}
+                            </Avatar>
+                          }
+                          title={
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <div>
+                                <strong>{prescription.NUMERO_PRESCRIPTION || `PRES-${prescription.COD_PRES || prescription.id}`}</strong>
+                                <Tag color="blue" style={{ marginLeft: 8 }}>
+                                  {prescription.TYPE_PRESTATION || 'Non spécifié'}
+                                </Tag>
+                              </div>
+                              <div>
+                                <Tag color={
+                                  prescription.STATUT === 'Exécutée' ? 'success' :
+                                    prescription.STATUT === 'Validée' ? 'processing' :
+                                    prescription.STATUT === 'En attente' ? 'warning' : 'error'
+                                }>
+                                  {prescription.STATUT || 'Inconnu'}
+                                </Tag>
+                              </div>
+                            </div>
+                          }
+                          description={
+                            <div>
+                              <div>
+                                <strong>Patient:</strong> {prescription.NOM_BEN || 'Inconnu'}
+                              </div>
+                              <div>
+                                <strong>Date:</strong> {prescription.DATE_PRESCRIPTION ? 
+                                  moment(prescription.DATE_PRESCRIPTION).format('DD/MM/YYYY HH:mm') : 
+                                  'Non spécifiée'}
+                              </div>
+                              <div>
+                                <strong>Actes:</strong> 
+                                <Tag color="blue" style={{ marginLeft: 8 }}>
+                                  {prescription.nombreActes || prescription.details?.length || 0} actes
+                                </Tag>
+                                {prescription.total && prescription.total > 0 ? (
+                                  <span style={{ marginLeft: 8, color: '#52c41a', fontWeight: 'bold' }}>
+                                    • Total: {prescription.total.toLocaleString('fr-FR')} XAF
+                                  </span>
+                                ) : (
+                                  <span style={{ marginLeft: 8, color: '#999', fontWeight: 'bold' }}>
+                                    • Total: 0 XAF
+                                  </span>
+                                )}
+                              </div>
+                              <div>
+                                <strong>Prescripteur:</strong> {prescription.NOM_MEDECIN || selectedPrestataire.nom_complet}
+                              </div>
+                              {prescription.COD_AFF && (
+                                <div>
+                                  <strong>Affection:</strong> {prescription.COD_AFF}
+                                </div>
                               )}
-                            </Box>
-                          ) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {element.prix ? (
-                            <Typography variant="body2" fontWeight={500}>
-                              {element.prix.toLocaleString('fr-FR')} FCFA
-                            </Typography>
-                          ) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {element.remboursable ? (
-                            <Chip className="status-chip" size="small" label="Oui" color="success" />
-                          ) : (
-                            <Chip className="status-chip" size="small" label="Non" color="error" />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            className="gradient-button"
-                            size="small"
-                            variant="contained"
-                            onClick={() => addElement(element)}
-                            sx={{ borderRadius: 2 }}
-                          >
-                            Ajouter
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ p: 2 }}>
-            <Button 
-              onClick={() => setSearchElementDialog(false)}
-              sx={{ borderRadius: 2 }}
-              className="hover-lift"
-            >
-              Fermer
-            </Button>
-          </DialogActions>
-        </Dialog>
+                            </div>
+                          }
+                        />
+                      </List.Item>
+                    )}
+                  />
+                ) : (
+                  <Empty
+                    description={
+                      <div>
+                        <div style={{ marginBottom: 16 }}>
+                          Aucune prescription trouvée pour {selectedPrestataire.nom_complet}
+                        </div>
+                        <Button
+                          type="primary"
+                          onClick={() => setActiveTab('saisie')}
+                        >
+                          Créer une nouvelle prescription
+                        </Button>
+                      </div>
+                    }
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  />
+                )
+              ) : (
+                <Empty
+                  description={
+                    <div>
+                      <div style={{ marginBottom: 16 }}>
+                        Veuillez sélectionner un médecin pour voir son historique de prescriptions
+                      </div>
+                      <Button
+                        type="primary"
+                        onClick={() => setModalPrestataires(true)}
+                      >
+                        Sélectionner un médecin
+                      </Button>
+                    </div>
+                  }
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                />
+              )}
+            </Card>
+          </TabPane>
+        </Tabs>
+      </Card>
 
-        {/* Modal de confirmation */}
-        <Dialog 
-          open={confirmDialogOpen} 
-          onClose={() => setConfirmDialogOpen(false)} 
-          maxWidth="sm" 
-          fullWidth
-          PaperProps={{
-            className: 'prescription-card',
-            sx: { borderRadius: 3 }
-          }}
-        >
-          <DialogTitle sx={{ fontWeight: 600 }} className="text-gradient">
-            ⚠️ Confirmation requise
-          </DialogTitle>
-          <DialogContent>
-            <Alert 
-              severity="warning" 
-              sx={{ mb: 2, borderRadius: 2 }}
-              icon={<WarningIcon />}
-            >
-              <Typography variant="body1" fontWeight="bold">
-                Cette action est irréversible !
-              </Typography>
-            </Alert>
-            
-            <Typography variant="body1" sx={{ mt: 2 }}>
-              Êtes-vous sûr de vouloir {isEditing ? 'mettre à jour' : 'créer'} cette prescription ?
-            </Typography>
-            
-            {!isEditing && (
-              <Box sx={{ mt: 2, p: 2, bgcolor: alpha('#FF9800', 0.1), borderRadius: 2 }}>
-                <Typography variant="body2" fontWeight="bold" color="warning.main">
-                  Une fois créée, la prescription ne pourra être modifiée que via l'option "Modifier Détails".
-                </Typography>
-                <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                  • Vérifiez bien les informations du patient<br/>
-                  • Vérifiez le type de prestation<br/>
-                  • Vérifiez les éléments de la prescription
-                </Typography>
-              </Box>
+      {/* MODAL DE SELECTION DES PRESTATAIRES */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <TeamOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+            <span>Sélection du Médecin</span>
+            {medecinConsultation && (
+              <Tag color="green" style={{ marginLeft: 8 }}>
+                Médecin de consultation: {medecinConsultation.nom}
+              </Tag>
             )}
-          </DialogContent>
-          <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
-            <Button 
-              onClick={() => setConfirmDialogOpen(false)}
-              sx={{ borderRadius: 2 }}
-              className="hover-lift"
-              color="inherit"
+          </div>
+        }
+        open={modalPrestataires}
+        onCancel={() => setModalPrestataires(false)}
+        width={800}
+        footer={null}
+      >
+        <Row gutter={16} style={{ marginBottom: 24 }}>
+          <Col span={24}>
+            <Input.Search
+              placeholder="Rechercher un médecin par nom, spécialité ou téléphone"
+              enterButton={<SearchOutlined />}
+              size="large"
+              value={searchPrestataire}
+              onChange={(e) => searchPrestataires(e.target.value)}
+              loading={loading.prestataires}
+            />
+          </Col>
+        </Row>
+
+        {medecinConsultation && (
+          <Alert
+            message="Médecin de la dernière consultation"
+            description={
+              <div>
+                <div><strong>Nom:</strong> {medecinConsultation.nom}</div>
+                <div><strong>Date consultation:</strong> {moment(medecinConsultation.date_consultation).format('DD/MM/YYYY')}</div>
+                <div><strong>Type:</strong> {medecinConsultation.type_consultation}</div>
+                <div style={{ marginTop: 8 }}>
+                  <Tag color="blue">
+                    <UserSwitchOutlined /> Ce médecin a été automatiquement sélectionné
+                  </Tag>
+                </div>
+              </div>
+            }
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
+        <Alert
+          message="Information"
+          description={`Sélectionnez le médecin qui va prescrire ou exécuter la prescription. Seuls les médecins affiliés au centre ${centreNom || `Centre ${centreId}`} sont affichés.`}
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+
+        <Table
+          columns={prestatairesColumns}
+          dataSource={searchPrestataireResults}
+          pagination={{ pageSize: 5 }}
+          size="small"
+          rowKey="id"
+          loading={loading.prestataires}
+          rowClassName={(record) => {
+            if (medecinConsultation && record.nom_complet.includes(medecinConsultation.nom)) {
+              return 'medecin-consultation-row';
+            }
+            return '';
+          }}
+          locale={{
+            emptyText: (
+              searchPrestataireResults.length === 0 && !loading.prestataires ? (
+                <Empty
+                  description={
+                    <div>
+                      <div style={{ marginBottom: 8 }}>Aucun médecin trouvé</div>
+                      <div style={{ fontSize: '12px', color: '#666', marginBottom: 16 }}>
+                        {searchPrestataire ? 
+                          `Aucun médecin correspondant à "${searchPrestataire}"` : 
+                          'Aucun médecin disponible pour ce centre'}
+                      </div>
+                      <Space>
+                        <Button 
+                          type="primary" 
+                          size="small"
+                          onClick={() => {
+                            setSearchPrestataire('');
+                            loadPrestataires();
+                          }}
+                        >
+                          Voir tous les médecins
+                        </Button>
+                        <Button 
+                          size="small"
+                          onClick={() => loadPrestataires()}
+                          icon={<SyncOutlined />}
+                        >
+                          Réessayer
+                        </Button>
+                      </Space>
+                    </div>
+                  }
+                />
+              ) : null
+            )
+          }}
+        />
+
+        <Divider />
+
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <Space>
+            <Button
+              icon={<SyncOutlined />}
+              onClick={() => {
+                loadPrestataires(searchPrestataire);
+                message.info('Liste des médecins rafraîchie');
+              }}
+              loading={loading.prestataires}
+            >
+              Rafraîchir
+            </Button>
+            <Button
+              onClick={() => setModalPrestataires(false)}
             >
               Annuler
             </Button>
             <Button
-              className="gradient-button"
-              variant="contained"
-              color="primary"
+              type="primary"
               onClick={() => {
-                setConfirmDialogOpen(false);
-                if (confirmAction === 'create') {
-                  createPrescription();
-                } else if (confirmAction === 'update') {
-                  updatePrescription();
+                if (selectedPrestataire) {
+                  setModalPrestataires(false);
+                } else {
+                  message.warning('Veuillez sélectionner un médecin');
                 }
               }}
-              sx={{ 
-                borderRadius: 2,
-                minWidth: '120px'
-              }}
             >
-              {isEditing ? 'Mettre à jour' : 'Créer la prescription'}
+              Confirmer la sélection
             </Button>
-          </DialogActions>
-        </Dialog>
+          </Space>
+        </div>
+      </Modal>
 
-        {/* Feuille de soins (pour impression) avec QR Code */}
-        {showFeuilleSoins && prescriptionToPrint && (
-          <Dialog
-            open={showFeuilleSoins}
-            onClose={() => setShowFeuilleSoins(false)}
-            maxWidth="lg"
-            fullWidth
-            PaperProps={{
-              className: 'prescription-card',
-              sx: { 
-                borderRadius: 3, 
-                maxWidth: '900px'
+      {/* MODAL DE VALIDATION */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <WarningOutlined style={{ marginRight: 8, color: '#faad14' }} />
+            <span>Confirmation de la prescription</span>
+          </div>
+        }
+        open={validationModalVisible}
+        onCancel={() => setValidationModalVisible(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setValidationModalVisible(false)}>
+            Annuler
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            danger
+            onClick={confirmerPrescription}
+            loading={loading.prescrire}
+            icon={<CheckCircleOutlined />}
+          >
+            Confirmer la prescription
+          </Button>
+        ]}
+      >
+        <Alert
+          message="Attention"
+          description="Cette action est irréversible. Une fois validée, la prescription ne pourra plus être modifiée."
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        
+        <Descriptions bordered size="small" column={1}>
+          <Descriptions.Item label="Patient">
+            <strong>{patient?.nom_complet}</strong>
+          </Descriptions.Item>
+          <Descriptions.Item label="Médecin prescripteur">
+            {selectedPrestataire?.nom_complet} - {selectedPrestataire?.specialite}
+            {medecinConsultation && selectedPrestataire?.nom_complet.includes(medecinConsultation.nom) && (
+              <Tag color="green" style={{ marginLeft: 8 }}>
+                Médecin de la consultation
+              </Tag>
+            )}
+          </Descriptions.Item>
+          <Descriptions.Item label="Centre">
+            {centreNom || `Centre ${centreId}`}
+          </Descriptions.Item>
+          <Descriptions.Item label="Type de prestation">
+            {typePrestation}
+          </Descriptions.Item>
+          <Descriptions.Item label="Code affectation">
+            {affectionCode}
+          </Descriptions.Item>
+          <Descriptions.Item label="Nombre d'actes">
+            <strong>{selectedMedicaments.length}</strong>
+          </Descriptions.Item>
+          <Descriptions.Item label="Montant total">
+            <strong>{calculerTotal().toLocaleString('fr-FR')} XAF</strong>
+          </Descriptions.Item>
+        </Descriptions>
+      </Modal>
+
+      {/* MODAL D'IMPRESSION D'ORDONNANCE */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <PrinterOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+            <span>Impression de l'Ordonnance Médicale</span>
+          </div>
+        }
+        open={printModalVisible}
+        onCancel={() => {
+          setPrintModalVisible(false);
+          setOrdonnanceToPrint(null);
+        }}
+        width={800}
+        footer={[
+          <Button key="close" onClick={() => {
+            setPrintModalVisible(false);
+            setOrdonnanceToPrint(null);
+          }}>
+            Fermer
+          </Button>,
+          <Button
+            key="print"
+            type="primary"
+            icon={printingOrdonnance ? <LoadingOutlined /> : <PrinterOutlined />}
+            onClick={handlePrintOrdonnance}
+            disabled={printingOrdonnance || !ordonnanceToPrint}
+          >
+            {printingOrdonnance ? 'Impression...' : 'Imprimer l\'ordonnance'}
+          </Button>
+        ]}
+      >
+        {ordonnanceToPrint ? (
+          <div style={{ padding: '20px', backgroundColor: 'white', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+            {/* Filigranes de prévisualisation */}
+            <div style={{
+              position: 'absolute',
+              top: '40%',
+              left: '20%',
+              transform: 'rotate(-45deg)',
+              opacity: 0.1,
+              zIndex: 1,
+              pointerEvents: 'none',
+              fontSize: '60px',
+              fontWeight: 'bold',
+              color: '#2c5aa0',
+              whiteSpace: 'nowrap'
+            }}>
+              VALIDÉ
+            </div>
+            <div style={{
+              position: 'absolute',
+              top: '60%',
+              left: '15%',
+              transform: 'rotate(-45deg)',
+              opacity: 0.1,
+              zIndex: 1,
+              pointerEvents: 'none',
+              fontSize: '40px',
+              fontWeight: 'bold',
+              color: '#666',
+              whiteSpace: 'nowrap'
+            }}>
+              SYSTÈME AMS
+            </div>
+            
+            <div style={{ textAlign: 'center', marginBottom: '10px', borderBottom: '1px solid #000', paddingBottom: '5px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#000', textTransform: 'uppercase' }}>
+                Ordonnance Médicale
+              </h3>
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                Centre de Santé: {centres.find(c => c.id === centreId || c.cod_cen === centreId)?.nom || 'Centre Médical Principal'}
+              </div>
+            </div>
+            
+            <div style={{ textAlign: 'center', margin: '10px 0' }}>
+              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#2c5aa0' }}>
+                {ordonnanceToPrint.numero || generatePrescriptionNumber()}
+              </div>
+            </div>
+            
+            <div style={{ marginBottom: '10px', padding: '5px', border: '1px solid #000', borderRadius: '2px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '5px', borderBottom: '1px solid #ccc', paddingBottom: '2px' }}>
+                INFORMATIONS DU PATIENT
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 'bold' }}>Nom et Prénom:</span>
+                  <span>{ordonnanceToPrint.patient?.nom_complet || 'Non spécifié'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 'bold' }}>Âge:</span>
+                  <span>{ordonnanceToPrint.patient?.age || 'N/A'} ans</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 'bold' }}>Identifiant:</span>
+                  <span>{ordonnanceToPrint.patient?.numero_carte || 'Non spécifié'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 'bold' }}>Sexe:</span>
+                  <span>{ordonnanceToPrint.patient?.sexe || 'Non spécifié'}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div style={{ marginBottom: '10px', fontSize: '11px' }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>DÉTAILS DE LA PRESCRIPTION ({ordonnanceToPrint.selectedMedicaments?.length || 0} actes)</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f0f0f0' }}>
+                    <th style={{ border: '1px solid #000', padding: '4px' }}>N°</th>
+                    <th style={{ border: '1px solid #000', padding: '4px' }}>Désignation</th>
+                    <th style={{ border: '1px solid #000', padding: '4px' }}>Quantité</th>
+                    <th style={{ border: '1px solid #000', padding: '4px' }}>Posologie</th>
+                    <th style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>Prix unitaire</th>
+                    <th style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>Montant</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ordonnanceToPrint.selectedMedicaments?.map((med, index) => {
+                    const prixUnitaire = parseFloat(med.PRIX_UNITAIRE) || 0;
+                    const quantite = parseInt(med.QUANTITE) || 1;
+                    const montant = prixUnitaire * quantite;
+                    
+                    return (
+                      <tr key={index}>
+                        <td style={{ border: '1px solid #000', padding: '4px' }}>{index + 1}</td>
+                        <td style={{ border: '1px solid #000', padding: '4px' }}>{med.LIBELLE || med.libelle || 'Médicament'}</td>
+                        <td style={{ border: '1px solid #000', padding: '4px' }}>{quantite} {med.UNITE || 'boîte(s)'}</td>
+                        <td style={{ border: '1px solid #000', padding: '4px' }}>{med.POSOLOGIE || 'À déterminer'}</td>
+                        <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>
+                          {prixUnitaire.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA
+                        </td>
+                        <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>
+                          {montant.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA
+                        </td>
+                      </tr>
+                    );
+                  }) || (
+                    <tr>
+                      <td style={{ border: '1px solid #000', padding: '4px' }}>1</td>
+                      <td style={{ border: '1px solid #000', padding: '4px' }}>Desiprane</td>
+                      <td style={{ border: '1px solid #000', padding: '4px' }}>5 boîte(s)</td>
+                      <td style={{ border: '1px solid #000', padding: '4px' }}>À déterminer</td>
+                      <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>500 FCFA</td>
+                      <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>2 500 FCFA</td>
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr style={{ backgroundColor: '#f0f0f0', fontWeight: 'bold' }}>
+                    <td colSpan="5" style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>
+                      TOTAL DE LA PRESCRIPTION ({ordonnanceToPrint.selectedMedicaments?.length || 0} actes)
+                    </td>
+                    <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>
+                      {ordonnanceToPrint.selectedMedicaments?.reduce((sum, med) => {
+                        const prix = parseFloat(med.PRIX_UNITAIRE) || 0;
+                        const quantite = parseInt(med.QUANTITE) || 1;
+                        return sum + (prix * quantite);
+                      }, 0).toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0}) || '0'} FCFA
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            
+            <div style={{ marginTop: '20px', textAlign: 'center', color: '#666', fontSize: '10px' }}>
+              <div>Document généré électroniquement par le système de gestion AMS</div>
+              <div>© PRTS 2025-0009 - Scan to validate</div>
+              <div>Document validé le {moment().format('DD/MM/YYYY')}</div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <Result
+              status="info"
+              title="Aucune ordonnance à imprimer"
+              subTitle="Veuillez créer une prescription d'abord"
+            />
+          </div>
+        )}
+      </Modal>
+
+      {/* MODAL DE FACTURE */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <DollarOutlined style={{ marginRight: 8, color: '#52c41a' }} />
+            <span>Feuille de soins - Décompte</span>
+          </div>
+        }
+        open={modalVisible}
+        onCancel={() => setModalVisible(false)}
+        width={800}
+        footer={[
+          <Button key="close" onClick={() => setModalVisible(false)}>
+            Fermer
+          </Button>,
+          <Button
+            key="print"
+            type="primary"
+            icon={<PrinterOutlined />}
+            onClick={() => {
+              const content = document.getElementById('facture-content');
+              if (content) {
+                const printWindow = window.open('', '_blank');
+                printWindow.document.write(`
+                  <html>
+                    <head>
+                      <title>Feuille de Soins</title>
+                      <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; }
+                        .header { text-align: center; margin-bottom: 30px; }
+                        .section { margin-bottom: 20px; }
+                        table { width: 100%; border-collapse: collapse; }
+                        th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+                        .total { font-weight: bold; font-size: 1.2em; }
+                        .signature { margin-top: 50px; }
+                      </style>
+                    </head>
+                    <body>
+                      <div class="header">
+                        <h2>FEUILLE DE SOINS</h2>
+                        <p>Centre de Santé</p>
+                      </div>
+                      ${content.innerHTML}
+                    </body>
+                  </html>
+                `);
+                printWindow.document.close();
+                printWindow.print();
               }
             }}
           >
-            <DialogTitle sx={{ 
-              fontWeight: 600, 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center' 
-            }}>
-              <Box>
-                <Typography className="text-gradient">
-                  Prescription Médicale - {prescriptionToPrint.NUM_PRESCRIPTION}
-                </Typography>
-                <Typography variant="caption" display="block" color="text.secondary">
-                  {formatDateDisplay(prescriptionToPrint.DATE_PRESCRIPTION)}
-                </Typography>
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                {generatingQrCode && (
-                  <CircularProgress size={20} sx={{ mr: 1 }} />
-                )}
-                <IconButton 
-                  onClick={() => setShowFeuilleSoins(false)}
-                  size="small"
-                  className="glow-on-hover"
-                >
-                  <CloseIcon />
-                </IconButton>
-              </Box>
-            </DialogTitle>
-            
-            <DialogContent dividers>
-              <Box 
-                ref={printRef} 
-                sx={{ 
-                  p: 2,
-                  backgroundColor: 'white',
-                  minWidth: '210mm',
-                  position: 'relative'
-                }}
-              >
-                {/* Filigrane (background watermark) */}
-                <div className="watermark" style={{ display: 'none' }}>
-                  PRESCRIPTION
+            Imprimer la feuille de soins
+          </Button>
+        ]}
+      >
+        <div id="facture-content">
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <h2>FEUILLE DE SOINS</h2>
+            <p>Centre de Santé - Département Prescriptions</p>
+          </div>
+          
+          <Descriptions bordered column={2} size="small" style={{ marginBottom: 24 }}>
+            <Descriptions.Item label="Numéro prescription">
+              <strong>{selectedPrescription?.NUMERO_PRESCRIPTION || 'N/A'}</strong>
+            </Descriptions.Item>
+            <Descriptions.Item label="Date d'exécution">
+              {moment().format('DD/MM/YYYY HH:mm')}
+            </Descriptions.Item>
+            <Descriptions.Item label="Patient">
+              {selectedPrescription?.NOM_BEN || 'Inconnu'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Prescripteur">
+              {selectedPrescription?.NOM_MEDECIN || 'Non spécifié'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Exécutant">
+              {selectedPrestataire?.nom_complet || 'Médecin exécutant'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Centre">
+              {centreNom || `Centre ${centreId}`}
+            </Descriptions.Item>
+            <Descriptions.Item label="Statut">
+              <Tag color="green">Exécutée</Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="Nombre d'actes exécutés">
+              <strong>{actesExecutes.filter(a => a.execute).length}/{actesExecutes.length}</strong>
+            </Descriptions.Item>
+          </Descriptions>
+          
+          <Table
+            columns={[
+              { title: 'Acte/Médicament', dataIndex: 'LIBELLE', key: 'LIBELLE' },
+              { title: 'Quantité', dataIndex: 'quantite_executee', key: 'quantite', align: 'center' },
+              { title: 'Prix unitaire', dataIndex: 'prix_execute', key: 'prix', align: 'right' },
+              { 
+                title: 'Total', 
+                key: 'total',
+                align: 'right',
+                render: (_, record) => (
+                  <span>{(record.quantite_executee * record.prix_execute).toLocaleString('fr-FR')} XAF</span>
+                )
+              }
+            ]}
+            dataSource={actesExecutes.filter(a => a.execute)}
+            pagination={false}
+            size="small"
+            summary={() => (
+              <Table.Summary.Row style={{ background: '#f0f0f0' }}>
+                <Table.Summary.Cell index={0} colSpan={3} align="right">
+                  <strong>TOTAL À FACTURER ({actesExecutes.filter(a => a.execute).length} actes):</strong>
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={1} align="right">
+                  <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#1890ff' }}>
+                    {totalFacture.toLocaleString('fr-FR')} XAF
+                  </span>
+                </Table.Summary.Cell>
+              </Table.Summary.Row>
+            )}
+          />
+          
+          <div style={{ marginTop: 32, textAlign: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: 48 }}>
+              <div>
+                <div style={{ borderTop: '1px solid #000', width: 200, paddingTop: 8 }}>
+                  Signature du bénéficiaire
                 </div>
+              </div>
+              <div>
+                <div style={{ borderTop: '1px solid #000', width: 200, paddingTop: 8 }}>
+                  Signature et cachet de l'exécutant
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Modal>
 
-                {/* Nouvel en-tête avec logo, titre et QR code */}
-                <div className="header">
-                  <div className="logo-section">
-                    {/* Logo de l'entreprise - Remplacez par votre logo */}
-                    <img 
-                      src="/logo.png" 
-                      alt="Logo de l'entreprise" 
-                      className="logo"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        // Créer un logo de secours avec du texte
-                        const fallback = document.createElement('div');
-                        fallback.innerHTML = `
-                          <div style="border: 2px solid #2c5aa0; padding: 10px; text-align: center; border-radius: 5px;">
-                            <div style="font-weight: bold; color: #2c5aa0; font-size: 16px;">CLINIQUE</div>
-                            <div style="font-size: 12px; color: #333;">Santé Plus</div>
-                          </div>
-                        `;
-                        e.target.parentNode.appendChild(fallback);
-                      }}
-                    />
-                    {/* Fallback si le logo ne charge pas */}
-                    <div style={{ display: 'none', border: '2px solid #2c5aa0', padding: '10px', textAlign: 'center', borderRadius: '5px' }}>
-                      <div style={{ fontWeight: 'bold', color: '#2c5aa0', fontSize: '16px' }}>CLINIQUE</div>
-                      <div style={{ fontSize: '12px', color: '#333' }}>Santé Plus</div>
-                    </div>
-                  </div>
-                  
-                  <div className="title-section">
-                    <h1>PRESCRIPTION MÉDICALE</h1>
-                    <h2>Document officiel de soins médicaux</h2>
-                    
-                    {/* Numéro de prescription en évidence */}
-                    <div className="prescription-number">
-                      <strong>N° {prescriptionToPrint.NUM_PRESCRIPTION}</strong>
-                    </div>
-                  </div>
-                  
-                  <div className="qrcode-section">
-                    {generatingQrCode ? (
-                      <div style={{ textAlign: 'center', padding: '10px' }}>
-                        <CircularProgress size={30} />
-                        <div style={{ fontSize: '9px', marginTop: '5px' }}>Génération QR Code...</div>
-                      </div>
-                    ) : qrCodeUrl ? (
-                      <>
-                        <img 
-                          src={qrCodeUrl} 
-                          alt="QR Code de la prescription" 
-                          className="qrcode"
-                        />
-                        <div className="qr-note">
-                          Scannez pour vérifier
-                        </div>
-                      </>
-                    ) : (
-                      <div style={{ textAlign: 'center', padding: '10px', border: '1px dashed #ccc' }}>
-                        <QrCodeIcon sx={{ fontSize: 40, color: '#ccc' }} />
-                        <div style={{ fontSize: '9px', marginTop: '5px' }}>QR Code non disponible</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Informations du patient */}
-                <div className="section">
-                  <div className="section-title">INFORMATIONS DU PATIENT</div>
-                  <div className="patient-info">
-                    <div className="info-item">
-                      <span className="info-label">Nom et Prénom:</span> {prescriptionToPrint.NOM_BEN} {prescriptionToPrint.PRE_BEN}
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Sexe:</span> {prescriptionToPrint.SEX_BEN}
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Âge:</span> {prescriptionToPrint.AGE} ans
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Date de prescription:</span> {formatDateDisplay(prescriptionToPrint.DATE_PRESCRIPTION)}
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Identifiant:</span> {prescriptionToPrint.IDENTIFIANT_NATIONAL}
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Date de validité:</span> {prescriptionToPrint.DATE_VALIDITE ? formatDateDisplay(prescriptionToPrint.DATE_VALIDITE) : 'Non spécifiée'}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Informations médicales */}
-                <div className="section">
-                  <div className="section-title">INFORMATIONS MÉDICALES</div>
-                  <div className="medical-info">
-                    <div className="info-item">
-                      <span className="info-label">Centre de santé:</span> {prescriptionToPrint.NOM_CENTRE || 'Non spécifié'}
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Type de prestation:</span> {prescriptionToPrint.TYPE_PRESTATION}
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Médecin prescripteur:</span> {prescriptionToPrint.NOM_PRESTATAIRE || 'Non spécifié'} {prescriptionToPrint.PRENOM_PRESTATAIRE || ''}
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Statut:</span> {prescriptionToPrint.STATUT || 'En attente'}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section AFFECTION pour remplir manuellement */}
-                <div className="section">
-                  <div className="section-title">AFFECTION DIAGNOSTIQUÉE</div>
-                  <div style={{ 
-                    padding: '10px', 
-                    backgroundColor: '#f9f9f9', 
-                    borderRadius: '4px',
-                    border: '1px dashed #ccc',
-                    minHeight: '60px'
-                  }}>
-                    {/* Espace pour écrire le diagnostic */}
-                    {prescriptionToPrint.OBSERVATIONS ? (
-                      <div>{prescriptionToPrint.OBSERVATIONS}</div>
-                    ) : (
-                      <div style={{ color: '#666', fontStyle: 'italic' }}>
-                        [À compléter par le médecin]
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Détails de la prescription */}
-                <div className="section">
-                  <div className="section-title">DÉTAILS DE LA PRESCRIPTION</div>
-                  
-                  {prescriptionToPrint.hasDefaultDetailOnly || 
-                   !prescriptionToPrint.details || 
-                   prescriptionToPrint.details.length === 0 ? (
-                    
-                    // AFFICHER DES LIGNES VIDES POUR LES PRESCRIPTIONS SANS DÉTAILS
-                    <div>
-                      <p style={{ color: '#666', fontStyle: 'italic', marginBottom: '15px' }}>
-                        Cette prescription a été créée sans détails spécifiques. Veuillez remplir manuellement ci-dessous :
-                      </p>
-                      
-                      <table>
-                        <thead>
-                          <tr>
-                            <th style={{ width: '40%' }}>Libellé</th>
-                            <th style={{ width: '10%' }}>Quantité</th>
-                            <th style={{ width: '20%' }}>Posologie</th>
-                            <th style={{ width: '10%' }}>Durée</th>
-                            <th style={{ width: '10%' }}>Prix unitaire</th>
-                            <th style={{ width: '10%' }}>Montant</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {/* Lignes vides pour la saisie manuelle */}
-                          {[1, 2, 3, 4, 5].map((row, index) => (
-                            <tr key={index} style={{ height: '25px' }}>
-                              <td style={{ border: '1px dashed #ccc', minHeight: '25px' }}></td>
-                              <td style={{ border: '1px dashed #ccc' }}></td>
-                              <td style={{ border: '1px dashed #ccc' }}></td>
-                              <td style={{ border: '1px dashed #ccc' }}></td>
-                              <td style={{ border: '1px dashed #ccc' }}></td>
-                              <td style={{ border: '1px dashed #ccc' }}></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="total-row">
-                            <td colSpan="5" align="right">
-                              <strong>TOTAL :</strong>
-                            </td>
-                            <td>
-                              <div className="total-amount" style={{ border: '1px dashed #ccc', minHeight: '25px' }}>
-                                {/* Espace pour le total */}
-                              </div>
-                            </td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  ) : (
-                    
-                    // AFFICHER LES DÉTAILS NORMAUX POUR LES PRESCRIPTIONS AVEC DÉTAILS
-                    <>
-                      <table>
-                        <thead>
-                          <tr>
-                            <th style={{ width: '40%' }}>Libellé</th>
-                            <th style={{ width: '10%' }}>Quantité</th>
-                            <th style={{ width: '20%' }}>Posologie</th>
-                            <th style={{ width: '10%' }}>Durée</th>
-                            <th style={{ width: '10%' }}>Prix unitaire</th>
-                            <th style={{ width: '10%' }}>Montant</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {prescriptionToPrint.details.map((detail, index) => (
-                            <tr key={index}>
-                              <td>{detail.LIBELLE}</td>
-                              <td>{detail.QUANTITE} {detail.UNITE}</td>
-                              <td>{detail.POSOLOGIE || '-'}</td>
-                              <td>{detail.DUREE_TRAITEMENT || '-'} {detail.DUREE_TRAITEMENT ? 'jours' : ''}</td>
-                              <td>{detail.PRIX_UNITAIRE?.toLocaleString('fr-FR')} FCFA</td>
-                              <td>
-                                <strong>{(detail.QUANTITE * detail.PRIX_UNITAIRE).toLocaleString('fr-FR')} FCFA</strong>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="total-row">
-                            <td colSpan="5" align="right">
-                              <strong>TOTAL PRESCRIPTION :</strong>
-                            </td>
-                            <td>
-                              <div className="total-amount">
-                                {prescriptionToPrint.MONTANT_TOTAL?.toLocaleString('fr-FR') || 
-                                 (prescriptionToPrint.details?.reduce((sum, d) => 
-                                   sum + (d.QUANTITE * d.PRIX_UNITAIRE), 0) || 0).toLocaleString('fr-FR')} FCFA
-                              </div>
-                            </td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </>
-                  )}
-                </div>
-
-                {/* Observations supplémentaires */}
-                <div className="section">
-                  <div className="section-title">OBSERVATIONS SUPPLÉMENTAIRES</div>
-                  <div style={{ 
-                    padding: '10px', 
-                    backgroundColor: '#f5f5f5', 
-                    borderRadius: '4px',
-                    border: '1px solid #ddd',
-                    minHeight: '40px'
-                  }}>
-                    {prescriptionToPrint.OBSERVATIONS && prescriptionToPrint.OBSERVATIONS !== prescriptionToPrint.OBSERVATIONS ? (
-                      prescriptionToPrint.OBSERVATIONS
-                    ) : (
-                      <div style={{ color: '#666', fontStyle: 'italic' }}>
-                        Aucune observation supplémentaire.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Total et signatures */}
-                <div style={{ marginTop: '30px' }}>
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-end',
-                    marginTop: '20px'
-                  }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ 
-                        padding: '10px', 
-                        backgroundColor: '#f0f7f0', 
-                        borderRadius: '4px',
-                        border: '1px solid #4CAF50'
-                      }}>
-                        <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#4CAF50' }}>
-                          TOTAL PRESCRIPTION: {prescriptionToPrint.MONTANT_TOTAL?.toLocaleString('fr-FR') || 
-                                 (prescriptionToPrint.details?.reduce((sum, d) => 
-                                   sum + (d.QUANTITE * d.PRIX_UNITAIRE), 0) || 0).toLocaleString('fr-FR')} FCFA
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div style={{ flex: 1, textAlign: 'center' }}>
-                      <div className="signature-area">
-                        <p style={{ marginBottom: '30px', color: '#666', fontSize: '11px' }}>
-                          Signature, cachet et nom du médecin prescripteur
-                        </p>
-                        <div className="signature-line"></div>
-                        <p style={{ marginTop: '5px', fontSize: '10px', color: '#666' }}>
-                          {prescriptionToPrint.NOM_PRESTATAIRE || 'Dr.'} {prescriptionToPrint.PRENOM_PRESTATAIRE || ''}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Signature du pharmacien/executant */}
-                  <div style={{ marginTop: '30px', textAlign: 'center' }}>
-                    <div style={{ 
-                      display: 'inline-block',
-                      width: '60%',
-                      margin: '0 auto'
-                    }}>
-                      <div className="signature-line"></div>
-                      <p style={{ marginTop: '5px', fontSize: '10px', color: '#666' }}>
-                        Signature et cachet du pharmacien/exécutant
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="footer">
-                  <p>
-                    Document généré électroniquement le {new Date().toLocaleDateString('fr-FR')} à {new Date().toLocaleTimeString('fr-FR')}
-                  </p>
-                  <p style={{ fontSize: '9px', marginTop: '3px' }}>
-                    © Système de Gestion Médicale - Ce document a une valeur légale. Conserver pour vos archives.
-                  </p>
-                  <p style={{ fontSize: '8px', marginTop: '3px', color: '#999' }}>
-                    QR Code contenant: N° prescription, patient, date, centre et statut
-                  </p>
-                </div>
-              </Box>
-            </DialogContent>
-            
-            <DialogActions sx={{ p: 2 }}>
-              <Button 
-                onClick={() => setShowFeuilleSoins(false)}
-                sx={{ borderRadius: 2 }}
-                className="hover-lift"
-              >
-                Fermer
-              </Button>
-              <Button 
-                className="gradient-button"
-                variant="contained"
-                startIcon={printing ? <CircularProgress size={20} color="inherit" /> : <PrintIcon />}
-                onClick={handlePrintFeuilleSoins}
-                disabled={printing || generatingQrCode}
-                sx={{ 
-                  borderRadius: 2
-                }}
-              >
-                {printing ? 'Impression en cours...' : 'Imprimer la prescription'}
-              </Button>
-            </DialogActions>
-          </Dialog>
-        )}
-      </Box>
-    </LocalizationProvider>
+      {/* Styles CSS pour surligner le médecin de la consultation */}
+      <style>
+        {`
+          .medecin-consultation-row {
+            background-color: #f0f9ff !important;
+            border-left: 4px solid #1890ff !important;
+          }
+          .medecin-consultation-row:hover {
+            background-color: #e6f7ff !important;
+          }
+          .acte-manuel-row {
+            background-color: #fff9e6 !important;
+          }
+          .acte-manuel-row:hover {
+            background-color: #fff0b3 !important;
+          }
+        `}
+      </style>
+    </div>
   );
 };
+
+// Fonction utilitaire pour calculer l'âge
+function calculateAge(dateNaissance) {
+  if (!dateNaissance) return null;
+  const today = moment();
+  const birthDate = moment(dateNaissance);
+  return today.diff(birthDate, 'years');
+}
 
 export default Prescriptions;

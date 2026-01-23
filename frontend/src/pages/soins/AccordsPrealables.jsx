@@ -1,5 +1,5 @@
 // src/pages/AccordsPrealables.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Container,
@@ -42,11 +42,11 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
   Checkbox,
   Accordion,
   AccordionSummary,
-  AccordionDetails
+  AccordionDetails,
+  Autocomplete
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -56,24 +56,88 @@ import {
   Visibility as ViewIcon,
   CheckCircle as ValidIcon,
   Cancel as RejectIcon,
-  PlayCircle as ExecuteIcon,
   Download as DownloadIcon,
-  AttachFile as AttachFileIcon,
   ExpandMore as ExpandMoreIcon,
   Description as DescriptionIcon,
   LocalHospital as HospitalIcon,
-  Medication as MedicationIcon
+  Medication as MedicationIcon,
+  Person as PersonIcon,
+  Assignment as AssignmentIcon,
+  Receipt as ReceiptIcon,
+  FilterList as FilterIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { fr } from 'date-fns/locale';
-import api, { prescriptionsAPI } from '../../services/api';
+import { prescriptionsAPI, beneficiairesAPI } from '../../services/api';
+import { styled } from '@mui/material/styles';
+
+// Composants stylisés
+const StyledCard = styled(Card)(({ theme }) => ({
+  borderRadius: theme.shape.borderRadius * 2,
+  boxShadow: theme.shadows[2],
+  transition: 'box-shadow 0.3s ease',
+  '&:hover': {
+    boxShadow: theme.shadows[4],
+  },
+}));
+
+const StatusBadge = styled(Chip)(({ theme, statuscolor }) => {
+  const colorMap = {
+    'warning': theme.palette.warning,
+    'success': theme.palette.success,
+    'error': theme.palette.error,
+    'info': theme.palette.info,
+    'primary': theme.palette.primary,
+    'default': theme.palette.grey[500]
+  };
+  
+  const colorObj = colorMap[statuscolor] || theme.palette.primary;
+  
+  return {
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    fontSize: '0.7rem',
+    letterSpacing: '0.5px',
+    backgroundColor: colorObj.light || colorObj[100],
+    color: colorObj.main || colorObj[700],
+    border: `1px solid ${colorObj.main || colorObj[400]}`,
+  };
+});
+
+const ActionButton = styled(IconButton)(({ theme }) => ({
+  backgroundColor: theme.palette.background.paper,
+  boxShadow: theme.shadows[1],
+  '&:hover': {
+    backgroundColor: theme.palette.action.hover,
+    boxShadow: theme.shadows[2],
+  },
+}));
+
+const StyledTableRow = styled(TableRow)(({ theme }) => ({
+  '&:hover': {
+    backgroundColor: theme.palette.action.hover,
+  },
+  '&.Mui-selected': {
+    backgroundColor: theme.palette.action.selected,
+  },
+}));
+
+const StatCard = styled(Card)(({ theme, color = 'primary' }) => ({
+  padding: theme.spacing(2),
+  textAlign: 'center',
+  background: `linear-gradient(135deg, ${theme.palette[color].light}20 0%, ${theme.palette[color].light}10 100%)`,
+  border: `1px solid ${theme.palette[color].light}30`,
+}));
 
 const AccordsPrealables = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [demandes, setDemandes] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [affectionsLoading, setAffectionsLoading] = useState(false);
+  const [affectionsList, setAffectionsList] = useState([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
@@ -84,9 +148,9 @@ const AccordsPrealables = () => {
     date_debut: null,
     date_fin: null
   });
-  const [openDialog, setOpenDialog] = useState(false);
-  const [openExecutionDialog, setOpenExecutionDialog] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [selectedDemande, setSelectedDemande] = useState(null);
+  const [openDetailsDialog, setOpenDetailsDialog] = useState(false);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
@@ -94,13 +158,11 @@ const AccordsPrealables = () => {
   });
   const [creationStep, setCreationStep] = useState(0);
   const [newDemande, setNewDemande] = useState({
-    // Étape 1: Informations générales
     patientId: null,
     patientInfo: null,
-    prescriptionId: null,
-    prescriptionInfo: null,
     typePrestation: '',
     prestataireId: null,
+    prestataireInfo: null,
     codeAffectation: '',
     codeAffectationInfo: null,
     remarques: '',
@@ -108,105 +170,115 @@ const AccordsPrealables = () => {
     dateDebutHospitalisation: null,
     dateFinHospitalisation: null,
     dureeHospitalisation: null,
-    piecesJointes: [],
-    
-    // Étape 2: Actes médicaux
     actes: [],
-    
-    // Étape 3: Récapitulatif
     montantTotal: 0,
     tauxCouverture: 80
   });
   const [searchPatientTerm, setSearchPatientTerm] = useState('');
-  const [searchPrescriptionTerm, setSearchPrescriptionTerm] = useState('');
   const [searchActeTerm, setSearchActeTerm] = useState('');
+  const [searchAffectionTerm, setSearchAffectionTerm] = useState('');
   const [patientResults, setPatientResults] = useState([]);
-  const [prescriptionResults, setPrescriptionResults] = useState([]);
   const [acteResults, setActeResults] = useState([]);
-  const [executionData, setExecutionData] = useState({
-    actesSelectionnes: [],
-    montantTotal: 0,
-    feuilleDeSoins: null
-  });
 
   const statuts = [
-    { value: 'En attente', label: 'En attente', color: 'warning' },
-    { value: 'Validee', label: 'Validée', color: 'success' },
-    { value: 'Rejetee', label: 'Rejetée', color: 'error' },
-    { value: 'Executee', label: 'Exécutée', color: 'info' }
+    { value: 'En attente', label: 'En attente', color: 'warning', icon: '⏳' },
+    { value: 'Validee', label: 'Validée', color: 'success', icon: '✅' },
+    { value: 'Rejetee', label: 'Rejetée', color: 'error', icon: '❌' },
+    { value: 'Executee', label: 'Exécutée', color: 'info', icon: '✅' },
+    { value: 'Annulée', label: 'Annulée', color: 'default', icon: '🚫' }
   ];
 
   const typesPrestation = [
-    { value: 'Consultation', label: 'Consultation' },
-    { value: 'Pharmacie', label: 'Pharmacie' },
-    { value: 'Biologie', label: 'Biologie' },
-    { value: 'Imagerie', label: 'Imagerie' },
-    { value: 'Hospitalisation', label: 'Hospitalisation' },
-    { value: 'Chirurgie', label: 'Chirurgie' },
-    { value: 'Rééducation', label: 'Rééducation' }
+    { value: 'Consultation', label: 'Consultation', icon: '🩺' },
+    { value: 'Pharmacie', label: 'Pharmacie', icon: '💊' },
+    { value: 'Biologie', label: 'Biologie', icon: '🧪' },
+    { value: 'Imagerie', label: 'Imagerie', icon: '📷' },
+    { value: 'Hospitalisation', label: 'Hospitalisation', icon: '🏥' },
+    { value: 'Chirurgie', label: 'Chirurgie', icon: '🔪' },
+    { value: 'Rééducation', label: 'Rééducation', icon: '🦿' }
   ];
 
-  // Charger les demandes
- // Charger les demandes
-const loadDemandes = useCallback(async () => {
-  setLoading(true);
-  try {
-    const params = {
-      page: page + 1,
-      limit: rowsPerPage,
-      ...filters
-    };
-    
-    // Nettoyer les paramètres null
-    Object.keys(params).forEach(key => {
-      if (params[key] === null || params[key] === '') {
-        delete params[key];
-      }
-    });
-    
-    const response = await prescriptionsAPI.getAll(params);
-    console.log('📋 Réponse des demandes:', response);
-    
-    if (response.success) {
-      // Pour chaque demande, récupérer les détails si nécessaire
-      const demandesAvecDetails = await Promise.all(
-        response.prescriptions.map(async (demande) => {
-          try {
-            // Récupérer les détails pour chaque prescription
-            const detailsResponse = await prescriptionsAPI.getById(demande.COD_PRES);
-            if (detailsResponse.success && detailsResponse.prescription) {
-              return {
-                ...demande,
-                details: detailsResponse.prescription.details || []
-              };
-            }
-          } catch (error) {
-            console.error(`Erreur chargement détails prescription ${demande.COD_PRES}:`, error);
-          }
-          return demande;
-        })
-      );
+  const stats = useMemo(() => ({
+    total: demandes.length,
+    enAttente: demandes.filter(d => d.STATUT === 'En attente').length,
+    validees: demandes.filter(d => d.STATUT === 'Validee').length,
+    executees: demandes.filter(d => d.STATUT === 'Executee').length,
+    rejetees: demandes.filter(d => d.STATUT === 'Rejetee').length,
+    annulees: demandes.filter(d => d.STATUT === 'Annulée').length,
+  }), [demandes]);
+
+  const getStatusColor = (statut) => {
+    const statusObj = statuts.find(s => s.value === statut);
+    return statusObj ? statusObj.color : 'default';
+  };
+
+  const loadAffections = useCallback(async (search = '') => {
+    setAffectionsLoading(true);
+    try {
+      const response = await prescriptionsAPI.searchAffections(search, 50);
       
-      setDemandes(demandesAvecDetails);
-      setTotalCount(response.pagination.total);
+      if (response.success && response.affections) {
+        const transformedAffections = response.affections.map(affection => ({
+          id: affection.id || affection.COD_AFF,
+          label: `${affection.libelle || affection.LIB_AFF} (${affection.id || affection.COD_AFF})`,
+          libelle: affection.libelle || affection.LIB_AFF,
+          code: affection.id || affection.COD_AFF,
+          ncp: affection.ncp,
+          sexe: affection.sexe || affection.SEXE,
+          etat: affection.etat || affection.ETAT
+        }));
+        setAffectionsList(transformedAffections);
+      } else {
+        setAffectionsList([]);
+      }
+    } catch (error) {
+      console.error('Erreur chargement affections:', error);
+      setAffectionsList([]);
+    } finally {
+      setAffectionsLoading(false);
     }
-  } catch (error) {
-    console.error('Erreur chargement demandes:', error);
-    setSnackbar({
-      open: true,
-      message: 'Erreur lors du chargement des demandes',
-      severity: 'error'
-    });
-  } finally {
-    setLoading(false);
-  }
-}, [page, rowsPerPage, filters]);
+  }, []);
+
+  const loadDemandes = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = {
+        page: page + 1,
+        limit: rowsPerPage,
+        ...Object.fromEntries(
+          Object.entries(filters).filter(([_, v]) => v !== null && v !== '')
+        )
+      };
+
+      const response = await prescriptionsAPI.getAll(params);
+      
+      if (response.success) {
+        setDemandes(response.prescriptions || []);
+        setTotalCount(response.pagination?.total || 0);
+      } else {
+        throw new Error(response.message);
+      }
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: error.message || 'Erreur lors du chargement',
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [page, rowsPerPage, filters]);
+
+  useEffect(() => {
+    if (activeTab === 1) {
+      loadAffections();
+    }
+  }, [activeTab, loadAffections]);
 
   useEffect(() => {
     loadDemandes();
   }, [loadDemandes]);
 
-  // Recherche de patients
   const searchPatients = async (searchTerm) => {
     if (searchTerm.length < 2) {
       setPatientResults([]);
@@ -214,35 +286,13 @@ const loadDemandes = useCallback(async () => {
     }
     
     try {
-      const response = await prescriptionsAPI.searchPatients(searchTerm);
-      if (response.success) {
-        setPatientResults(response.patients || []);
-      }
+      const response = await prescriptionsAPI.searchPatients(searchTerm, 10);
+      setPatientResults(response.success ? response.patients || [] : []);
     } catch (error) {
-      console.error('Erreur recherche patients:', error);
+      setPatientResults([]);
     }
   };
 
-  // Recherche de prescriptions
-  const searchPrescriptions = async (searchTerm) => {
-    if (!searchTerm) {
-      setPrescriptionResults([]);
-      return;
-    }
-    
-    try {
-      const response = await prescriptionsAPI.getByNumeroOrId(searchTerm);
-      if (response.success && response.prescription) {
-        setPrescriptionResults([response.prescription]);
-      } else {
-        setPrescriptionResults([]);
-      }
-    } catch (error) {
-      console.error('Erreur recherche prescriptions:', error);
-    }
-  };
-
-  // Recherche d'actes médicaux
   const searchActes = async (searchTerm) => {
     if (searchTerm.length < 2) {
       setActeResults([]);
@@ -251,119 +301,109 @@ const loadDemandes = useCallback(async () => {
     
     try {
       const response = await prescriptionsAPI.searchMedicalItems(searchTerm);
-      if (response.success) {
-        setActeResults(response.items || []);
-      }
+      setActeResults(response.success ? response.items || [] : []);
     } catch (error) {
-      console.error('Erreur recherche actes:', error);
+      setActeResults([]);
     }
   };
 
-  // Sélectionner un patient
   const handleSelectPatient = (patient) => {
-    setNewDemande({
-      ...newDemande,
+    setNewDemande(prev => ({
+      ...prev,
       patientId: patient.id,
-      patientInfo: patient,
-      patientSearch: `${patient.nom} ${patient.prenom} - ${patient.identifiant || patient.matricule}`
-    });
+      patientInfo: patient
+    }));
     setPatientResults([]);
+    setSearchPatientTerm(`${patient.nom} ${patient.prenom}`);
   };
 
-  // Sélectionner une prescription
-  const handleSelectPrescription = (prescription) => {
-    setNewDemande({
-      ...newDemande,
-      prescriptionId: prescription.COD_PRES,
-      prescriptionInfo: prescription,
-      patientId: prescription.COD_BEN,
-      patientInfo: {
-        id: prescription.COD_BEN,
-        nom: prescription.NOM_BEN,
-        prenom: prescription.PRE_BEN,
-        identifiant: prescription.IDENTIFIANT_NATIONAL
-      },
-      codeAffectation: prescription.COD_AFF,
-      codeAffectationInfo: {
-        code: prescription.COD_AFF,
-        libelle: prescription.LIB_AFF
-      }
-    });
-    setPrescriptionResults([]);
+  const handleSelectAffection = (affection) => {
+    setNewDemande(prev => ({
+      ...prev,
+      codeAffectation: affection?.code || '',
+      codeAffectationInfo: affection || null
+    }));
   };
 
-  // Ajouter un acte médical
   const handleAddActe = (acte) => {
     const nouvelActe = {
       id: acte.id,
-      type: acte.type || 'medicament',
       code: acte.code || acte.id,
       libelle: acte.libelle || acte.libelle_complet,
       quantite: 1,
       prixUnitaire: acte.prix || 0,
-      remboursable: acte.remboursable !== undefined ? acte.remboursable : true,
+      remboursable: acte.remboursable !== false,
       tauxPriseEnCharge: 80
     };
     
-    setNewDemande({
-      ...newDemande,
-      actes: [...newDemande.actes, nouvelActe],
-      montantTotal: newDemande.montantTotal + (nouvelActe.quantite * nouvelActe.prixUnitaire)
-    });
+    setNewDemande(prev => ({
+      ...prev,
+      actes: [...prev.actes, nouvelActe],
+      montantTotal: prev.montantTotal + nouvelActe.prixUnitaire
+    }));
     setActeResults([]);
+    setSearchActeTerm('');
   };
 
-  // Mettre à jour un acte
   const handleUpdateActe = (index, field, value) => {
-    const updatedActes = [...newDemande.actes];
-    const oldActe = updatedActes[index];
-    updatedActes[index] = { ...oldActe, [field]: value };
-    
-    // Recalculer le montant total
-    const montantTotal = updatedActes.reduce((total, acte) => {
-      return total + (acte.quantite * acte.prixUnitaire);
-    }, 0);
-    
-    setNewDemande({
-      ...newDemande,
-      actes: updatedActes,
-      montantTotal
+    setNewDemande(prev => {
+      const updatedActes = [...prev.actes];
+      const oldActe = updatedActes[index];
+      
+      if (field === 'quantite' || field === 'prixUnitaire') {
+        const oldTotal = oldActe.quantite * oldActe.prixUnitaire;
+        updatedActes[index] = { 
+          ...oldActe, 
+          [field]: field === 'quantite' ? parseInt(value) || 0 : parseFloat(value) || 0 
+        };
+        const newTotal = updatedActes[index].quantite * updatedActes[index].prixUnitaire;
+        return {
+          ...prev,
+          actes: updatedActes,
+          montantTotal: prev.montantTotal - oldTotal + newTotal
+        };
+      }
+      
+      updatedActes[index] = { ...oldActe, [field]: value };
+      return { ...prev, actes: updatedActes };
     });
   };
 
-  // Supprimer un acte
   const handleRemoveActe = (index) => {
-    const removedActe = newDemande.actes[index];
-    const updatedActes = newDemande.actes.filter((_, i) => i !== index);
-    
-    setNewDemande({
-      ...newDemande,
-      actes: updatedActes,
-      montantTotal: newDemande.montantTotal - (removedActe.quantite * removedActe.prixUnitaire)
+    setNewDemande(prev => {
+      const removedActe = prev.actes[index];
+      const updatedActes = prev.actes.filter((_, i) => i !== index);
+      return {
+        ...prev,
+        actes: updatedActes,
+        montantTotal: prev.montantTotal - (removedActe.quantite * removedActe.prixUnitaire)
+      };
     });
   };
 
-  // Soumettre une nouvelle demande
   const handleSubmitDemande = async () => {
     try {
+      if (!newDemande.patientId || !newDemande.typePrestation) {
+        throw new Error('Patient et type de prestation sont obligatoires');
+      }
+
       const demandeData = {
         COD_BEN: newDemande.patientId,
-        COD_PRE: newDemande.prestataireId,
+        COD_PRE: newDemande.prestataireId || null,
         TYPE_PRESTATION: newDemande.typePrestation,
-        COD_AFF: newDemande.codeAffectation,
-        OBSERVATIONS: newDemande.remarques,
+        COD_AFF: newDemande.codeAffectation || 'NSP',
+        OBSERVATIONS: newDemande.remarques || '',
+        STATUT: 'En attente',
         details: newDemande.actes.map(acte => ({
-          TYPE_ELEMENT: acte.type,
           COD_ELEMENT: acte.code,
           LIBELLE: acte.libelle,
           QUANTITE: acte.quantite,
           PRIX_UNITAIRE: acte.prixUnitaire,
-          REMBOURSABLE: acte.remboursable,
+          REMBOURSABLE: acte.remboursable ? 1 : 0,
           TAUX_PRISE_EN_CHARGE: acte.tauxPriseEnCharge
         }))
       };
       
-      // Ajouter les données d'hospitalisation si nécessaire
       if (newDemande.hospitalisation) {
         demandeData.DATE_DEBUT_HOSPITALISATION = newDemande.dateDebutHospitalisation;
         demandeData.DATE_FIN_HOSPITALISATION = newDemande.dateFinHospitalisation;
@@ -375,1265 +415,951 @@ const loadDemandes = useCallback(async () => {
       if (response.success) {
         setSnackbar({
           open: true,
-          message: `Demande créée avec succès. Numéro: ${response.numero}`,
+          message: `Demande créée avec succès. Numéro: ${response.numero || response.COD_PRES}`,
           severity: 'success'
         });
-        setOpenDialog(false);
-        setNewDemande({
-          patientId: null,
-          patientInfo: null,
-          prescriptionId: null,
-          prescriptionInfo: null,
-          typePrestation: '',
-          prestataireId: null,
-          codeAffectation: '',
-          codeAffectationInfo: null,
-          remarques: '',
-          hospitalisation: false,
-          dateDebutHospitalisation: null,
-          dateFinHospitalisation: null,
-          dureeHospitalisation: null,
-          piecesJointes: [],
-          actes: [],
-          montantTotal: 0,
-          tauxCouverture: 80
-        });
-        setCreationStep(0);
+        resetNewDemande();
+        setActiveTab(0);
         loadDemandes();
+      } else {
+        throw new Error(response.message);
       }
     } catch (error) {
       setSnackbar({
         open: true,
-        message: `Erreur lors de la création: ${error.message}`,
+        message: `Erreur: ${error.message}`,
         severity: 'error'
       });
     }
   };
 
-  // Valider une demande
-  // Valider une demande
-const handleValidateDemande = async (id) => {
-  try {
-    // Données d'accord
-    const accordData = {
-      statut: 'Validee',
-      dateValidite: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 jours
-      conditions: {
-        tauxCouverture: 80,
-        plafond: 500000,
-        validite: 30
-      },
-      raison: 'Accord accordé suite à analyse médicale'
-    };
-    
-    const response = await api.prescriptions.updateStatus(id, accordData);
-    if (response.success) {
+  const resetNewDemande = () => {
+    setNewDemande({
+      patientId: null,
+      patientInfo: null,
+      typePrestation: '',
+      prestataireId: null,
+      prestataireInfo: null,
+      codeAffectation: '',
+      codeAffectationInfo: null,
+      remarques: '',
+      hospitalisation: false,
+      dateDebutHospitalisation: null,
+      dateFinHospitalisation: null,
+      dureeHospitalisation: null,
+      actes: [],
+      montantTotal: 0,
+      tauxCouverture: 80
+    });
+    setCreationStep(0);
+    setSearchPatientTerm('');
+    setSearchActeTerm('');
+    setSearchAffectionTerm('');
+  };
+
+  const handleValidateDemande = async (id) => {
+    try {
+      const response = await prescriptionsAPI.updateStatus(id, {
+        statut: 'Validee'
+      });
+      
+      if (response.success) {
+        setSnackbar({
+          open: true,
+          message: 'Demande validée avec succès',
+          severity: 'success'
+        });
+        loadDemandes();
+      } else {
+        throw new Error(response.message);
+      }
+    } catch (error) {
       setSnackbar({
         open: true,
-        message: 'Accord préalable validé avec succès',
-        severity: 'success'
+        message: `Erreur: ${error.message}`,
+        severity: 'error'
       });
-      loadDemandes();
     }
-  } catch (error) {
-    setSnackbar({
-      open: true,
-      message: `Erreur lors de la validation: ${error.message}`,
-      severity: 'error'
-    });
-  }
-};
+  };
 
-// Rejeter une demande
-const handleRejectDemande = async (id) => {
-  try {
-    const raison = prompt('Veuillez saisir la raison du rejet :');
+  const handleRejectDemande = async (id) => {
+    const raison = prompt('Raison du rejet :');
     if (!raison) return;
     
-    const accordData = {
-      statut: 'Rejetee',
-      raison: raison
-    };
-    
-    const response = await api.prescriptions.updateStatus(id, accordData);
-    if (response.success) {
+    try {
+      const response = await prescriptionsAPI.updateStatus(id, {
+        statut: 'Rejetee',
+        motif: raison
+      });
+      
+      if (response.success) {
+        setSnackbar({
+          open: true,
+          message: 'Demande rejetée',
+          severity: 'success'
+        });
+        loadDemandes();
+      } else {
+        throw new Error(response.message);
+      }
+    } catch (error) {
       setSnackbar({
         open: true,
-        message: 'Accord préalable rejeté',
-        severity: 'success'
+        message: `Erreur: ${error.message}`,
+        severity: 'error'
       });
-      loadDemandes();
     }
-  } catch (error) {
-    setSnackbar({
-      open: true,
-      message: 'Erreur lors du rejet',
-      severity: 'error'
-    });
-  }
-};
+  };
 
- 
-
-  // Exécuter une demande
- // Exécuter une demande
-const handleExecuteDemande = (demande) => {
-  console.log('📋 Demande sélectionnée pour exécution:', demande);
-  console.log('📋 Détails de la demande:', demande.details);
-  
-  setSelectedDemande(demande);
-  
-  // S'assurer que les détails existent et ont la bonne structure
-  const actesSelectionnes = demande.details?.map((detail, index) => ({
-    id: detail.COD_PRES_DET || detail.ID || index, // Utiliser différents champs possibles
-    cod_pres_det: detail.COD_PRES_DET || detail.ID || index,
-    libelle: detail.LIBELLE || detail.NOM || `Acte ${index + 1}`,
-    quantitePrescrite: detail.QUANTITE || detail.quantite || 1,
-    quantiteExecutee: detail.QUANTITE_EXECUTEE || 0,
-    prixUnitaire: detail.PRIX_UNITAIRE || detail.prix || 0
-  })) || [];
-  
-  console.log('📋 Actes sélectionnés préparés:', actesSelectionnes);
-  
-  setExecutionData({
-    actesSelectionnes: actesSelectionnes,
-    montantTotal: 0,
-    feuilleDeSoins: null
-  });
-  setOpenExecutionDialog(true);
-};
-
-  // Générer la feuille de soins
-const handleGenerateFeuilleSoins = () => {
-  try {
-    console.log('=== DÉBUT GÉNÉRATION FEUILLE DE SOINS ===');
+  const handleCancelDemande = async (id) => {
+    const raison = prompt('Raison de l\'annulation :');
+    if (!raison) return;
     
-    // Vérifier que nous avons une demande sélectionnée
-    if (!selectedDemande) {
-      console.error('❌ Aucune demande sélectionnée');
-      return;
-    }
-    
-    // Vérifier qu'il y a des actes
-    if (!executionData.actesSelectionnes || executionData.actesSelectionnes.length === 0) {
-      console.error('❌ Aucun acte sélectionné');
-      return;
-    }
-    
-    // Calculer le total
-    let total = 0;
-    const actesExecutes = [];
-    
-    executionData.actesSelectionnes.forEach((acte, index) => {
-      const quantite = Number(acte.quantiteExecutee) || 0;
-      const prix = Number(acte.prixUnitaire) || 0;
-      const sousTotal = quantite * prix;
+    try {
+      const response = await prescriptionsAPI.cancel(id, raison);
       
-      if (quantite > 0) {
-        total += sousTotal;
-        actesExecutes.push({
-          libelle: acte.libelle || `Acte ${index + 1}`,
-          quantiteExecutee: quantite,
-          prixUnitaire: prix,
-          sousTotal: sousTotal
+      if (response.success) {
+        setSnackbar({
+          open: true,
+          message: 'Demande annulée',
+          severity: 'success'
         });
+        loadDemandes();
+      } else {
+        throw new Error(response.message);
       }
-      
-      console.log(`📊 ${index + 1}. ${acte.libelle}: ${quantite} × ${prix} = ${sousTotal}`);
-    });
-    
-    console.log('💰 Total:', total);
-    console.log('🎯 Actes exécutés:', actesExecutes.length);
-    
-    // Générer un numéro unique
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 10).toUpperCase();
-    const numeroFeuille = `FDS-${new Date().getFullYear()}-${timestamp.toString().substr(-6)}-${random}`;
-    
-    // Créer l'objet feuille de soins
-    const feuilleDeSoins = {
-      numero: numeroFeuille,
-      date: new Date().toLocaleDateString('fr-FR'),
-      patient: `${selectedDemande.NOM_BEN} ${selectedDemande.PRE_BEN}`,
-      prestataire: selectedDemande.NOM_PRESTATAIRE || 'Non spécifié',
-      actes: actesExecutes,
-      montantTotal: total
-    };
-    
-    console.log('📄 Feuille de soins créée:', feuilleDeSoins);
-    
-    // Mettre à jour l'état
-    setExecutionData(prev => ({
-      ...prev,
-      montantTotal: total,
-      feuilleDeSoins: feuilleDeSoins
-    }));
-    
-    // Notification
-    setSnackbar({
-      open: true,
-      message: `Feuille de soins générée: ${numeroFeuille}`,
-      severity: 'success'
-    });
-    
-    console.log('=== FIN GÉNÉRATION FEUILLE DE SOINS ===');
-    
-  } catch (error) {
-    console.error('❌ Erreur lors de la génération:', error);
-    setSnackbar({
-      open: true,
-      message: `Erreur: ${error.message}`,
-      severity: 'error'
-    });
-  }
-};
-  // Télécharger la feuille de soins
-  const handleDownloadFeuilleSoins = () => {
-    if (!executionData.feuilleDeSoins) return;
-    
-    const content = `
-      FEUILLE DE SOINS
-      ================
-      
-      Numéro: ${executionData.feuilleDeSoins.numero}
-      Date: ${executionData.feuilleDeSoins.date}
-      
-      Patient: ${executionData.feuilleDeSoins.patient}
-      Prestataire: ${executionData.feuilleDeSoins.prestataire}
-      
-      ACTES EXÉCUTÉS:
-      ${executionData.feuilleDeSoins.actes.map(acte => `
-        - ${acte.libelle}
-          Quantité: ${acte.quantiteExecutee}
-          Prix unitaire: ${acte.prixUnitaire.toFixed(2)} FCFA
-          Total: ${(acte.quantiteExecutee * acte.prixUnitaire).toFixed(2)} FCFA
-      `).join('')}
-      
-      MONTANT TOTAL: ${executionData.feuilleDeSoins.montantTotal.toFixed(2)} FCFA
-      
-      Signature: ____________________
-    `;
-    
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `FeuilleSoins-${executionData.feuilleDeSoins.numero}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: `Erreur: ${error.message}`,
+        severity: 'error'
+      });
+    }
   };
 
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
-  };
-
-  const handleFilterChange = (field, value) => {
-    setFilters(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
-
-  const steps = ['Informations générales', 'Actes médicaux', 'Récapitulatif'];
+  const steps = ['Patient & Affection', 'Actes médicaux', 'Validation'];
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-      <Container maxWidth="xl">
+      <Container maxWidth="xl" sx={{ py: 3 }}>
         <Box sx={{ mb: 4 }}>
-          <Typography variant="h4" gutterBottom>
-            Gestion des Accords Préalables / Prise en charge
+          <Typography variant="h4" fontWeight={600} gutterBottom>
+            Accords Préalables
           </Typography>
-          <Typography color="textSecondary">
-            Gestion des demandes d'accord préalable et de prise en charge des soins
+          <Typography color="text.secondary">
+            Gestion des demandes de prise en charge médicale
           </Typography>
         </Box>
 
-        <Card>
-          <CardContent>
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-              <Tabs value={activeTab} onChange={handleTabChange}>
-                <Tab label="Tableau de bord" />
-                <Tab label="Créer une demande" />
-                <Tab label="Exécution" />
-                <Tab label="Conditions de prise en charge" />
+        <StyledCard>
+          <CardContent sx={{ p: 0 }}>
+            <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+              <Tabs 
+                value={activeTab} 
+                onChange={(e, v) => setActiveTab(v)}
+                sx={{ px: 2, pt: 1 }}
+              >
+                <Tab 
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <ReceiptIcon fontSize="small" />
+                      <span>Demandes</span>
+                    </Box>
+                  } 
+                />
+                <Tab 
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <AddIcon fontSize="small" />
+                      <span>Nouvelle demande</span>
+                    </Box>
+                  } 
+                />
               </Tabs>
             </Box>
 
-            {/* Tableau de bord */}
             {activeTab === 0 && (
-              <Box>
-                <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="h6">Liste des demandes</Typography>
+              <Box sx={{ p: 3 }}>
+                {/* Statistiques */}
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                  <Grid item xs={6} sm={4} md={2.4}>
+                    <StatCard>
+                      <Typography variant="h6" color="primary" fontWeight={600}>
+                        {stats.total}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Total
+                      </Typography>
+                    </StatCard>
+                  </Grid>
+                  <Grid item xs={6} sm={4} md={2.4}>
+                    <StatCard color="warning">
+                      <Typography variant="h6" color="warning.main" fontWeight={600}>
+                        {stats.enAttente}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        En attente
+                      </Typography>
+                    </StatCard>
+                  </Grid>
+                  <Grid item xs={6} sm={4} md={2.4}>
+                    <StatCard color="success">
+                      <Typography variant="h6" color="success.main" fontWeight={600}>
+                        {stats.validees}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Validées
+                      </Typography>
+                    </StatCard>
+                  </Grid>
+                  <Grid item xs={6} sm={4} md={2.4}>
+                    <StatCard color="info">
+                      <Typography variant="h6" color="info.main" fontWeight={600}>
+                        {stats.executees}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Exécutées
+                      </Typography>
+                    </StatCard>
+                  </Grid>
+                  <Grid item xs={6} sm={4} md={2.4}>
+                    <StatCard color="error">
+                      <Typography variant="h6" color="error.main" fontWeight={600}>
+                        {stats.rejetees + stats.annulees}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Rejetées/Annulées
+                      </Typography>
+                    </StatCard>
+                  </Grid>
+                </Grid>
+
+                {/* Barre d'actions */}
+                <Box sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  mb: 3,
+                  p: 2,
+                  bgcolor: 'background.default',
+                  borderRadius: 1
+                }}>
                   <Button
                     variant="contained"
                     startIcon={<AddIcon />}
-                    onClick={() => setOpenDialog(true)}
+                    onClick={() => setActiveTab(1)}
                   >
                     Nouvelle demande
                   </Button>
+                  
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                      startIcon={<FilterIcon />}
+                      onClick={() => setShowFilters(!showFilters)}
+                    >
+                      Filtres
+                    </Button>
+                    <Button
+                      startIcon={<RefreshIcon />}
+                      onClick={loadDemandes}
+                      disabled={loading}
+                    >
+                      Actualiser
+                    </Button>
+                  </Box>
                 </Box>
 
                 {/* Filtres */}
-                <Paper sx={{ p: 2, mb: 3 }}>
-                  <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} md={3}>
-                      <TextField
-                        fullWidth
-                        label="Recherche"
-                        value={filters.search}
-                        onChange={(e) => handleFilterChange('search', e.target.value)}
-                        InputProps={{
-                          startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                        }}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={2}>
-                      <FormControl fullWidth>
-                        <InputLabel>Statut</InputLabel>
-                        <Select
-                          value={filters.statut}
-                          label="Statut"
-                          onChange={(e) => handleFilterChange('statut', e.target.value)}
+                {showFilters && (
+                  <Paper sx={{ p: 2, mb: 3 }}>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={3}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Rechercher"
+                          value={filters.search}
+                          onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={2}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel>Statut</InputLabel>
+                          <Select
+                            value={filters.statut}
+                            label="Statut"
+                            onChange={(e) => setFilters(prev => ({ ...prev, statut: e.target.value }))}
+                          >
+                            <MenuItem value="">Tous</MenuItem>
+                            {statuts.map(statut => (
+                              <MenuItem key={statut.value} value={statut.value}>
+                                {statut.icon} {statut.label}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} md={2}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel>Type</InputLabel>
+                          <Select
+                            value={filters.type_prestation}
+                            label="Type"
+                            onChange={(e) => setFilters(prev => ({ ...prev, type_prestation: e.target.value }))}
+                          >
+                            <MenuItem value="">Tous</MenuItem>
+                            {typesPrestation.map(type => (
+                              <MenuItem key={type.value} value={type.value}>
+                                {type.icon} {type.label}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} md={2}>
+                        <DatePicker
+                          label="Date début"
+                          value={filters.date_debut}
+                          onChange={(date) => setFilters(prev => ({ ...prev, date_debut: date }))}
+                          slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={2}>
+                        <DatePicker
+                          label="Date fin"
+                          value={filters.date_fin}
+                          onChange={(date) => setFilters(prev => ({ ...prev, date_fin: date }))}
+                          slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={1}>
+                        <Button
+                          fullWidth
+                          variant="contained"
+                          onClick={loadDemandes}
+                          disabled={loading}
                         >
-                          <MenuItem value="">Tous</MenuItem>
-                          {statuts.map(statut => (
-                            <MenuItem key={statut.value} value={statut.value}>
-                              {statut.label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
+                          OK
+                        </Button>
+                      </Grid>
                     </Grid>
-                    <Grid item xs={12} md={2}>
-                      <FormControl fullWidth>
-                        <InputLabel>Type prestation</InputLabel>
-                        <Select
-                          value={filters.type_prestation}
-                          label="Type prestation"
-                          onChange={(e) => handleFilterChange('type_prestation', e.target.value)}
-                        >
-                          <MenuItem value="">Tous</MenuItem>
-                          {typesPrestation.map(type => (
-                            <MenuItem key={type.value} value={type.value}>
-                              {type.label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12} md={2}>
-                      <DatePicker
-                        label="Date début"
-                        value={filters.date_debut}
-                        onChange={(date) => handleFilterChange('date_debut', date)}
-                        slotProps={{ textField: { fullWidth: true } }}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={2}>
-                      <DatePicker
-                        label="Date fin"
-                        value={filters.date_fin}
-                        onChange={(date) => handleFilterChange('date_fin', date)}
-                        slotProps={{ textField: { fullWidth: true } }}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={1}>
-                      <Button
-                        variant="outlined"
-                        onClick={loadDemandes}
-                        disabled={loading}
-                      >
-                        {loading ? <CircularProgress size={24} /> : 'Filtrer'}
-                      </Button>
-                    </Grid>
-                  </Grid>
-                </Paper>
+                  </Paper>
+                )}
 
-                {/* Tableau des demandes */}
-                <TableContainer>
+                {/* Tableau */}
+                <TableContainer sx={{ borderRadius: 1, border: 1, borderColor: 'divider' }}>
                   <Table>
-                    <TableHead>
+                    <TableHead sx={{ bgcolor: 'background.default' }}>
                       <TableRow>
-                        <TableCell>Numéro</TableCell>
+                        <TableCell>N°</TableCell>
                         <TableCell>Patient</TableCell>
                         <TableCell>Type</TableCell>
                         <TableCell>Affection</TableCell>
                         <TableCell>Date</TableCell>
-                        <TableCell>Statut</TableCell>
                         <TableCell>Montant</TableCell>
-                        <TableCell>Actions</TableCell>
+                        <TableCell>Statut</TableCell>
+                        <TableCell align="center">Actions</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {loading ? (
                         <TableRow>
-                          <TableCell colSpan={8} align="center">
+                          <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                             <CircularProgress />
                           </TableCell>
                         </TableRow>
                       ) : demandes.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={8} align="center">
-                            Aucune demande trouvée
+                          <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                            <Typography color="text.secondary">
+                              Aucune demande trouvée
+                            </Typography>
                           </TableCell>
                         </TableRow>
                       ) : (
                         demandes.map((demande) => (
-                          <TableRow key={demande.COD_PRES}>
-                            <TableCell>{demande.NUM_PRESCRIPTION}</TableCell>
+                          <StyledTableRow key={demande.COD_PRES} hover>
                             <TableCell>
-                              {demande.NOM_BEN} {demande.PRE_BEN}
-                              <br />
-                              <Typography variant="caption" color="textSecondary">
-                                {demande.IDENTIFIANT_NATIONAL}
+                              <Typography variant="body2" fontWeight={500}>
+                                {demande.NUM_PRESCRIPTION || demande.COD_PRES}
                               </Typography>
                             </TableCell>
-                            <TableCell>{demande.TYPE_PRESTATION}</TableCell>
-                            <TableCell>{demande.LIB_AFF}</TableCell>
                             <TableCell>
-                              {new Date(demande.DATE_PRESCRIPTION).toLocaleDateString('fr-FR')}
+                              <Box>
+                                <Typography variant="body2" fontWeight={500}>
+                                  {demande.NOM_BEN} {demande.PRE_BEN}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {demande.IDENTIFIANT_NATIONAL || '-'}
+                                </Typography>
+                              </Box>
                             </TableCell>
                             <TableCell>
-                              <Chip
-                                label={demande.STATUT}
-                                color={statuts.find(s => s.value === demande.STATUT)?.color || 'default'}
-                                size="small"
+                              <Chip 
+                                label={demande.TYPE_PRESTATION} 
+                                size="small" 
+                                variant="outlined"
                               />
                             </TableCell>
                             <TableCell>
-                              {demande.MONTANT_TOTAL ? `${demande.MONTANT_TOTAL.toFixed(2)} FCFA` : '-'}
+                              <Typography variant="body2">
+                                {demande.LIB_AFF || '-'}
+                              </Typography>
+                              {demande.COD_AFF && (
+                                <Typography variant="caption" color="text.secondary">
+                                  {demande.COD_AFF}
+                                </Typography>
+                              )}
                             </TableCell>
                             <TableCell>
-                              <Box sx={{ display: 'flex', gap: 1 }}>
-                                <Tooltip title="Voir détails">
-                                  <IconButton size="small" onClick={() => setSelectedDemande(demande)}>
-                                    <ViewIcon />
-                                  </IconButton>
-                                </Tooltip>
+                              {demande.DATE_PRESCRIPTION 
+                                ? new Date(demande.DATE_PRESCRIPTION).toLocaleDateString('fr-FR')
+                                : '-'
+                              }
+                            </TableCell>
+                            <TableCell>
+                              <Typography fontWeight={500}>
+                                {demande.MONTANT_TOTAL 
+                                  ? `${parseFloat(demande.MONTANT_TOTAL).toLocaleString('fr-FR')} FCFA`
+                                  : '-'
+                                }
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <StatusBadge
+                                label={demande.STATUT}
+                                statuscolor={getStatusColor(demande.STATUT)}
+                              />
+                            </TableCell>
+                            <TableCell align="center">
+                              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
+                                <ActionButton
+                                  size="small"
+                                  onClick={() => {
+                                    setSelectedDemande(demande);
+                                    setOpenDetailsDialog(true);
+                                  }}
+                                >
+                                  <ViewIcon fontSize="small" />
+                                </ActionButton>
+                                
                                 {demande.STATUT === 'En attente' && (
                                   <>
-                                    <Tooltip title="Valider">
-                                      <IconButton
-                                        size="small"
-                                        color="success"
-                                        onClick={() => handleValidateDemande(demande.COD_PRES)}
-                                      >
-                                        <ValidIcon />
-                                      </IconButton>
-                                    </Tooltip>
-                                    <Tooltip title="Rejeter">
-                                      <IconButton
-                                        size="small"
-                                        color="error"
-                                        onClick={() => handleRejectDemande(demande.COD_PRES)}
-                                      >
-                                        <RejectIcon />
-                                      </IconButton>
-                                    </Tooltip>
+                                    <ActionButton
+                                      size="small"
+                                      color="success"
+                                      onClick={() => handleValidateDemande(demande.COD_PRES)}
+                                    >
+                                      <ValidIcon fontSize="small" />
+                                    </ActionButton>
+                                    <ActionButton
+                                      size="small"
+                                      color="error"
+                                      onClick={() => handleRejectDemande(demande.COD_PRES)}
+                                    >
+                                      <RejectIcon fontSize="small" />
+                                    </ActionButton>
+                                    <ActionButton
+                                      size="small"
+                                      color="default"
+                                      onClick={() => handleCancelDemande(demande.COD_PRES)}
+                                      title="Annuler"
+                                    >
+                                      <DeleteIcon fontSize="small" />
+                                    </ActionButton>
                                   </>
                                 )}
-                                {demande.STATUT === 'Validee' && (
-                                  <Tooltip title="Exécuter">
-                                    <IconButton
-                                      size="small"
-                                      color="primary"
-                                      onClick={() => handleExecuteDemande(demande)}
-                                    >
-                                      <ExecuteIcon />
-                                    </IconButton>
-                                  </Tooltip>
+                                
+                                {(demande.STATUT === 'Rejetee' || demande.STATUT === 'Annulée') && (
+                                  <ActionButton
+                                    size="small"
+                                    color="default"
+                                    onClick={() => handleCancelDemande(demande.COD_PRES)}
+                                    title="Supprimer définitivement"
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </ActionButton>
                                 )}
                               </Box>
                             </TableCell>
-                          </TableRow>
+                          </StyledTableRow>
                         ))
                       )}
                     </TableBody>
                   </Table>
                 </TableContainer>
+                
                 <TablePagination
                   rowsPerPageOptions={[5, 10, 25]}
                   component="div"
                   count={totalCount}
                   rowsPerPage={rowsPerPage}
                   page={page}
-                  onPageChange={handleChangePage}
-                  onRowsPerPageChange={handleChangeRowsPerPage}
+                  onPageChange={(e, newPage) => setPage(newPage)}
+                  onRowsPerPageChange={(e) => {
+                    setRowsPerPage(parseInt(e.target.value, 10));
+                    setPage(0);
+                  }}
+                  sx={{ mt: 2 }}
                 />
               </Box>
             )}
 
-            {/* Création de demande */}
+            {/* Formulaire de création */}
             {activeTab === 1 && (
-              <Box>
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={() => {
-                    setOpenDialog(true);
-                    setCreationStep(0);
-                  }}
-                  sx={{ mb: 3 }}
-                >
-                  Nouvelle demande
-                </Button>
-                <Alert severity="info">
-                  Cliquez sur le bouton ci-dessus pour créer une nouvelle demande d'accord préalable.
-                </Alert>
-              </Box>
-            )}
+              <Box sx={{ p: 3 }}>
+                <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+                  <Box sx={{ mb: 4 }}>
+                    <Stepper activeStep={creationStep} sx={{ mb: 4 }}>
+                      {steps.map((label) => (
+                        <Step key={label}>
+                          <StepLabel>{label}</StepLabel>
+                        </Step>
+                      ))}
+                    </Stepper>
 
-            {/* Exécution */}
-            {activeTab === 2 && (
-              <Box>
-                <Alert severity="warning">
-                  Sélectionnez une demande validée dans le tableau de bord pour l'exécuter.
-                </Alert>
-              </Box>
-            )}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+                      <Typography variant="h5" fontWeight={600}>
+                        Nouvelle demande
+                      </Typography>
+                      <Button
+                        onClick={resetNewDemande}
+                        disabled={creationStep === 0 && !newDemande.patientId}
+                      >
+                        Réinitialiser
+                      </Button>
+                    </Box>
+                  </Box>
 
-            {/* Conditions de prise en charge */}
-            {activeTab === 3 && (
-              <Box>
-                <Typography variant="h6" gutterBottom>
-                  Conditions de prise en charge
-                </Typography>
-                <Card sx={{ mb: 3 }}>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom color="primary">
-                      Taux de couverture par type de prestation
-                    </Typography>
-                    <List>
-                      <ListItem>
-                        <ListItemText primary="Consultations" secondary="Taux de couverture: 80%" />
-                        <Chip label="Couvert" color="success" />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemText primary="Médicaments" secondary="Taux de couverture: 70% (liste positive)" />
-                        <Chip label="Partiellement couvert" color="warning" />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemText primary="Analyses biologiques" secondary="Taux de couverture: 90%" />
-                        <Chip label="Couvert" color="success" />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemText primary="Imagerie médicale" secondary="Taux de couverture: 85%" />
-                        <Chip label="Couvert" color="success" />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemText primary="Hospitalisation" secondary="Taux de couverture: 95% (plafond: 500,000 FCFA/jour)" />
-                        <Chip label="Couvert avec plafond" color="info" />
-                      </ListItem>
-                    </List>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom color="primary">
-                      Exclusions
-                    </Typography>
-                    <Typography paragraph>
-                      Les prestations suivantes ne sont pas couvertes par le régime de prise en charge :
-                    </Typography>
-                    <List>
-                      <ListItem>
-                        <ListItemText primary="Médicaments non inscrits sur la liste positive" />
-                        <Chip label="Non couvert" color="error" />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemText primary="Soins esthétiques non thérapeutiques" />
-                        <Chip label="Non couvert" color="error" />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemText primary="Médecines alternatives non conventionnelles" />
-                        <Chip label="Non couvert" color="error" />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemText primary="Transports sanitaires non urgents" />
-                        <Chip label="Non couvert" color="error" />
-                      </ListItem>
-                    </List>
-                  </CardContent>
-                </Card>
+                  {/* Étape 1: Patient & Affection */}
+                  {creationStep === 0 && (
+                    <Grid container spacing={3}>
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle1" gutterBottom fontWeight={600}>
+                          Sélection du patient
+                        </Typography>
+                        <TextField
+                          fullWidth
+                          label="Rechercher un patient"
+                          value={searchPatientTerm}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setSearchPatientTerm(value);
+                            searchPatients(value);
+                          }}
+                          InputProps={{
+                            startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                          }}
+                          helperText="Nom, prénom ou numéro d'identification"
+                        />
+                        
+                        {patientResults.length > 0 && (
+                          <Paper sx={{ mt: 1, maxHeight: 200, overflow: 'auto' }}>
+                            <List dense>
+                              {patientResults.map((patient) => (
+                                <ListItem
+                                  key={patient.id}
+                                  button
+                                  onClick={() => handleSelectPatient(patient)}
+                                  selected={newDemande.patientId === patient.id}
+                                >
+                                  <ListItemText
+                                    primary={`${patient.nom} ${patient.prenom}`}
+                                    secondary={`ID: ${patient.identifiant || patient.matricule} • Âge: ${patient.age || 'N/A'}`}
+                                  />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Paper>
+                        )}
+
+                        {newDemande.patientInfo && (
+                          <Alert 
+                            severity="success" 
+                            sx={{ mt: 2 }}
+                            icon={<PersonIcon />}
+                          >
+                            Patient sélectionné : <strong>{newDemande.patientInfo.nom} {newDemande.patientInfo.prenom}</strong>
+                          </Alert>
+                        )}
+                      </Grid>
+
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle1" gutterBottom fontWeight={600}>
+                          Informations médicales
+                        </Typography>
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} md={6}>
+                            <FormControl fullWidth required>
+                              <InputLabel>Type de prestation</InputLabel>
+                              <Select
+                                value={newDemande.typePrestation}
+                                label="Type de prestation"
+                                onChange={(e) => setNewDemande(prev => ({ ...prev, typePrestation: e.target.value }))}
+                              >
+                                <MenuItem value="">Sélectionner</MenuItem>
+                                {typesPrestation.map(type => (
+                                  <MenuItem key={type.value} value={type.value}>
+                                    {type.label}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+
+                          <Grid item xs={12} md={6}>
+                            <Autocomplete
+                              fullWidth
+                              options={affectionsList}
+                              getOptionLabel={(option) => option.label}
+                              value={newDemande.codeAffectationInfo}
+                              onChange={(event, newValue) => handleSelectAffection(newValue)}
+                              onInputChange={(event, newInputValue) => {
+                                setSearchAffectionTerm(newInputValue);
+                                loadAffections(newInputValue);
+                              }}
+                              loading={affectionsLoading}
+                              loadingText="Chargement..."
+                              noOptionsText="Aucune affection trouvée"
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  label="Affection"
+                                  helperText="Sélectionnez l'affection principale"
+                                  InputProps={{
+                                    ...params.InputProps,
+                                    endAdornment: (
+                                      <>
+                                        {affectionsLoading && <CircularProgress size={20} />}
+                                        {params.InputProps.endAdornment}
+                                      </>
+                                    ),
+                                  }}
+                                />
+                              )}
+                            />
+                          </Grid>
+                        </Grid>
+                      </Grid>
+
+                      <Grid item xs={12}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={newDemande.hospitalisation}
+                              onChange={(e) => setNewDemande(prev => ({ ...prev, hospitalisation: e.target.checked }))}
+                            />
+                          }
+                          label="Hospitalisation"
+                        />
+                        
+                        {newDemande.hospitalisation && (
+                          <Grid container spacing={2} sx={{ mt: 1 }}>
+                            <Grid item xs={12} md={4}>
+                              <DatePicker
+                                label="Date d'entrée"
+                                value={newDemande.dateDebutHospitalisation}
+                                onChange={(date) => setNewDemande(prev => ({ ...prev, dateDebutHospitalisation: date }))}
+                                slotProps={{ textField: { fullWidth: true } }}
+                              />
+                            </Grid>
+                            <Grid item xs={12} md={4}>
+                              <DatePicker
+                                label="Date de sortie"
+                                value={newDemande.dateFinHospitalisation}
+                                onChange={(date) => setNewDemande(prev => ({ ...prev, dateFinHospitalisation: date }))}
+                                slotProps={{ textField: { fullWidth: true } }}
+                              />
+                            </Grid>
+                            <Grid item xs={12} md={4}>
+                              <TextField
+                                fullWidth
+                                label="Durée (jours)"
+                                type="number"
+                                value={newDemande.dureeHospitalisation || ''}
+                                onChange={(e) => setNewDemande(prev => ({ ...prev, dureeHospitalisation: parseInt(e.target.value) || null }))}
+                              />
+                            </Grid>
+                          </Grid>
+                        )}
+                      </Grid>
+
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          multiline
+                          rows={2}
+                          label="Remarques supplémentaires"
+                          value={newDemande.remarques}
+                          onChange={(e) => setNewDemande(prev => ({ ...prev, remarques: e.target.value }))}
+                          placeholder="Informations complémentaires..."
+                        />
+                      </Grid>
+                    </Grid>
+                  )}
+
+                  {/* Étape 2: Actes médicaux */}
+                  {creationStep === 1 && (
+                    <Box>
+                      <Typography variant="subtitle1" gutterBottom fontWeight={600}>
+                        Actes et prestations
+                      </Typography>
+                      
+                      <Box sx={{ mb: 3 }}>
+                        <TextField
+                          fullWidth
+                          label="Rechercher un acte, médicament ou prestation"
+                          value={searchActeTerm}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setSearchActeTerm(value);
+                            searchActes(value);
+                          }}
+                          InputProps={{
+                            startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                          }}
+                        />
+                        
+                        {acteResults.length > 0 && (
+                          <Paper sx={{ mt: 1, maxHeight: 200, overflow: 'auto' }}>
+                            <List dense>
+                              {acteResults.map((acte) => (
+                                <ListItem
+                                  key={acte.id}
+                                  button
+                                  onClick={() => handleAddActe(acte)}
+                                  secondaryAction={
+                                    <Button size="small">Ajouter</Button>
+                                  }
+                                >
+                                  <ListItemText
+                                    primary={acte.libelle || acte.libelle_complet}
+                                    secondary={`${acte.prix ? `${acte.prix.toFixed(2)} FCFA` : 'Prix non spécifié'}`}
+                                  />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Paper>
+                        )}
+                      </Box>
+
+                      {newDemande.actes.length === 0 ? (
+                        <Alert severity="info">
+                          Aucun acte ajouté. Recherchez et ajoutez des actes médicaux.
+                        </Alert>
+                      ) : (
+                        <TableContainer component={Paper} sx={{ mb: 3 }}>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Acte</TableCell>
+                                <TableCell width={100} align="center">Qté</TableCell>
+                                <TableCell width={120} align="right">Prix unit.</TableCell>
+                                <TableCell width={120} align="right">Total</TableCell>
+                                <TableCell width={80} align="center">Remb.</TableCell>
+                                <TableCell width={60} align="center"></TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {newDemande.actes.map((acte, index) => (
+                                <TableRow key={index}>
+                                  <TableCell>
+                                    <Typography variant="body2">{acte.libelle}</Typography>
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <TextField
+                                      type="number"
+                                      size="small"
+                                      value={acte.quantite}
+                                      onChange={(e) => handleUpdateActe(index, 'quantite', e.target.value)}
+                                      inputProps={{ min: 1 }}
+                                    />
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <TextField
+                                      type="number"
+                                      size="small"
+                                      value={acte.prixUnitaire}
+                                      onChange={(e) => handleUpdateActe(index, 'prixUnitaire', e.target.value)}
+                                      InputProps={{
+                                        endAdornment: <Typography variant="caption">FCFA</Typography>
+                                      }}
+                                    />
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    {(acte.quantite * acte.prixUnitaire).toFixed(2)} FCFA
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <Checkbox
+                                      checked={acte.remboursable}
+                                      onChange={(e) => handleUpdateActe(index, 'remboursable', e.target.checked)}
+                                      color="success"
+                                    />
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      onClick={() => handleRemoveActe(index)}
+                                    >
+                                      <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              <TableRow sx={{ bgcolor: 'action.hover' }}>
+                                <TableCell colSpan={3} align="right">
+                                  <Typography fontWeight={600}>Total</Typography>
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Typography fontWeight={600} color="primary">
+                                    {newDemande.montantTotal.toFixed(2)} FCFA
+                                  </Typography>
+                                </TableCell>
+                                <TableCell colSpan={2} />
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+                    </Box>
+                  )}
+
+                  {/* Étape 3: Validation */}
+                  {creationStep === 2 && (
+                    <Box>
+                      <Typography variant="subtitle1" gutterBottom fontWeight={600}>
+                        Validation de la demande
+                      </Typography>
+                      
+                      <Grid container spacing={3}>
+                        <Grid item xs={12}>
+                          <Card>
+                            <CardContent>
+                              <Typography variant="h6" gutterBottom color="primary">
+                                Récapitulatif
+                              </Typography>
+                              <Grid container spacing={2}>
+                                <Grid item xs={12} md={6}>
+                                  <Typography variant="body2">
+                                    <strong>Patient:</strong> {newDemande.patientInfo ? `${newDemande.patientInfo.nom} ${newDemande.patientInfo.prenom}` : 'Non spécifié'}
+                                  </Typography>
+                                </Grid>
+                                <Grid item xs={12} md={6}>
+                                  <Typography variant="body2">
+                                    <strong>Type:</strong> {newDemande.typePrestation || 'Non spécifié'}
+                                  </Typography>
+                                </Grid>
+                                <Grid item xs={12} md={6}>
+                                  <Typography variant="body2">
+                                    <strong>Affection:</strong> {newDemande.codeAffectationInfo ? `${newDemande.codeAffectationInfo.libelle}` : 'Non spécifiée'}
+                                  </Typography>
+                                </Grid>
+                                <Grid item xs={12}>
+                                  <Typography variant="body2">
+                                    <strong>Actes:</strong> {newDemande.actes.length} article(s)
+                                  </Typography>
+                                </Grid>
+                                <Grid item xs={12}>
+                                  <Divider sx={{ my: 1 }} />
+                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Typography variant="h6">Montant total</Typography>
+                                    <Typography variant="h5" color="primary">
+                                      {newDemande.montantTotal.toFixed(2)} FCFA
+                                    </Typography>
+                                  </Box>
+                                </Grid>
+                              </Grid>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+
+                        <Grid item xs={12}>
+                          <Alert severity="info">
+                            Vérifiez les informations avant de soumettre. La demande passera en statut "En attente" de validation.
+                          </Alert>
+                        </Grid>
+                      </Grid>
+                    </Box>
+                  )}
+
+                  {/* Boutons de navigation */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4, pt: 3, borderTop: 1, borderColor: 'divider' }}>
+                    <Button
+                      onClick={() => creationStep > 0 ? setCreationStep(prev => prev - 1) : setActiveTab(0)}
+                    >
+                      {creationStep === 0 ? 'Retour aux demandes' : 'Précédent'}
+                    </Button>
+                    
+                    {creationStep < steps.length - 1 ? (
+                      <Button
+                        variant="contained"
+                        onClick={() => {
+                          if (creationStep === 0 && (!newDemande.patientId || !newDemande.typePrestation)) {
+                            setSnackbar({
+                              open: true,
+                              message: 'Veuillez sélectionner un patient et un type de prestation',
+                              severity: 'warning'
+                            });
+                            return;
+                          }
+                          setCreationStep(prev => prev + 1);
+                        }}
+                        disabled={creationStep === 0 && (!newDemande.patientId || !newDemande.typePrestation)}
+                      >
+                        Continuer
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="contained"
+                        color="success"
+                        onClick={handleSubmitDemande}
+                        disabled={!newDemande.patientId || newDemande.actes.length === 0}
+                      >
+                        Soumettre la demande
+                      </Button>
+                    )}
+                  </Box>
+                </Box>
               </Box>
             )}
           </CardContent>
-        </Card>
+        </StyledCard>
 
-        {/* Dialog de création de demande */}
+        {/* Dialog Détails */}
         <Dialog
-          open={openDialog}
-          onClose={() => setOpenDialog(false)}
+          open={openDetailsDialog}
+          onClose={() => setOpenDetailsDialog(false)}
           maxWidth="md"
           fullWidth
         >
           <DialogTitle>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <AddIcon />
-              <Typography variant="h6">Nouvelle demande d'accord préalable</Typography>
-            </Box>
+            <Typography variant="h6" fontWeight={600}>
+              Détails de la demande
+            </Typography>
           </DialogTitle>
           <DialogContent dividers>
-            <Stepper activeStep={creationStep} sx={{ mb: 4 }}>
-              {steps.map((label) => (
-                <Step key={label}>
-                  <StepLabel>{label}</StepLabel>
-                </Step>
-              ))}
-            </Stepper>
-
-            {/* Étape 1: Informations générales */}
-            {creationStep === 0 && (
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <Typography variant="subtitle1" gutterBottom>
-                    <strong>1. Recherche du patient</strong>
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-                    <TextField
-                      fullWidth
-                      label="Rechercher par matricule ou nom"
-                      value={searchPatientTerm}
-                      onChange={(e) => {
-                        setSearchPatientTerm(e.target.value);
-                        searchPatients(e.target.value);
-                      }}
-                      InputProps={{
-                        startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                      }}
-                    />
-                    <Typography variant="body2" sx={{ alignSelf: 'center' }}>
-                      OU
-                    </Typography>
-                    <TextField
-                      fullWidth
-                      label="Lien à une prescription existante"
-                      value={searchPrescriptionTerm}
-                      onChange={(e) => {
-                        setSearchPrescriptionTerm(e.target.value);
-                        searchPrescriptions(e.target.value);
-                      }}
-                      placeholder="Numéro de prescription"
-                    />
-                  </Box>
-
-                  {patientResults.length > 0 && (
-                    <Paper sx={{ p: 2, mb: 2 }}>
-                      <Typography variant="subtitle2" gutterBottom>
-                        Résultats de recherche:
-                      </Typography>
-                      <List dense>
-                        {patientResults.map((patient) => (
-                          <ListItem
-                            key={patient.id}
-                            button
-                            onClick={() => handleSelectPatient(patient)}
-                          >
-                            <ListItemText
-                              primary={`${patient.nom} ${patient.prenom}`}
-                              secondary={`Matricule: ${patient.identifiant || patient.matricule} | Âge: ${patient.age || 'N/A'}`}
-                            />
-                          </ListItem>
-                        ))}
-                      </List>
-                    </Paper>
-                  )}
-
-                  {prescriptionResults.length > 0 && (
-                    <Paper sx={{ p: 2, mb: 2 }}>
-                      <Typography variant="subtitle2" gutterBottom>
-                        Prescription trouvée:
-                      </Typography>
-                      {prescriptionResults.map((prescription) => (
-                        <Card key={prescription.COD_PRES} sx={{ mb: 1 }}>
-                          <CardContent>
-                            <Typography variant="body2">
-                              <strong>Numéro:</strong> {prescription.NUM_PRESCRIPTION}
-                            </Typography>
-                            <Typography variant="body2">
-                              <strong>Patient:</strong> {prescription.NOM_BEN} {prescription.PRE_BEN}
-                            </Typography>
-                            <Typography variant="body2">
-                              <strong>Affection:</strong> {prescription.LIB_AFF}
-                            </Typography>
-                            <Button
-                              size="small"
-                              onClick={() => handleSelectPrescription(prescription)}
-                              sx={{ mt: 1 }}
-                            >
-                              Utiliser cette prescription
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </Paper>
-                  )}
-
-                  {newDemande.patientInfo && (
-                    <Alert severity="success" sx={{ mb: 2 }}>
-                      Patient sélectionné: <strong>{newDemande.patientInfo.nom} {newDemande.patientInfo.prenom}</strong>
-                    </Alert>
-                  )}
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Type de prestation *</InputLabel>
-                    <Select
-                      value={newDemande.typePrestation}
-                      label="Type de prestation *"
-                      onChange={(e) => setNewDemande({ ...newDemande, typePrestation: e.target.value })}
-                    >
-                      <MenuItem value="">Sélectionnez un type</MenuItem>
-                      {typesPrestation.map(type => (
-                        <MenuItem key={type.value} value={type.value}>
-                          {type.label}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Code affectation *"
-                    value={newDemande.codeAffectation}
-                    onChange={(e) => setNewDemande({ ...newDemande, codeAffectation: e.target.value })}
-                    helperText="Code CIM ou interne de l'affection"
-                  />
-                </Grid>
-
-                <Grid item xs={12}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={newDemande.hospitalisation}
-                        onChange={(e) => setNewDemande({ ...newDemande, hospitalisation: e.target.checked })}
-                      />
-                    }
-                    label="Hospitalisation"
-                  />
-                </Grid>
-
-                {newDemande.hospitalisation && (
-                  <>
-                    <Grid item xs={12} md={4}>
-                      <DatePicker
-                        label="Date d'entrée"
-                        value={newDemande.dateDebutHospitalisation}
-                        onChange={(date) => setNewDemande({ ...newDemande, dateDebutHospitalisation: date })}
-                        slotProps={{ textField: { fullWidth: true } }}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={4}>
-                      <DatePicker
-                        label="Date de sortie prévue"
-                        value={newDemande.dateFinHospitalisation}
-                        onChange={(date) => setNewDemande({ ...newDemande, dateFinHospitalisation: date })}
-                        slotProps={{ textField: { fullWidth: true } }}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={4}>
-                      <TextField
-                        fullWidth
-                        label="Durée (jours)"
-                        type="number"
-                        value={newDemande.dureeHospitalisation || ''}
-                        onChange={(e) => setNewDemande({ ...newDemande, dureeHospitalisation: parseInt(e.target.value) || null })}
-                      />
-                    </Grid>
-                  </>
-                )}
-
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    multiline
-                    rows={3}
-                    label="Remarques"
-                    value={newDemande.remarques}
-                    onChange={(e) => setNewDemande({ ...newDemande, remarques: e.target.value })}
-                  />
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Button
-                    startIcon={<AttachFileIcon />}
-                    variant="outlined"
-                    onClick={() => document.getElementById('file-upload').click()}
-                  >
-                    Ajouter des pièces jointes
-                  </Button>
-                  <input
-                    id="file-upload"
-                    type="file"
-                    multiple
-                    hidden
-                    onChange={(e) => {
-                      const files = Array.from(e.target.files);
-                      setNewDemande({
-                        ...newDemande,
-                        piecesJointes: [...newDemande.piecesJointes, ...files]
-                      });
-                    }}
-                  />
-                  {newDemande.piecesJointes.length > 0 && (
-                    <List dense sx={{ mt: 1 }}>
-                      {newDemande.piecesJointes.map((file, index) => (
-                        <ListItem key={index}>
-                          <ListItemText primary={file.name} secondary={`${(file.size / 1024).toFixed(2)} KB`} />
-                          <ListItemSecondaryAction>
-                            <IconButton
-                              edge="end"
-                              size="small"
-                              onClick={() => {
-                                const newFiles = [...newDemande.piecesJointes];
-                                newFiles.splice(index, 1);
-                                setNewDemande({ ...newDemande, piecesJointes: newFiles });
-                              }}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          </ListItemSecondaryAction>
-                        </ListItem>
-                      ))}
-                    </List>
-                  )}
-                </Grid>
-              </Grid>
-            )}
-
-            {/* Étape 2: Actes médicaux */}
-            {creationStep === 1 && (
-              <Box>
-                <Typography variant="subtitle1" gutterBottom>
-                  <strong>2. Saisie des actes médicaux</strong>
-                </Typography>
-                
-                <Box sx={{ mb: 3 }}>
-                  <TextField
-                    fullWidth
-                    label="Rechercher un acte médical"
-                    value={searchActeTerm}
-                    onChange={(e) => {
-                      setSearchActeTerm(e.target.value);
-                      searchActes(e.target.value);
-                    }}
-                    InputProps={{
-                      startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                    }}
-                    helperText="Recherchez par nom de médicament, acte ou code"
-                  />
-                  
-                  {acteResults.length > 0 && (
-                    <Paper sx={{ p: 2, mt: 2 }}>
-                      <Typography variant="subtitle2" gutterBottom>
-                        Résultats:
-                      </Typography>
-                      <List dense>
-                        {acteResults.map((acte) => (
-                          <ListItem
-                            key={acte.id}
-                            button
-                            onClick={() => handleAddActe(acte)}
-                          >
-                            <ListItemText
-                              primary={acte.libelle || acte.libelle_complet}
-                              secondary={`Prix: ${acte.prix ? `${acte.prix} FCFA` : 'Non spécifié'} | Type: ${acte.type || 'Médicament'}`}
-                            />
-                            <Button size="small">Ajouter</Button>
-                          </ListItem>
-                        ))}
-                      </List>
-                    </Paper>
-                  )}
-                </Box>
-
-                {newDemande.actes.length === 0 ? (
-                  <Alert severity="info">
-                    Aucun acte médical ajouté. Veuillez rechercher et ajouter des actes.
-                  </Alert>
-                ) : (
-                  <TableContainer component={Paper}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Acte</TableCell>
-                          <TableCell align="center">Quantité</TableCell>
-                          <TableCell align="right">Prix unitaire</TableCell>
-                          <TableCell align="right">Total</TableCell>
-                          <TableCell align="center">Remboursable</TableCell>
-                          <TableCell align="center">Actions</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {newDemande.actes.map((acte, index) => (
-                          <TableRow key={index}>
-                            <TableCell>
-                              <Typography variant="body2">{acte.libelle}</Typography>
-                              <Typography variant="caption" color="textSecondary">
-                                Code: {acte.code}
-                              </Typography>
-                            </TableCell>
-                            <TableCell align="center">
-                              <TextField
-                                type="number"
-                                size="small"
-                                value={acte.quantite}
-                                onChange={(e) => handleUpdateActe(index, 'quantite', parseFloat(e.target.value))}
-                                sx={{ width: 80 }}
-                              />
-                            </TableCell>
-                            <TableCell align="right">
-                              <TextField
-                                type="number"
-                                size="small"
-                                value={acte.prixUnitaire}
-                                onChange={(e) => handleUpdateActe(index, 'prixUnitaire', parseFloat(e.target.value))}
-                                sx={{ width: 100 }}
-                                InputProps={{
-                                  endAdornment: <Typography variant="caption">FCFA</Typography>
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell align="right">
-                              {(acte.quantite * acte.prixUnitaire).toFixed(2)} FCFA
-                            </TableCell>
-                            <TableCell align="center">
-                              <Checkbox
-                                checked={acte.remboursable}
-                                onChange={(e) => handleUpdateActe(index, 'remboursable', e.target.checked)}
-                                color="success"
-                              />
-                            </TableCell>
-                            <TableCell align="center">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleRemoveActe(index)}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        <TableRow>
-                          <TableCell colSpan={3} align="right">
-                            <strong>Total:</strong>
-                          </TableCell>
-                          <TableCell align="right">
-                            <strong>{newDemande.montantTotal.toFixed(2)} FCFA</strong>
-                          </TableCell>
-                          <TableCell colSpan={2} />
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                )}
-              </Box>
-            )}
-
-            {/* Étape 3: Récapitulatif */}
-            {creationStep === 2 && (
-              <Box>
-                <Typography variant="subtitle1" gutterBottom>
-                  <strong>3. Récapitulatif de la demande</strong>
-                </Typography>
-                
-                <Card sx={{ mb: 3 }}>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom color="primary">
-                      Informations générales
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} md={6}>
-                        <Typography variant="body2">
-                          <strong>Patient:</strong> {newDemande.patientInfo ? `${newDemande.patientInfo.nom} ${newDemande.patientInfo.prenom}` : 'Non spécifié'}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <Typography variant="body2">
-                          <strong>Type de prestation:</strong> {newDemande.typePrestation || 'Non spécifié'}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <Typography variant="body2">
-                          <strong>Code affectation:</strong> {newDemande.codeAffectation || 'Non spécifié'}
-                        </Typography>
-                      </Grid>
-                      {newDemande.hospitalisation && (
-                        <>
-                          <Grid item xs={12} md={6}>
-                            <Typography variant="body2">
-                              <strong>Hospitalisation:</strong> Oui
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} md={6}>
-                            <Typography variant="body2">
-                              <strong>Durée:</strong> {newDemande.dureeHospitalisation} jours
-                            </Typography>
-                          </Grid>
-                        </>
-                      )}
-                      <Grid item xs={12}>
-                        <Typography variant="body2">
-                          <strong>Remarques:</strong> {newDemande.remarques || 'Aucune'}
-                        </Typography>
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
-
-                <Card sx={{ mb: 3 }}>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom color="primary">
-                      Actes médicaux ({newDemande.actes.length})
-                    </Typography>
-                    <List dense>
-                      {newDemande.actes.map((acte, index) => (
-                        <ListItem key={index}>
-                          <ListItemText
-                            primary={acte.libelle}
-                            secondary={`Quantité: ${acte.quantite} | Prix unitaire: ${acte.prixUnitaire.toFixed(2)} FCFA | Total: ${(acte.quantite * acte.prixUnitaire).toFixed(2)} FCFA`}
-                          />
-                          <Chip
-                            label={acte.remboursable ? 'Remboursable' : 'Non remboursable'}
-                            color={acte.remboursable ? 'success' : 'error'}
-                            size="small"
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                    <Divider sx={{ my: 2 }} />
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="h6">
-                        Montant total:
-                      </Typography>
-                      <Typography variant="h5" color="primary">
-                        {newDemande.montantTotal.toFixed(2)} FCFA
-                      </Typography>
-                    </Box>
-                  </CardContent>
-                </Card>
-
-                <Alert severity="info">
-                  Vérifiez toutes les informations avant de soumettre la demande. Une fois soumise, elle sera en statut "En attente" de validation.
-                </Alert>
-              </Box>
-            )}
-          </DialogContent>
-          <DialogActions>
-            {creationStep > 0 && (
-              <Button onClick={() => setCreationStep(creationStep - 1)}>
-                Retour
-              </Button>
-            )}
-            <Box sx={{ flex: 1 }} />
-            <Button onClick={() => setOpenDialog(false)}>
-              Annuler
-            </Button>
-            {creationStep < steps.length - 1 ? (
-              <Button
-                variant="contained"
-                onClick={() => {
-                  if (creationStep === 0 && (!newDemande.patientId || !newDemande.typePrestation || !newDemande.codeAffectation)) {
-                    setSnackbar({
-                      open: true,
-                      message: 'Veuillez remplir tous les champs obligatoires',
-                      severity: 'error'
-                    });
-                    return;
-                  }
-                  if (creationStep === 1 && newDemande.actes.length === 0) {
-                    setSnackbar({
-                      open: true,
-                      message: 'Veuillez ajouter au moins un acte médical',
-                      severity: 'error'
-                    });
-                    return;
-                  }
-                  setCreationStep(creationStep + 1);
-                }}
-              >
-                Suivant
-              </Button>
-            ) : (
-              <Button
-                variant="contained"
-                color="success"
-                onClick={handleSubmitDemande}
-                disabled={!newDemande.patientId || newDemande.actes.length === 0}
-              >
-                Soumettre la demande
-              </Button>
-            )}
-          </DialogActions>
-        </Dialog>
-
-        {/* Dialog d'exécution */}
-        {/* Dialog d'exécution */}
-<Dialog
-  open={openExecutionDialog}
-  onClose={() => setOpenExecutionDialog(false)}
-  maxWidth="md"
-  fullWidth
->
-  <DialogTitle>
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      <ExecuteIcon />
-      <Typography variant="h6">Exécution de la demande</Typography>
-    </Box>
-  </DialogTitle>
-  <DialogContent dividers>
-    {selectedDemande && (
-      <Box>
-        <Typography variant="subtitle1" gutterBottom>
-          <strong>Demande:</strong> {selectedDemande.NUM_PRESCRIPTION}
-        </Typography>
-        <Typography variant="body2" color="textSecondary" gutterBottom>
-          Patient: {selectedDemande.NOM_BEN} {selectedDemande.PRE_BEN}
-        </Typography>
-
-        <Accordion defaultExpanded sx={{ mb: 2 }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography>
-              Sélection des actes à exécuter ({executionData.actesSelectionnes.length} actes)
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            {executionData.actesSelectionnes.length === 0 ? (
-              <Alert severity="warning">
-                Aucun acte trouvé pour cette prescription. Vérifiez les détails de la prescription.
-              </Alert>
-            ) : (
-              <>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Acte</TableCell>
-                        <TableCell align="center">Quantité prescrite</TableCell>
-                        <TableCell align="center">Quantité à exécuter</TableCell>
-                        <TableCell align="right">Prix unitaire</TableCell>
-                        <TableCell align="right">Total</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {executionData.actesSelectionnes.map((acte, index) => (
-                        <TableRow key={acte.id || index}>
-                          <TableCell>{acte.libelle || `Acte ${index + 1}`}</TableCell>
-                          <TableCell align="center">{acte.quantitePrescrite || 0}</TableCell>
-                          <TableCell align="center">
-                            <TextField
-                              type="number"
-                              size="small"
-                              value={acte.quantiteExecutee || 0}
-                              onChange={(e) => {
-                                const newActes = [...executionData.actesSelectionnes];
-                                newActes[index].quantiteExecutee = Math.min(
-                                  parseFloat(e.target.value) || 0,
-                                  acte.quantitePrescrite || 0
-                                );
-                                setExecutionData({ ...executionData, actesSelectionnes: newActes });
-                              }}
-                              sx={{ width: 80 }}
-                              inputProps={{ 
-                                min: 0, 
-                                max: acte.quantitePrescrite || 0 
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            {acte.prixUnitaire ? `${acte.prixUnitaire.toFixed(2)} FCFA` : '0 FCFA'}
-                          </TableCell>
-                          <TableCell align="right">
-                            {((acte.quantiteExecutee || 0) * (acte.prixUnitaire || 0)).toFixed(2)} FCFA
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow>
-                        <TableCell colSpan={4} align="right">
-                          <strong>Total à exécuter:</strong>
-                        </TableCell>
-                        <TableCell align="right">
-                          <strong>{executionData.montantTotal.toFixed(2)} FCFA</strong>
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-                
-                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
-                  <Button
-                    variant="contained"
-                    startIcon={<DescriptionIcon />}
-                    onClick={handleGenerateFeuilleSoins}
-                    disabled={executionData.actesSelectionnes.every(a => (a.quantiteExecutee || 0) === 0)}
-                  >
-                    Générer la feuille de soins
-                  </Button>
-                </Box>
-              </>
-            )}
-          </AccordionDetails>
-        </Accordion>
-        {/* ... reste du code ... */}
-      </Box>
-    )}
-  </DialogContent>
-  <DialogActions>
-    <Button onClick={() => setOpenExecutionDialog(false)}>
-      Fermer
-    </Button>
-  </DialogActions>
-</Dialog>
-
-        {/* Dialog de détails */}
-        {selectedDemande && !openExecutionDialog && (
-          <Dialog
-            open={!!selectedDemande && !openExecutionDialog}
-            onClose={() => setSelectedDemande(null)}
-            maxWidth="md"
-            fullWidth
-          >
-            <DialogTitle>
-              Détails de la demande
-            </DialogTitle>
-            <DialogContent dividers>
+            {selectedDemande && (
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="textSecondary">
+                  <Typography variant="subtitle2" color="text.secondary">
                     Numéro
                   </Typography>
                   <Typography variant="body1" gutterBottom>
-                    {selectedDemande.NUM_PRESCRIPTION}
+                    {selectedDemande.NUM_PRESCRIPTION || selectedDemande.COD_PRES}
                   </Typography>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="textSecondary">
+                  <Typography variant="subtitle2" color="text.secondary">
                     Statut
                   </Typography>
-                  <Chip
+                  <StatusBadge
                     label={selectedDemande.STATUT}
-                    color={statuts.find(s => s.value === selectedDemande.STATUT)?.color || 'default'}
+                    statuscolor={getStatusColor(selectedDemande.STATUT)}
                   />
                 </Grid>
                 <Grid item xs={12}>
-                  <Typography variant="subtitle2" color="textSecondary">
+                  <Typography variant="subtitle2" color="text.secondary">
                     Patient
                   </Typography>
                   <Typography variant="body1" gutterBottom>
@@ -1641,7 +1367,7 @@ const handleGenerateFeuilleSoins = () => {
                   </Typography>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="textSecondary">
+                  <Typography variant="subtitle2" color="text.secondary">
                     Type de prestation
                   </Typography>
                   <Typography variant="body1" gutterBottom>
@@ -1649,103 +1375,104 @@ const handleGenerateFeuilleSoins = () => {
                   </Typography>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="textSecondary">
+                  <Typography variant="subtitle2" color="text.secondary">
                     Affection
                   </Typography>
                   <Typography variant="body1" gutterBottom>
-                    {selectedDemande.LIB_AFF} ({selectedDemande.COD_AFF})
+                    {selectedDemande.LIB_AFF || selectedDemande.COD_AFF || '-'}
                   </Typography>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="textSecondary">
-                    Date de prescription
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Date
                   </Typography>
                   <Typography variant="body1" gutterBottom>
-                    {new Date(selectedDemande.DATE_PRESCRIPTION).toLocaleDateString('fr-FR')}
+                    {selectedDemande.DATE_PRESCRIPTION 
+                      ? new Date(selectedDemande.DATE_PRESCRIPTION).toLocaleDateString('fr-FR')
+                      : '-'
+                    }
                   </Typography>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="textSecondary">
-                    Montant total
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Montant
                   </Typography>
-                  <Typography variant="body1" gutterBottom>
-                    {selectedDemande.MONTANT_TOTAL ? `${selectedDemande.MONTANT_TOTAL.toFixed(2)} FCFA` : 'Non spécifié'}
+                  <Typography variant="body1" gutterBottom fontWeight={600}>
+                    {selectedDemande.MONTANT_TOTAL 
+                      ? `${parseFloat(selectedDemande.MONTANT_TOTAL).toFixed(2)} FCFA`
+                      : '-'
+                    }
                   </Typography>
                 </Grid>
                 <Grid item xs={12}>
-                  <Typography variant="subtitle2" color="textSecondary">
+                  <Typography variant="subtitle2" color="text.secondary">
                     Observations
                   </Typography>
                   <Typography variant="body1" gutterBottom>
                     {selectedDemande.OBSERVATIONS || 'Aucune observation'}
                   </Typography>
                 </Grid>
-              </Grid>
-              
-              {selectedDemande.details && selectedDemande.details.length > 0 && (
-                <Box sx={{ mt: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Détails des actes
-                  </Typography>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Acte</TableCell>
-                          <TableCell align="center">Quantité</TableCell>
-                          <TableCell align="right">Prix unitaire</TableCell>
-                          <TableCell align="right">Total</TableCell>
-                          <TableCell align="center">Statut</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {selectedDemande.details.map((detail, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{detail.LIBELLE}</TableCell>
-                            <TableCell align="center">{detail.QUANTITE}</TableCell>
-                            <TableCell align="right">{detail.PRIX_UNITAIRE ? `${detail.PRIX_UNITAIRE.toFixed(2)} FCFA` : '-'}</TableCell>
-                            <TableCell align="right">{detail.MONTANT_TOTAL ? `${detail.MONTANT_TOTAL.toFixed(2)} FCFA` : '-'}</TableCell>
-                            <TableCell align="center">
-                              <Chip
-                                label={detail.STATUT_EXECUTION || 'Non exécuté'}
-                                size="small"
-                                color={detail.STATUT_EXECUTION === 'Execute' ? 'success' : 'default'}
-                              />
-                            </TableCell>
+                
+                {selectedDemande.details && selectedDemande.details.length > 0 && (
+                  <Grid item xs={12}>
+                    <Divider sx={{ my: 2 }} />
+                    <Typography variant="subtitle1" gutterBottom fontWeight={600}>
+                      Détails des actes
+                    </Typography>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Acte</TableCell>
+                            <TableCell align="center">Quantité</TableCell>
+                            <TableCell align="right">Prix unitaire</TableCell>
+                            <TableCell align="right">Total</TableCell>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Box>
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setSelectedDemande(null)}>
-                Fermer
-              </Button>
-              {selectedDemande.STATUT === 'Validee' && (
-                <Button
-                  variant="contained"
-                  startIcon={<ExecuteIcon />}
-                  onClick={() => handleExecuteDemande(selectedDemande)}
-                >
-                  Exécuter
-                </Button>
-              )}
-            </DialogActions>
-          </Dialog>
-        )}
+                        </TableHead>
+                        <TableBody>
+                          {selectedDemande.details.map((detail, index) => (
+                            <TableRow key={index}>
+                              <TableCell>{detail.LIBELLE || 'N/A'}</TableCell>
+                              <TableCell align="center">{detail.QUANTITE || 0}</TableCell>
+                              <TableCell align="right">
+                                {detail.PRIX_UNITAIRE 
+                                  ? `${parseFloat(detail.PRIX_UNITAIRE).toFixed(2)} FCFA`
+                                  : '-'
+                                }
+                              </TableCell>
+                              <TableCell align="right">
+                                {detail.MONTANT_TOTAL 
+                                  ? `${parseFloat(detail.MONTANT_TOTAL).toFixed(2)} FCFA`
+                                  : '-'
+                                }
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Grid>
+                )}
+              </Grid>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenDetailsDialog(false)}>
+              Fermer
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Snackbar
           open={snackbar.open}
-          autoHideDuration={6000}
-          onClose={handleCloseSnackbar}
+          autoHideDuration={5000}
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         >
           <Alert
-            onClose={handleCloseSnackbar}
             severity={snackbar.severity}
             sx={{ width: '100%' }}
+            onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
           >
             {snackbar.message}
           </Alert>

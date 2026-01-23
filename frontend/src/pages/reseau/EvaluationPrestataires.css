@@ -1,0 +1,71 @@
+/* src/pages/EvaluationPrestataires.css */
+.prestataire-card {
+  transition: all 0.3s ease;
+}
+
+.prestataire-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.rating-stars {
+  color: #ffc107;
+}
+
+.status-badge {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.status-active {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.status-inactive {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.status-onleave {
+  background-color: #fff3e0;
+  color: #ef6c00;
+}
+
+.progress-bar-custom {
+  border-radius: 4px;
+  height: 8px;
+}
+
+.filter-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.stats-card {
+  background: white;
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.stats-icon {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+}
+
+.stats-value {
+  font-size: 2rem;
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+.stats-label {
+  color: #666;
+  font-size: 0.9rem;
+}

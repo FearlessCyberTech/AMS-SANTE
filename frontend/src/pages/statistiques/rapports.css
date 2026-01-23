@@ -1,0 +1,45 @@
+/* src/styles/rapports.css */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  .rapports-container,
+  .rapports-container * {
+    visibility: visible;
+  }
+  
+  .rapports-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+  
+  .page-break {
+    page-break-before: always;
+  }
+}
+
+.rapports-container {
+  background: white;
+}
+
+.stat-card {
+  transition: transform 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+}
+
+.chart-container {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}

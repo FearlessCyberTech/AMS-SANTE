@@ -1,75 +1,181 @@
+// server.js - Point d'entrée principal
+require('dotenv').config();
+
+// Importer l'application Express
 const app = require('./app');
-const db = require('./config/database');
+
+// Configuration des middlewares de sécurité et démarrage du serveur
+const cors = require("cors");
+const helmet = require("helmet");
+const compression = require("compression");
+const rateLimit = require("express-rate-limit");
+const morgan = require('morgan');
+const fs = require('fs');
+const path = require('path');
+
+// === CONFIGURATION DE SÉCURITÉ ===
+
+// Configuration CORS pour production
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'development' 
+    ? [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://127.0.0.1:3000',
+        'http://172.20.10.2:3000',
+        'http://172.20.10.2:5000'
+      ]
+    : [
+        process.env.FRONTEND_URL,
+        process.env.ADMIN_URL,
+        `https://${process.env.FRONTEND_URL}`,
+        `https://${process.env.ADMIN_URL}`
+      ].filter(Boolean),
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin'
+  ],
+  credentials: true,
+  maxAge: 86400,
+  optionsSuccessStatus: 200
+};
+
+// Rate limiting configuration
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: {
+    error: 'Trop de requêtes depuis cette IP, veuillez réessayer plus tard.',
+    code: 429
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    return req.path.includes('/api/health') || req.path.includes('/api/status');
+  }
+});
+
+// === MIDDLEWARES SUPPLÉMENTAIRES ===
+
+// Compression GZIP
+app.use(compression({
+  level: 6,
+  threshold: 100 * 1024
+}));
+
+// CORS
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
+// Rate limiting pour l'API
+app.use('/api/', apiLimiter);
+
+// Logging structuré
+const logFormat = process.env.NODE_ENV === 'production' 
+  ? ':remote-addr - :remote-user [:date[clf]] ":method :url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent" :response-time ms'
+  : 'dev';
+
+// Création du dossier de logs si inexistant
+const logDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+}
+
+// Stream pour les logs d'accès
+const accessLogStream = fs.createWriteStream(
+  path.join(logDir, 'access.log'),
+  { flags: 'a' }
+);
+
+// Logger pour production
+if (process.env.NODE_ENV === 'production') {
+  app.use(morgan(logFormat, {
+    stream: accessLogStream,
+    skip: (req) => req.path === '/api/health'
+  }));
+  
+  // Logger dans la console en format JSON
+  app.use(morgan(logFormat, {
+    skip: (req) => req.path === '/api/health'
+  }));
+} else {
+  // Logger détaillé en développement
+  app.use(morgan('dev'));
+}
+
+// === GESTION DES ERREURS SUPPLÉMENTAIRES ===
+
+// Middleware pour les erreurs 404
+app.use((req, res, next) => {
+  res.status(404).json({
+    error: 'Endpoint non trouvé',
+    path: req.path,
+    method: req.method,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// === CONFIGURATION DU SERVEUR ===
 
 const PORT = process.env.PORT || 5000;
-
-// Tester la connexion à la base de données au démarrage
-const startServer = async () => {
-  try {
-    console.log('🔍 Tentative de connexion à SQL Server...');
-    console.log(`📊 Serveur: ${process.env.DB_SERVER || 'DESKTOP-G2TN8LC'}`);
-    console.log(`📁 Base de données: ${process.env.DB_NAME || 'hcs_backoffice'}`);
-    
-    const isConnected = await db.testConnection();
-    
-    if (!isConnected) {
-      console.log('⚠️  Mode démonstration activé - SQL Server non connectée');
-      console.log('💡 Vérifiez que:');
-      console.log('   1. SQL Server est en cours d\'exécution');
-      console.log('   2. L\'authentification SQL Server est activée');
-      console.log('   3. Le port 1433 est accessible');
-      console.log('   4. Les identifiants sont corrects');
-    } else {
-      console.log('✅ SQL Server connecté avec succès');
-    }
-
-    app.listen(PORT, () => {
-      console.log(`🚀 HealthCenterSoft backend running on port ${PORT}`);
-      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔗 API URL: http://localhost:${PORT}/api`);
-      console.log(`❤️  Health check: http://localhost:${PORT}/api/health`);
-      console.log(`🗄️  Database: SQL Server (${process.env.DB_NAME})`);
-    });
-  } catch (error) {
-    console.error('❌ Erreur lors du démarrage du serveur:', error);
-    
-    // Tentative de démarrage en mode démo si la base de données n'est pas disponible
-    if (error.code === 'ELOGIN' || error.code === 'ETIMEOUT') {
-      console.log('⚠️  Démarrage en mode sans base de données...');
-      app.listen(PORT, () => {
-        console.log(`🚀 Serveur démarré en mode démonstration (sans DB) sur le port ${PORT}`);
-      });
-    } else {
-      process.exit(1);
-    }
-  }
-};
-
-// Gestion propre de l'arrêt avec fermeture du pool de connexions
-const shutdown = async () => {
-  console.log('\n🛑 Arrêt du serveur...');
-  try {
-    await db.close();
-    console.log('✅ Pool de connexions SQL Server fermé');
-  } catch (error) {
-    console.error('❌ Erreur lors de la fermeture des connexions:', error);
-  }
-  process.exit(0);
-};
-
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
-
-// Gestion des erreurs non catchées
-process.on('uncaughtException', (error) => {
-  console.error('💥 Erreur non gérée:', error);
-  shutdown();
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('💥 Promise rejetée non gérée:', reason);
-  shutdown();
-});
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Démarrer le serveur
-startServer();
+const server = app.listen(PORT, HOST, () => {
+  console.log(`✅ Serveur démarré avec succès`);
+  console.log(`   URL: http://${HOST}:${PORT}`);
+  console.log(`   URL locale: http://localhost:${PORT}`);
+  console.log(`   URL réseau: http://172.20.10.2:${PORT}`);
+  console.log(`   Environnement: ${process.env.NODE_ENV || 'development'}`);
+});
+
+// Configuration du timeout
+server.setTimeout(300000);
+
+// Gestion des erreurs du serveur
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`❌ Le port ${PORT} est déjà utilisé`);
+    process.exit(1);
+  } else {
+    console.error('❌ Erreur du serveur:', error);
+    process.exit(1);
+  }
+});
+
+// Gestion de l'arrêt gracieux
+let isShuttingDown = false;
+
+const gracefulShutdown = async (signal) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  
+  console.log(`\n⚠️  Signal ${signal} reçu, arrêt gracieux...`);
+  
+  setTimeout(() => {
+    console.error('⏰ Timeout atteint, arrêt forcé');
+    process.exit(1);
+  }, 30000);
+  
+  try {
+    console.log('🚪 Fermeture du serveur HTTP...');
+    server.close(() => {
+      console.log('✅ Serveur HTTP fermé');
+      process.exit(0);
+    });
+  } catch (error) {
+    console.error('❌ Erreur lors de l\'arrêt gracieux:', error);
+    process.exit(1);
+  }
+};
+
+// Signaux d'arrêt
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Export pour les tests
+module.exports = { app, server };

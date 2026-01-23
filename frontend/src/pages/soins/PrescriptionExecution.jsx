@@ -13,7 +13,7 @@ import {
   Pill,
   Stethoscope
 } from 'lucide-react';
-import { prescriptionsAPI } from '../services/prescriptions';
+import { prescriptionsAPI } from '../../services/api';
 
 const PrescriptionExecution = () => {
   const [step, setStep] = useState(1); // 1: Recherche, 2: Détails, 3: Exécution

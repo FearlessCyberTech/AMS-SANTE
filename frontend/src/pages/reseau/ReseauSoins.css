@@ -1,0 +1,492 @@
+/* NetworkPage.css - Styles modernes et animés */
+
+/* Variables CSS pour un design système cohérent */
+:root {
+  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  --warning-gradient: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+  --info-gradient: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+  --dark-gradient: linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%);
+  
+  --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  --card-shadow-hover: 0 20px 40px rgba(0, 0, 0, 0.12);
+  --modal-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+  
+  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  
+  --glass-effect: rgba(255, 255, 255, 0.95);
+  --glass-border: rgba(255, 255, 255, 0.18);
+}
+
+/* Animations keyframes */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+/* Styles généraux */
+.network-page-container {
+  animation: fadeIn 0.8s ease-out;
+}
+
+/* En-tête avec effet glassmorphism */
+.network-header {
+  background: var(--glass-effect);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: var(--card-shadow);
+  transition: var(--transition-smooth);
+}
+
+.network-header:hover {
+  box-shadow: var(--card-shadow-hover);
+  transform: translateY(-2px);
+}
+
+/* Cartes de statistiques améliorées */
+.stat-card {
+  height: 100%;
+  border-radius: 20px;
+  overflow: hidden;
+  position: relative;
+  background: white;
+  border: none;
+  box-shadow: var(--card-shadow);
+  transition: var(--transition-smooth);
+  cursor: pointer;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--primary-gradient);
+  background-size: 200% 200%;
+  animation: gradientShift 3s ease infinite;
+}
+
+.stat-card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--card-shadow-hover);
+}
+
+.stat-card .MuiAvatar-root {
+  transition: var(--transition-smooth);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card:hover .MuiAvatar-root {
+  transform: scale(1.1) rotate(5deg);
+}
+
+.stat-card-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* Table avec lignes animées */
+.networks-table-container {
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: var(--card-shadow);
+  background: white;
+}
+
+.networks-table-container .MuiTableRow-root {
+  transition: var(--transition-smooth);
+}
+
+.networks-table-container .MuiTableRow-root:hover {
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+  transform: scale(1.002);
+}
+
+.networks-table-container .MuiTableCell-root {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  transition: var(--transition-smooth);
+}
+
+/* Carte de détails avec animation */
+.network-details-card {
+  border-radius: 24px;
+  overflow: hidden;
+  animation: slideInRight 0.6s ease-out;
+  box-shadow: var(--modal-shadow);
+  position: relative;
+}
+
+.network-details-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent 0%, rgba(255,255,255,0.1) 100%);
+  pointer-events: none;
+}
+
+/* Tabs animés */
+.MuiTabs-root .MuiTab-root {
+  transition: var(--transition-smooth);
+  border-radius: 12px 12px 0 0;
+}
+
+.MuiTabs-root .MuiTab-root:hover {
+  background: rgba(102, 126, 234, 0.08);
+}
+
+.MuiTabs-root .Mui-selected {
+  position: relative;
+}
+
+.MuiTabs-root .Mui-selected::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  right: 20%;
+  height: 3px;
+  background: var(--primary-gradient);
+  border-radius: 3px;
+  animation: pulse 2s infinite;
+}
+
+/* Modal avec effet glassmorphism */
+.MuiDialog-paper {
+  border-radius: 24px !important;
+  background: var(--glass-effect) !important;
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--modal-shadow) !important;
+  animation: fadeIn 0.4s ease-out;
+  overflow: hidden;
+}
+
+.MuiDialogTitle-root {
+  background: var(--primary-gradient);
+  background-size: 200% 200%;
+  animation: gradientShift 3s ease infinite;
+  color: white !important;
+  padding: 1.5rem 2rem !important;
+}
+
+/* Boutons améliorés */
+.network-action-button {
+  border-radius: 12px !important;
+  padding: 10px 24px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  transition: var(--transition-smooth) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.network-action-button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.5);
+  opacity: 0;
+  border-radius: 100%;
+  transform: scale(1, 1) translate(-50%);
+  transform-origin: 50% 50%;
+}
+
+.network-action-button:focus:not(:active)::after {
+  animation: ripple 1s ease-out;
+}
+
+.network-action-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+}
+
+/* Cartes de membre avec effet hover */
+.member-card {
+  border-radius: 16px;
+  transition: var(--transition-smooth);
+  border: 2px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.member-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(102, 126, 234, 0.3);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+}
+
+.member-card .MuiAvatar-root {
+  transition: var(--transition-bounce);
+}
+
+.member-card:hover .MuiAvatar-root {
+  transform: scale(1.1) rotate(10deg);
+}
+
+/* Éléments de formulaire */
+.MuiTextField-root {
+  transition: var(--transition-smooth);
+}
+
+.MuiTextField-root:focus-within {
+  transform: translateY(-1px);
+}
+
+.MuiOutlinedInput-root {
+  border-radius: 12px !important;
+  transition: var(--transition-smooth) !important;
+}
+
+.MuiOutlinedInput-root:hover {
+  transform: translateY(-1px);
+}
+
+.MuiOutlinedInput-root.Mui-focused {
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+}
+
+/* Chips avec animation */
+.MuiChip-root {
+  transition: var(--transition-smooth) !important;
+  animation: fadeIn 0.5s ease-out;
+}
+
+.MuiChip-root:hover {
+  transform: scale(1.05);
+}
+
+/* Pagination améliorée */
+.MuiPagination-root .MuiPaginationItem-root {
+  transition: var(--transition-smooth);
+  border-radius: 10px !important;
+}
+
+.MuiPagination-root .MuiPaginationItem-root:hover {
+  background: rgba(102, 126, 234, 0.1);
+  transform: scale(1.1);
+}
+
+.MuiPagination-root .Mui-selected {
+  background: var(--primary-gradient) !important;
+  color: white !important;
+  animation: pulse 2s infinite;
+}
+
+/* Snackbar avec animation */
+.MuiSnackbar-root {
+  animation: slideInRight 0.3s ease-out !important;
+}
+
+.MuiAlert-root {
+  border-radius: 12px !important;
+  backdrop-filter: blur(10px);
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* État de chargement avec effet de brillance */
+.loading-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite linear;
+}
+
+/* Animation pour les icônes */
+.MuiSvgIcon-root {
+  transition: var(--transition-smooth);
+}
+
+.MuiIconButton-root:hover .MuiSvgIcon-root {
+  transform: scale(1.2);
+}
+
+/* Éléments flottants pour les statistiques */
+.floating-element {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Responsive design */
+@media (max-width: 600px) {
+  .network-header {
+    padding: 1rem;
+    border-radius: 16px;
+  }
+  
+  .stat-card {
+    margin-bottom: 1rem;
+  }
+  
+  .network-details-card {
+    margin: 0 -16px;
+    border-radius: 20px 20px 0 0;
+  }
+  
+  .MuiDialog-paper {
+    margin: 16px !important;
+    border-radius: 20px !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .stat-card:hover {
+    transform: translateY(-4px);
+  }
+  
+  .member-card:hover {
+    transform: translateY(-3px);
+  }
+}
+
+/* Scrollbar personnalisée */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary-gradient);
+  border-radius: 10px;
+  transition: var(--transition-smooth);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary-gradient);
+}
+
+/* Focus styles accessibles */
+*:focus {
+  outline: 2px solid rgba(102, 126, 234, 0.5);
+  outline-offset: 2px;
+}
+
+*:focus:not(.focus-visible) {
+  outline: none;
+}
+
+/* Styles pour les états vides */
+.empty-state {
+  animation: fadeIn 0.6s ease-out;
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.empty-state-icon {
+  animation: float 3s ease-in-out infinite;
+  opacity: 0.5;
+}
+
+/* Effet de particules subtil */
+.particle-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.particle-effect::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+  animation: gradientShift 20s linear infinite;
+  pointer-events: none;
+  opacity: 0.3;
+}

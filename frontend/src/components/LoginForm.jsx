@@ -204,8 +204,8 @@ const LoginForm = () => {
             <Shield className="logo-icon" />
           </div>
           <div className="logo-text">
-            <h1>{t('systemName')}</h1>
-            <span className="logo-subtitle">{t('region')}</span>
+            <h1>{t('AMS SANTE')}</h1>
+            <span className="logo-subtitle">{t('Insurance')}</span>
           </div>
         </motion.div>
         
