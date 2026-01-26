@@ -1,3 +1,4 @@
+// ReglementPage.jsx - VERSION CORRIGÉE
 import React, { useState, useEffect } from 'react';
 import {
   Container,
@@ -88,14 +89,72 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { format, subDays, subMonths, parseISO, isValid, isDate } from 'date-fns';
+import { format, subDays, subMonths, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '../../contexts/AuthContext';
 import { financesAPI, facturationAPI } from '../../services/api';
 import PaymentDialog from './PaymentDialog';
 import FactureDialog from './FactureDialog';
 import DetailDialog from './DetailDialog';
-import './Reglements.css';
+
+// Fonction pour extraire les valeurs de manière sécurisée
+const extractValue = (data, keys) => {
+  for (const key of keys) {
+    const value = data[key];
+    if (value !== undefined && value !== null) {
+      // Si c'est un objet, extraire les valeurs communes
+      if (typeof value === 'object') {
+        return value.NOM_BEN || value.nom || value.PRE_BEN || value.prenom || 
+               value.BENEFICIAIRE || value.numero || value.NUMERO_FACTURE || 
+               JSON.stringify(value).substring(0, 50);
+      }
+      return value;
+    }
+  }
+  return 'N/A';
+};
+
+// Fonction pour normaliser les données de facture
+const normalizeFacture = (facture) => {
+  if (!facture) return facture;
+  
+  return {
+    ...facture,
+    // Normalisation des noms de champs
+    id: extractValue(facture, ['id', 'COD_FACTURE', 'ID_FACTURE']),
+    numero: extractValue(facture, ['numero', 'NUMERO_FACTURE', 'numero_facture']),
+    nom_ben: extractValue(facture, ['NOM_BEN', 'nom_ben', 'nom']),
+    prenom_ben: extractValue(facture, ['PRE_BEN', 'PRENOM_BEN', 'prenom_ben', 'prenom']),
+    montant_total: parseFloat(extractValue(facture, ['MONTANT_TOTAL', 'montant_total', 'montant']) || 0),
+    montant_paye: parseFloat(extractValue(facture, ['MONTANT_PAYE', 'montant_paye']) || 0),
+    montant_restant: parseFloat(extractValue(facture, ['MONTANT_RESTANT', 'montant_restant']) || 0),
+    date_facture: extractValue(facture, ['DATE_FACTURE', 'date_facture']),
+    date_echeance: extractValue(facture, ['DATE_ECHEANCE', 'date_echeance']),
+    statut: extractValue(facture, ['STATUT_FACTURE', 'statut', 'STATUT']),
+    cod_ben: extractValue(facture, ['COD_BEN', 'cod_ben', 'beneficiaryId']),
+    telephone: extractValue(facture, ['TELEPHONE', 'telephone', 'phone'])
+  };
+};
+
+// Fonction pour normaliser les données de transaction
+const normalizeTransaction = (transaction) => {
+  if (!transaction) return transaction;
+  
+  return {
+    ...transaction,
+    id: extractValue(transaction, ['id', 'COD_TRANS', 'ID_TRANSACTION']),
+    reference: extractValue(transaction, ['REFERENCE_TRANSACTION', 'reference', 'reference_transaction']),
+    beneficiaire: extractValue(transaction, ['BENEFICIAIRE', 'beneficiaire', 'NOM_BEN', 'nom_ben']),
+    nom_ben: extractValue(transaction, ['NOM_BEN', 'nom_ben', 'nom']),
+    prenom_ben: extractValue(transaction, ['PRENOM_BEN', 'prenom_ben', 'prenom']),
+    montant: parseFloat(extractValue(transaction, ['MONTANT', 'montant']) || 0),
+    methode_paiement: extractValue(transaction, ['METHODE_PAIEMENT', 'methode_paiement', 'method']),
+    statut: extractValue(transaction, ['STATUT_TRANSACTION', 'statut', 'STATUT']),
+    date_initiation: extractValue(transaction, ['DATE_INITIATION', 'date_initiation', 'date']),
+    cod_ben: extractValue(transaction, ['COD_BEN', 'cod_ben']),
+    observations: extractValue(transaction, ['OBSERVATIONS', 'observations'])
+  };
+};
 
 // Fonction pour formater les dates pour l'API
 const formatDateForAPI = (date) => {
@@ -117,125 +176,6 @@ const formatDateForAPI = (date) => {
   } catch (error) {
     console.error('❌ Erreur formatage date:', error);
     return null;
-  }
-};
-
-// Fonction utilitaire pour valider et formater les données - VERSION RÉCURSIVE CORRIGÉE
-const validateData = (data, type = 'transaction') => {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) {
-    return null;
-  }
-  
-  // Fonction helper récursive pour convertir en string
-  const toStringRecursive = (value, defaultValue = '') => {
-    if (value === null || value === undefined) return defaultValue;
-    if (typeof value === 'string') return value;
-    if (typeof value === 'number') return value.toString();
-    if (typeof value === 'boolean') return value ? 'true' : 'false';
-    if (typeof value === 'object') {
-      // Si c'est un objet, vérifier s'il a des propriétés spécifiques
-      if (value._id || value.id || value.code) {
-        // Si c'est un objet avec un identifiant, essayer de l'afficher
-        return String(value._id || value.id || value.code || '');
-      }
-      // Si c'est un objet simple, essayer de le sérialiser
-      try {
-        const str = JSON.stringify(value);
-        // Si la chaîne JSON est trop longue, la tronquer
-        return str.length > 100 ? str.substring(0, 100) + '...' : str;
-      } catch {
-        return String(value);
-      }
-    }
-    return String(value || defaultValue);
-  };
-
-  // Fonction pour nettoyer récursivement un objet
-  const cleanObject = (obj) => {
-    if (!obj || typeof obj !== 'object') return obj;
-    
-    const cleaned = {};
-    for (const key in obj) {
-      if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        const value = obj[key];
-        
-        // Convertir les valeurs primitives en string
-        if (value === null || value === undefined) {
-          cleaned[key] = '';
-        } else if (typeof value === 'string') {
-          cleaned[key] = value;
-        } else if (typeof value === 'number') {
-          cleaned[key] = value;
-        } else if (typeof value === 'boolean') {
-          cleaned[key] = value;
-        } else if (Array.isArray(value)) {
-          // Pour les tableaux, les laisser tels quels (seront traités séparément)
-          cleaned[key] = value;
-        } else if (typeof value === 'object') {
-          // Pour les sous-objets, les convertir en string
-          cleaned[key] = toStringRecursive(value, '');
-        } else {
-          cleaned[key] = String(value);
-        }
-      }
-    }
-    return cleaned;
-  };
-
-  if (type === 'transaction') {
-    const baseData = {
-      COD_TRANS: data.COD_TRANS || data.id || null,
-      REFERENCE_TRANSACTION: toStringRecursive(data.REFERENCE_TRANSACTION || data.reference, 'N/A'),
-      BENEFICIAIRE: toStringRecursive(data.BENEFICIAIRE || data.NOM_BEN || data.nom_ben, 'N/A'),
-      DATE_INITIATION: data.DATE_INITIATION || data.date_initiation,
-      MONTANT: Number(data.MONTANT || data.montant || 0),
-      STATUT_TRANSACTION: toStringRecursive(data.STATUT_TRANSACTION || data.statut, 'N/A'),
-      METHODE_PAIEMENT: toStringRecursive(data.METHODE_PAIEMENT || data.methode, 'N/A'),
-    };
-    
-    // Nettoyer le reste des données
-    const cleanedRest = cleanObject(data);
-    
-    return {
-      ...baseData,
-      ...cleanedRest
-    };
-  } else {
-    const baseData = {
-      id: data.id || data.COD_FACTURE || null,
-      numero: toStringRecursive(data.numero || data.numero_facture, 'N/A'),
-      numero_facture: toStringRecursive(data.numero_facture || data.numero, 'N/A'),
-      nom_ben: toStringRecursive(data.nom_ben || data.NOM_BEN, ''),
-      prenom_ben: toStringRecursive(data.prenom_ben || data.PRE_BEN, ''),
-      date_echeance: data.date_echeance || data.DATE_ECHEANCE,
-      date_facture: data.date_facture || data.DATE_FACTURE,
-      montant_total: Number(data.montant_total || data.MONTANT_TOTAL || 0),
-      montant_restant: Number(data.montant_restant || data.MONTANT_RESTANT || 0),
-      statut: toStringRecursive(data.statut, 'N/A'),
-      telephone: toStringRecursive(data.telephone || data.TELEPHONE, ''),
-    };
-    
-    // Nettoyer le reste des données
-    const cleanedRest = cleanObject(data);
-    
-    return {
-      ...baseData,
-      ...cleanedRest
-    };
-  }
-};
-
-// Fonction pour calculer les jours de retard
-const calculateDaysLate = (dateEcheance) => {
-  if (!dateEcheance) return 0;
-  try {
-    const echeance = new Date(dateEcheance);
-    const aujourdhui = new Date();
-    const diffTime = aujourdhui - echeance;
-    const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
-    return diffDays;
-  } catch (error) {
-    return 0;
   }
 };
 
@@ -399,36 +339,23 @@ const ReglementPage = () => {
   
   // Fonction utilitaire pour formater les montants
   const formatCurrency = (amount) => {
-    const num = Number(amount) || 0;
     return new Intl.NumberFormat('fr-FR', { 
       style: 'currency', 
       currency: 'XAF',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(num);
+    }).format(amount || 0);
   };
   
   // Fonction utilitaire pour formater les dates
   const formatDate = (date, formatStr = 'dd/MM/yyyy') => {
     if (!date) return 'N/A';
     try {
-      let dateObj;
-      if (date instanceof Date) {
-        dateObj = date;
-      } else if (typeof date === 'string') {
-        dateObj = parseISO(date);
-      } else {
-        dateObj = new Date(date);
-      }
-      
-      if (!isValid(dateObj) || isNaN(dateObj.getTime())) {
-        return 'Date invalide';
-      }
-      
+      const dateObj = date instanceof Date ? date : parseISO(date);
       return format(dateObj, formatStr, { locale: fr });
     } catch (error) {
       console.error('Erreur formatage date:', error);
-      return 'N/A';
+      return 'Date invalide';
     }
   };
   
@@ -436,7 +363,7 @@ const ReglementPage = () => {
   const showNotification = (message, type = 'info') => {
     setNotification({
       open: true,
-      message: message.toString(),
+      message,
       type
     });
   };
@@ -454,54 +381,47 @@ const ReglementPage = () => {
       console.log('📊 Chargement du tableau de bord...');
       const response = await financesAPI.getDashboard('mois');
       
-      if (response && response.success) {
+      if (response.success) {
         console.log('📊 Données dashboard reçues:', response);
         
         const data = response.dashboard || response.data || response;
         
-        // Valider et formater les transactions récentes
-        const rawTransactions = data.transactions_recentes || 
-                               data.recent_transactions || 
-                               data.recentTransactions || [];
+        const transactions_today = data.transactions_aujourdhui || 
+                                  data.today_transactions || 
+                                  data.resume?.transactions?.total_jour || 0;
         
-        const transactionsValidees = Array.isArray(rawTransactions) 
-          ? rawTransactions
-              .filter(item => item && typeof item === 'object')
-              .map(item => validateData(item, 'transaction'))
-              .filter(item => item !== null)
-          : [];
+        const transactions_month = data.transactions_mois || 
+                                  data.month_transactions || 
+                                  data.resume?.transactions?.total_mois || 0;
         
-        // Valider et formater les factures en retard
-        const rawFactures = data.factures_en_retard_liste || 
-                           data.overdue_invoices_list || 
-                           data.overdueInvoicesList || [];
+        const montant_month = data.montant_total_mois || 
+                             data.monthly_amount || 
+                             data.resume?.transactions?.montant_total_mois || 0;
         
-        const facturesValidees = Array.isArray(rawFactures)
-          ? rawFactures
-              .filter(item => item && typeof item === 'object')
-              .map(item => validateData(item, 'facture'))
-              .filter(item => item !== null)
-          : [];
+        const factures_en_retard = data.factures_en_retard || 
+                                  data.overdue_invoices || 
+                                  data.resume?.factures_en_retard || 0;
+        
+        // Normaliser les données
+        const normalizedTransactions = (data.transactions_recentes || 
+                                      data.recent_transactions || 
+                                      data.recentTransactions || []).map(normalizeTransaction);
+        
+        const normalizedFactures = (data.factures_en_retard_liste || 
+                                   data.overdue_invoices_list || 
+                                   data.overdueInvoicesList || []).map(normalizeFacture);
         
         setDashboardData({
           resume: {
             transactions: { 
-              total_jour: data.transactions_aujourdhui || 
-                         data.today_transactions || 
-                         data.resume?.transactions?.total_jour || 0, 
-              total_mois: data.transactions_mois || 
-                         data.month_transactions || 
-                         data.resume?.transactions?.total_mois || 0, 
-              montant_total_mois: data.montant_total_mois || 
-                                 data.monthly_amount || 
-                                 data.resume?.transactions?.montant_total_mois || 0 
+              total_jour: transactions_today, 
+              total_mois: transactions_month, 
+              montant_total_mois: montant_month 
             },
-            factures_en_retard: data.factures_en_retard || 
-                               data.overdue_invoices || 
-                               data.resume?.factures_en_retard || 0
+            factures_en_retard: factures_en_retard
           },
-          transactions_recentes: transactionsValidees,
-          factures_en_retard: facturesValidees,
+          transactions_recentes: normalizedTransactions,
+          factures_en_retard: normalizedFactures,
           evolution_mensuelle: data.evolution_mensuelle || 
                               data.monthly_evolution || 
                               data.monthlyEvolution || []
@@ -524,7 +444,7 @@ const ReglementPage = () => {
           evolution_mensuelle: []
         });
         
-        showNotification(response?.message || 'Erreur lors du chargement du tableau de bord', 'error');
+        showNotification(response.message || 'Erreur lors du chargement du tableau de bord', 'error');
       }
     } catch (error) {
       console.error('❌ Erreur chargement dashboard:', error);
@@ -572,23 +492,19 @@ const ReglementPage = () => {
       
       const response = await facturationAPI.getTransactions(params);
       
-      if (response && response.success) {
+      if (response.success) {
         console.log('✅ Transactions reçues:', response.transactions?.length || 0, 'éléments');
         
-        const validatedTransactions = Array.isArray(response.transactions) 
-          ? response.transactions
-              .filter(item => item && typeof item === 'object')
-              .map(item => validateData(item, 'transaction'))
-              .filter(item => item !== null)
-          : [];
+        // Normaliser les transactions
+        const normalizedTransactions = (response.transactions || []).map(normalizeTransaction);
         
-        setTransactions(validatedTransactions);
+        setTransactions(normalizedTransactions);
         setTransactionFilters(prev => ({
           ...prev,
           total: response.pagination?.total || response.total || 0
         }));
       } else {
-        showNotification(response?.message || 'Erreur lors du chargement des transactions', 'error');
+        showNotification(response.message || 'Erreur lors du chargement des transactions', 'error');
       }
     } catch (error) {
       console.error('❌ Erreur chargement transactions:', error);
@@ -619,23 +535,19 @@ const ReglementPage = () => {
       
       const response = await facturationAPI.getFactures(params);
       
-      if (response && response.success) {
+      if (response.success) {
         console.log('✅ Factures reçues:', response.factures?.length || 0, 'éléments');
         
-        const validatedFactures = Array.isArray(response.factures) 
-          ? response.factures
-              .filter(item => item && typeof item === 'object')
-              .map(item => validateData(item, 'facture'))
-              .filter(item => item !== null)
-          : [];
+        // Normaliser les factures
+        const normalizedFactures = (response.factures || []).map(normalizeFacture);
         
-        setFactures(validatedFactures);
+        setFactures(normalizedFactures);
         setFactureFilters(prev => ({
           ...prev,
           total: response.pagination?.total || response.total || 0
         }));
       } else {
-        showNotification(response?.message || 'Erreur lors du chargement des factures', 'error');
+        showNotification(response.message || 'Erreur lors du chargement des factures', 'error');
       }
     } catch (error) {
       console.error('❌ Erreur chargement factures:', error);
@@ -706,7 +618,7 @@ const ReglementPage = () => {
     }
   };
 
-  // Initier un paiement - VERSION CORRIGÉE
+  // Initier un paiement
   const handleInitiatePayment = async (paymentData) => {
     try {
       setLoading(prev => ({ ...prev, transactions: true }));
@@ -740,7 +652,7 @@ const ReglementPage = () => {
         notifierClient: paymentData.notifierClient,
         typeTransaction: paymentData.typeTransaction || 'facture',
         
-        // Identifiant facture - S'assurer qu'il est bien formaté
+        // Identifiant facture
         factureId: parseInt(factureId),
         COD_FACTURE: parseInt(factureId),
         
@@ -870,7 +782,7 @@ const ReglementPage = () => {
   // Composant pour les cartes de métriques
   const MetricCard = ({ title, value, icon, color, subtitle, trend }) => (
     <Grow in={true}>
-      <Card className="metric-card" sx={{ 
+      <Card sx={{ 
         height: '100%',
         borderLeft: `4px solid ${color}`,
         transition: 'all 0.3s ease',
@@ -910,144 +822,6 @@ const ReglementPage = () => {
       </Card>
     </Grow>
   );
-  
-  // Composant pour afficher une transaction dans la liste
-  const TransactionListItem = ({ transaction, index, onViewDetails, onPay }) => {
-    const validatedData = validateData(transaction, 'transaction');
-    if (!validatedData) return null;
-    
-    const { REFERENCE_TRANSACTION, BENEFICIAIRE, DATE_INITIATION, MONTANT, STATUT_TRANSACTION } = validatedData;
-    
-    return (
-      <Slide direction="up" in={true} timeout={index * 100}>
-        <ListItem 
-          className="list-item-hover"
-          secondaryAction={
-            <IconButton 
-              edge="end" 
-              size="small"
-              onClick={() => onViewDetails && onViewDetails(transaction)}
-            >
-              <ViewIcon />
-            </IconButton>
-          }
-        >
-          <ListItemAvatar>
-            <Avatar sx={{ 
-              bgcolor: alpha(statusConfig[STATUT_TRANSACTION]?.color || theme.palette.grey[500], 0.1),
-              color: statusConfig[STATUT_TRANSACTION]?.color || theme.palette.text.primary
-            }}>
-              {statusConfig[STATUT_TRANSACTION]?.icon || <PaymentIcon />}
-            </Avatar>
-          </ListItemAvatar>
-          <ListItemText
-            primary={
-              <Typography variant="body2" fontWeight="medium">
-                {REFERENCE_TRANSACTION}
-              </Typography>
-            }
-            secondary={
-              <React.Fragment>
-                <Typography variant="caption" display="block">
-                  {BENEFICIAIRE}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {formatDate(DATE_INITIATION, 'dd/MM HH:mm')}
-                </Typography>
-              </React.Fragment>
-            }
-          />
-          <Box sx={{ textAlign: 'right', ml: 2 }}>
-            <Typography variant="body2" fontWeight="bold" color="primary">
-              {formatCurrency(MONTANT)}
-            </Typography>
-            <Chip
-              label={statusConfig[STATUT_TRANSACTION]?.label || STATUT_TRANSACTION}
-              size="small"
-              sx={{ 
-                height: 20,
-                fontSize: '0.65rem',
-                bgcolor: statusConfig[STATUT_TRANSACTION]?.bgColor,
-                color: statusConfig[STATUT_TRANSACTION]?.color
-              }}
-            />
-          </Box>
-        </ListItem>
-      </Slide>
-    );
-  };
-  
-  // Composant pour afficher une facture dans la liste
-  const FactureListItem = ({ facture, index, onViewDetails, onPay }) => {
-    const validatedData = validateData(facture, 'facture');
-    if (!validatedData) return null;
-    
-    const { numero, nom_ben, prenom_ben, date_echeance, montant_restant, montant_total } = validatedData;
-    const joursRetard = calculateDaysLate(date_echeance);
-    
-    return (
-      <Slide direction="up" in={true} timeout={index * 100}>
-        <ListItem 
-          className="list-item-hover"
-          secondaryAction={
-            <Stack direction="row" spacing={0.5}>
-              <Tooltip title="Payer">
-                <IconButton 
-                  size="small"
-                  onClick={() => onPay && onPay(validatedData)}
-                  sx={{ color: theme.palette.success.main }}
-                >
-                  <PaymentIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Détails">
-                <IconButton 
-                  size="small"
-                  onClick={() => onViewDetails && onViewDetails(facture)}
-                >
-                  <ViewIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Stack>
-          }
-        >
-          <ListItemAvatar>
-            <Avatar sx={{ 
-              bgcolor: alpha(theme.palette.error.main, 0.1),
-              color: theme.palette.error.main
-            }}>
-              <WarningIcon />
-            </Avatar>
-          </ListItemAvatar>
-          <ListItemText
-            primary={
-              <Typography variant="body2" fontWeight="medium">
-                {numero}
-              </Typography>
-            }
-            secondary={
-              <React.Fragment>
-                <Typography variant="caption" display="block">
-                  {nom_ben} {prenom_ben}
-                </Typography>
-                <Typography variant="caption" color="error">
-                  Échéance: {formatDate(date_echeance, 'dd/MM/yyyy')}
-                </Typography>
-              </React.Fragment>
-            }
-          />
-          <Box sx={{ textAlign: 'right', ml: 2 }}>
-            <Typography variant="body2" fontWeight="bold" color="error">
-              {formatCurrency(montant_restant)}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Retard: {joursRetard} jour{joursRetard !== 1 ? 's' : ''}
-            </Typography>
-          </Box>
-        </ListItem>
-      </Slide>
-    );
-  };
   
   // Rendu du tableau de bord
   const renderDashboard = () => {
@@ -1099,7 +873,7 @@ const ReglementPage = () => {
         <Grid container spacing={3}>
           {/* Transactions récentes */}
           <Grid item xs={12} md={6}>
-            <Card className="stat-card" sx={{ height: '100%' }}>
+            <Card sx={{ height: '100%' }}>
               <CardHeader 
                 title={
                   <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -1113,7 +887,7 @@ const ReglementPage = () => {
                       size="small" 
                       onClick={() => setActiveTab(1)}
                       endIcon={<ArrowUpIcon />}
-                      className="action-button outline"
+                      variant="outlined"
                     >
                       Voir tout
                     </Button>
@@ -1123,16 +897,64 @@ const ReglementPage = () => {
               <CardContent>
                 <List dense sx={{ maxHeight: 300, overflow: 'auto' }}>
                   {dashboardData.transactions_recentes.slice(0, 5).map((transaction, index) => (
-                    <TransactionListItem
-                      key={transaction.COD_TRANS || transaction.id || index}
-                      transaction={transaction}
-                      index={index}
-                      onViewDetails={(data) => setDetailDialog({ 
-                        open: true, 
-                        type: 'transaction', 
-                        data 
-                      })}
-                    />
+                    <Slide key={index} direction="up" in={true} timeout={index * 100}>
+                      <ListItem 
+                        secondaryAction={
+                          <IconButton 
+                            edge="end" 
+                            size="small"
+                            onClick={() => setDetailDialog({ 
+                              open: true, 
+                              type: 'transaction', 
+                              data: transaction 
+                            })}
+                          >
+                            <ViewIcon />
+                          </IconButton>
+                        }
+                      >
+                        <ListItemAvatar>
+                          <Avatar sx={{ 
+                            bgcolor: alpha(statusConfig[transaction.statut]?.color || theme.palette.grey[500], 0.1),
+                            color: statusConfig[transaction.statut]?.color || theme.palette.text.primary
+                          }}>
+                            {statusConfig[transaction.statut]?.icon || <PaymentIcon />}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Typography variant="body2" fontWeight="medium">
+                              {transaction.reference || 'N/A'}
+                            </Typography>
+                          }
+                          secondary={
+                            <React.Fragment>
+                              <Typography variant="caption" display="block">
+                                {transaction.beneficiaire || transaction.nom_ben || 'N/A'}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {formatDate(transaction.date_initiation, 'dd/MM HH:mm')}
+                              </Typography>
+                            </React.Fragment>
+                          }
+                        />
+                        <Box sx={{ textAlign: 'right', ml: 2 }}>
+                          <Typography variant="body2" fontWeight="bold" color="primary">
+                            {formatCurrency(transaction.montant)}
+                          </Typography>
+                          <Chip
+                            label={statusConfig[transaction.statut]?.label || transaction.statut}
+                            size="small"
+                            sx={{ 
+                              height: 20,
+                              fontSize: '0.65rem',
+                              bgcolor: statusConfig[transaction.statut]?.bgColor,
+                              color: statusConfig[transaction.statut]?.color
+                            }}
+                          />
+                        </Box>
+                      </ListItem>
+                    </Slide>
                   ))}
                 </List>
                 {dashboardData.transactions_recentes.length === 0 && (
@@ -1149,7 +971,7 @@ const ReglementPage = () => {
           
           {/* Factures en retard */}
           <Grid item xs={12} md={6}>
-            <Card className="stat-card" sx={{ 
+            <Card sx={{ 
               height: '100%',
               border: `2px solid ${alpha(theme.palette.error.main, 0.2)}`
             }}>
@@ -1166,8 +988,8 @@ const ReglementPage = () => {
                       size="small" 
                       onClick={() => setActiveTab(2)}
                       endIcon={<ArrowUpIcon />}
-                      className="action-button error"
-                      sx={{ color: theme.palette.error.main }}
+                      variant="outlined"
+                      sx={{ color: theme.palette.error.main, borderColor: theme.palette.error.main }}
                     >
                       Voir tout
                     </Button>
@@ -1177,31 +999,86 @@ const ReglementPage = () => {
               <CardContent>
                 <List dense sx={{ maxHeight: 300, overflow: 'auto' }}>
                   {dashboardData.factures_en_retard.slice(0, 5).map((facture, index) => (
-                    <FactureListItem
-                      key={facture.id || facture.COD_FACTURE || index}
-                      facture={facture}
-                      index={index}
-                      onViewDetails={(data) => setDetailDialog({ 
-                        open: true, 
-                        type: 'facture', 
-                        data 
-                      })}
-                      onPay={(data) => {
-                        const factureData = {
-                          COD_FACTURE: data.id || data.COD_FACTURE,
-                          NUMERO_FACTURE: data.numero || data.numero_facture,
-                          NOM_BEN: data.nom_ben,
-                          PRENOM_BEN: data.prenom_ben,
-                          MONTANT_RESTANT: data.montant_restant || data.montant_total,
-                          ...data
-                        };
-                        setPaymentDialog({ 
-                          open: true, 
-                          type: 'facture', 
-                          data: factureData 
-                        });
-                      }}
-                    />
+                    <Slide key={index} direction="up" in={true} timeout={index * 100}>
+                      <ListItem 
+                        secondaryAction={
+                          <Stack direction="row" spacing={0.5}>
+                            <Tooltip title="Payer">
+                              <IconButton 
+                                size="small"
+                                onClick={() => {
+                                  // Utiliser les données normalisées
+                                  const factureData = {
+                                    COD_FACTURE: facture.id,
+                                    NUMERO_FACTURE: facture.numero,
+                                    NOM_BEN: facture.nom_ben,
+                                    PRENOM_BEN: facture.prenom_ben,
+                                    MONTANT_RESTANT: facture.montant_restant,
+                                    ...facture
+                                  };
+                                  setPaymentDialog({ 
+                                    open: true, 
+                                    type: 'facture', 
+                                    data: factureData 
+                                  });
+                                }}
+                                sx={{ color: theme.palette.success.main }}
+                              >
+                                <PaymentIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Détails">
+                              <IconButton 
+                                size="small"
+                                onClick={() => setDetailDialog({ 
+                                  open: true, 
+                                  type: 'facture', 
+                                  data: facture 
+                                })}
+                              >
+                                <ViewIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
+                        }
+                      >
+                        <ListItemAvatar>
+                          <Avatar sx={{ 
+                            bgcolor: alpha(theme.palette.error.main, 0.1),
+                            color: theme.palette.error.main
+                          }}>
+                            <WarningIcon />
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Typography variant="body2" fontWeight="medium">
+                              {facture.numero || 'N/A'}
+                            </Typography>
+                          }
+                          secondary={
+                            <React.Fragment>
+                              <Typography variant="caption" display="block">
+                                {facture.nom_ben || 'N/A'} {facture.prenom_ben || ''}
+                              </Typography>
+                              <Typography variant="caption" color="error">
+                                Échéance: {formatDate(facture.date_echeance, 'dd/MM/yyyy')}
+                              </Typography>
+                            </React.Fragment>
+                          }
+                        />
+                        <Box sx={{ textAlign: 'right', ml: 2 }}>
+                          <Typography variant="body2" fontWeight="bold" color="error">
+                            {formatCurrency(facture.montant_restant)}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Retard: {facture.date_echeance ? 
+                              Math.max(0, Math.floor((new Date() - new Date(facture.date_echeance)) / (1000 * 60 * 60 * 24))) : 
+                              0} jours
+                          </Typography>
+                        </Box>
+                      </ListItem>
+                    </Slide>
                   ))}
                 </List>
                 {dashboardData.factures_en_retard.length === 0 && (
@@ -1224,7 +1101,7 @@ const ReglementPage = () => {
   const renderTransactions = () => (
     <Box>
       {/* En-tête avec filtres */}
-      <Card className="stat-card" sx={{ mb: 3 }}>
+      <Card sx={{ mb: 3 }}>
         <CardContent>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={6}>
@@ -1243,7 +1120,6 @@ const ReglementPage = () => {
                   startIcon={<RefreshIcon />}
                   onClick={loadTransactions}
                   disabled={loading.transactions}
-                  className="action-button outline"
                 >
                   Actualiser
                 </Button>
@@ -1254,7 +1130,7 @@ const ReglementPage = () => {
       </Card>
       
       {/* Filtres rapides */}
-      <Card className="stat-card" sx={{ mb: 3 }}>
+      <Card sx={{ mb: 3 }}>
         <CardContent>
           <Grid container spacing={2}>
             <Grid item xs={12} md={4}>
@@ -1265,7 +1141,6 @@ const ReglementPage = () => {
                 placeholder="Référence, bénéficiaire..."
                 value={transactionFilters.search}
                 onChange={(e) => handleTransactionFilterChange('search', e.target.value)}
-                className="form-field"
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -1276,8 +1151,8 @@ const ReglementPage = () => {
               />
             </Grid>
             <Grid item xs={6} md={2}>
-              <FormControl fullWidth size="small" className="filter-group">
-                <InputLabel className="filter-label">Statut</InputLabel>
+              <FormControl fullWidth size="small">
+                <InputLabel>Statut</InputLabel>
                 <Select
                   value={transactionFilters.status}
                   label="Statut"
@@ -1298,7 +1173,7 @@ const ReglementPage = () => {
                     value={transactionFilters.dateDebut}
                     onChange={(date) => handleTransactionFilterChange('dateDebut', date)}
                     renderInput={(params) => (
-                      <TextField {...params} size="small" fullWidth className="form-field" />
+                      <TextField {...params} size="small" fullWidth />
                     )}
                   />
                 </LocalizationProvider>
@@ -1308,7 +1183,7 @@ const ReglementPage = () => {
                     value={transactionFilters.dateFin}
                     onChange={(date) => handleTransactionFilterChange('dateFin', date)}
                     renderInput={(params) => (
-                      <TextField {...params} size="small" fullWidth className="form-field" />
+                      <TextField {...params} size="small" fullWidth />
                     )}
                   />
                 </LocalizationProvider>
@@ -1319,13 +1194,13 @@ const ReglementPage = () => {
       </Card>
       
       {/* Tableau des transactions */}
-      <Card className="stat-card">
+      <Card>
         <CardContent sx={{ p: 0 }}>
-          <TableContainer className="table-container" sx={{ maxHeight: 500 }}>
-            <Table stickyHeader className="data-table">
-              <TableHead className="table-head">
+          <TableContainer sx={{ maxHeight: 500 }}>
+            <Table stickyHeader>
+              <TableHead>
                 <TableRow>
-                  <TableCell className="table-header">
+                  <TableCell>
                     <Button 
                       size="small" 
                       endIcon={<SwapVertIcon />}
@@ -1335,8 +1210,8 @@ const ReglementPage = () => {
                       Référence
                     </Button>
                   </TableCell>
-                  <TableCell className="table-header">Bénéficiaire</TableCell>
-                  <TableCell className="table-header" align="right">
+                  <TableCell>Bénéficiaire</TableCell>
+                  <TableCell align="right">
                     <Button 
                       size="small" 
                       endIcon={<SwapVertIcon />}
@@ -1346,9 +1221,9 @@ const ReglementPage = () => {
                       Montant
                     </Button>
                   </TableCell>
-                  <TableCell className="table-header">Méthode</TableCell>
-                  <TableCell className="table-header">Statut</TableCell>
-                  <TableCell className="table-header">
+                  <TableCell>Méthode</TableCell>
+                  <TableCell>Statut</TableCell>
+                  <TableCell>
                     <Button 
                       size="small" 
                       endIcon={<SwapVertIcon />}
@@ -1358,7 +1233,7 @@ const ReglementPage = () => {
                       Date
                     </Button>
                   </TableCell>
-                  <TableCell className="table-header" align="right">Actions</TableCell>
+                  <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1389,94 +1264,85 @@ const ReglementPage = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  transactions.map((transaction, index) => {
-                    const validatedData = validateData(transaction, 'transaction');
-                    if (!validatedData) return null;
-                    
-                    const { REFERENCE_TRANSACTION, BENEFICIAIRE, DATE_INITIATION, MONTANT, STATUT_TRANSACTION, METHODE_PAIEMENT } = validatedData;
-                    
-                    return (
-                      <TableRow 
-                        key={validatedData.COD_TRANS || validatedData.id || index} 
-                        hover 
-                        className="table-row-animated"
-                        sx={{ 
-                          '&:nth-of-type(odd)': { backgroundColor: alpha(theme.palette.primary.main, 0.02) }
-                        }}
-                      >
-                        <TableCell className="table-cell">
-                          <Box>
-                            <Typography variant="body2" fontWeight="medium">
-                              {REFERENCE_TRANSACTION}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          <Box className="beneficiary-info">
-                            <Typography variant="body2" fontWeight="medium" className="beneficiary-name">
-                              {BENEFICIAIRE}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell className="table-cell" align="right">
-                          <Typography variant="h6" color="primary" fontWeight="bold">
-                            {formatCurrency(MONTANT)}
+                  transactions.map((transaction, index) => (
+                    <TableRow 
+                      key={transaction.id} 
+                      hover 
+                      sx={{ 
+                        '&:nth-of-type(odd)': { backgroundColor: alpha(theme.palette.primary.main, 0.02) }
+                      }}
+                    >
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2" fontWeight="medium">
+                            {transaction.reference || 'N/A'}
                           </Typography>
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <Typography variant="body2">
-                              {paymentMethods[METHODE_PAIEMENT]?.label || METHODE_PAIEMENT || 'N/A'}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          <Chip
-                            label={statusConfig[STATUT_TRANSACTION]?.label || STATUT_TRANSACTION}
-                            size="small"
-                            className="status-badge"
-                            sx={{ 
-                              bgcolor: statusConfig[STATUT_TRANSACTION]?.bgColor,
-                              color: statusConfig[STATUT_TRANSACTION]?.color,
-                              fontWeight: 600
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          <Box>
-                            <Typography variant="body2">
-                              {formatDate(DATE_INITIATION, 'dd/MM/yyyy')}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell className="table-cell" align="right">
-                          <Stack direction="row" spacing={1} justifyContent="flex-end" className="actions-container">
-                            <Tooltip title="Détails">
-                              <IconButton 
-                                size="small"
-                                onClick={() => setDetailDialog({ 
-                                  open: true, 
-                                  type: 'transaction', 
-                                  data: validatedData 
-                                })}
-                                sx={{ color: theme.palette.info.main }}
-                              >
-                                <ViewIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2" fontWeight="medium">
+                            {transaction.beneficiaire || transaction.nom_ben || 'N/A'}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="h6" color="primary" fontWeight="bold">
+                          {formatCurrency(transaction.montant)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Typography variant="body2">
+                            {paymentMethods[transaction.methode_paiement]?.label || transaction.methode_paiement || 'N/A'}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={statusConfig[transaction.statut]?.label || transaction.statut}
+                          size="small"
+                          sx={{ 
+                            bgcolor: statusConfig[transaction.statut]?.bgColor,
+                            color: statusConfig[transaction.statut]?.color,
+                            fontWeight: 600
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2">
+                            {formatDate(transaction.date_initiation, 'dd/MM/yyyy')}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          <Tooltip title="Détails">
+                            <IconButton 
+                              size="small"
+                              onClick={() => setDetailDialog({ 
+                                open: true, 
+                                type: 'transaction', 
+                                data: transaction 
+                              })}
+                              sx={{ color: theme.palette.info.main }}
+                            >
+                              <ViewIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
           </TableContainer>
           
           {/* Pagination */}
-          <Box className="pagination-container" sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
-            <Typography className="pagination-info">
+          <Box sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
+            <Typography>
               Page {transactionFilters.page + 1} sur {Math.ceil(transactionFilters.total / transactionFilters.limit)}
             </Typography>
             <TablePagination
@@ -1504,7 +1370,7 @@ const ReglementPage = () => {
   const renderFactures = () => (
     <Box>
       {/* En-tête avec filtres */}
-      <Card className="stat-card" sx={{ mb: 3 }}>
+      <Card sx={{ mb: 3 }}>
         <CardContent>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={6}>
@@ -1522,7 +1388,6 @@ const ReglementPage = () => {
                   variant="contained"
                   startIcon={<AddIcon />}
                   onClick={() => setFactureDialog({ open: true, mode: 'create', data: null })}
-                  className="action-button primary"
                 >
                   Nouvelle facture
                 </Button>
@@ -1531,7 +1396,6 @@ const ReglementPage = () => {
                   startIcon={<RefreshIcon />}
                   onClick={loadFactures}
                   disabled={loading.factures}
-                  className="action-button outline"
                 >
                   Actualiser
                 </Button>
@@ -1542,7 +1406,7 @@ const ReglementPage = () => {
       </Card>
       
       {/* Filtres rapides */}
-      <Card className="stat-card" sx={{ mb: 3 }}>
+      <Card sx={{ mb: 3 }}>
         <CardContent>
           <Grid container spacing={2}>
             <Grid item xs={12} md={4}>
@@ -1553,7 +1417,6 @@ const ReglementPage = () => {
                 placeholder="Numéro, bénéficiaire..."
                 value={factureFilters.search}
                 onChange={(e) => handleFactureFilterChange('search', e.target.value)}
-                className="form-field"
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -1564,8 +1427,8 @@ const ReglementPage = () => {
               />
             </Grid>
             <Grid item xs={6} md={3}>
-              <FormControl fullWidth size="small" className="filter-group">
-                <InputLabel className="filter-label">Statut</InputLabel>
+              <FormControl fullWidth size="small">
+                <InputLabel>Statut</InputLabel>
                 <Select
                   value={factureFilters.statut}
                   label="Statut"
@@ -1587,7 +1450,7 @@ const ReglementPage = () => {
                     value={factureFilters.dateDebut}
                     onChange={(date) => handleFactureFilterChange('dateDebut', date)}
                     renderInput={(params) => (
-                      <TextField {...params} size="small" fullWidth className="form-field" />
+                      <TextField {...params} size="small" fullWidth />
                     )}
                   />
                 </LocalizationProvider>
@@ -1597,7 +1460,7 @@ const ReglementPage = () => {
                     value={factureFilters.dateFin}
                     onChange={(date) => handleFactureFilterChange('dateFin', date)}
                     renderInput={(params) => (
-                      <TextField {...params} size="small" fullWidth className="form-field" />
+                      <TextField {...params} size="small" fullWidth />
                     )}
                   />
                 </LocalizationProvider>
@@ -1608,13 +1471,13 @@ const ReglementPage = () => {
       </Card>
       
       {/* Tableau des factures */}
-      <Card className="stat-card">
+      <Card>
         <CardContent sx={{ p: 0 }}>
-          <TableContainer className="table-container" sx={{ maxHeight: 500 }}>
-            <Table stickyHeader className="data-table">
-              <TableHead className="table-head">
+          <TableContainer sx={{ maxHeight: 500 }}>
+            <Table stickyHeader>
+              <TableHead>
                 <TableRow>
-                  <TableCell className="table-header">
+                  <TableCell>
                     <Button 
                       size="small" 
                       endIcon={<SwapVertIcon />}
@@ -1624,8 +1487,8 @@ const ReglementPage = () => {
                       Numéro
                     </Button>
                   </TableCell>
-                  <TableCell className="table-header">Bénéficiaire</TableCell>
-                  <TableCell className="table-header">
+                  <TableCell>Bénéficiaire</TableCell>
+                  <TableCell>
                     <Button 
                       size="small" 
                       endIcon={<SwapVertIcon />}
@@ -1635,7 +1498,7 @@ const ReglementPage = () => {
                       Date
                     </Button>
                   </TableCell>
-                  <TableCell className="table-header">
+                  <TableCell>
                     <Button 
                       size="small" 
                       endIcon={<SwapVertIcon />}
@@ -1645,10 +1508,10 @@ const ReglementPage = () => {
                       Échéance
                     </Button>
                   </TableCell>
-                  <TableCell className="table-header" align="right">Total</TableCell>
-                  <TableCell className="table-header" align="right">Reste</TableCell>
-                  <TableCell className="table-header">Statut</TableCell>
-                  <TableCell className="table-header" align="right">Actions</TableCell>
+                  <TableCell align="right">Total</TableCell>
+                  <TableCell align="right">Reste</TableCell>
+                  <TableCell>Statut</TableCell>
+                  <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1679,138 +1542,121 @@ const ReglementPage = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  factures.map((facture, index) => {
-                    const validatedData = validateData(facture, 'facture');
-                    if (!validatedData) return null;
-                    
-                    const { numero, nom_ben, prenom_ben, date_facture, date_echeance, montant_total, montant_restant, statut } = validatedData;
-                    const joursRetard = calculateDaysLate(date_echeance);
-                    
-                    return (
-                      <TableRow 
-                        key={validatedData.id || validatedData.COD_FACTURE || index} 
-                        hover 
-                        className="table-row-animated"
-                        sx={{ 
-                          '&:nth-of-type(odd)': { backgroundColor: alpha(theme.palette.primary.main, 0.02) }
-                        }}
-                      >
-                        <TableCell className="table-cell">
+                  factures.map((facture, index) => (
+                    <TableRow 
+                      key={facture.id} 
+                      hover 
+                      sx={{ 
+                        '&:nth-of-type(odd)': { backgroundColor: alpha(theme.palette.primary.main, 0.02) }
+                      }}
+                    >
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="medium">
+                          {facture.numero || 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Box>
                           <Typography variant="body2" fontWeight="medium">
-                            {numero}
+                            {facture.nom_ben || 'N/A'} {facture.prenom_ben || ''}
                           </Typography>
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          <Box className="beneficiary-info">
-                            <Typography variant="body2" fontWeight="medium" className="beneficiary-name">
-                              {nom_ben} {prenom_ben}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          {formatDate(date_facture, 'dd/MM/yyyy')}
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          <Box sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center'
-                          }}>
-                            {formatDate(date_echeance, 'dd/MM/yyyy')}
-                            {joursRetard > 0 && (
-                              <Chip
-                                label={`+${joursRetard}j`}
-                                size="small"
-                                color="error"
-                                sx={{ ml: 1, height: 20, fontSize: '0.7rem' }}
-                              />
-                            )}
-                          </Box>
-                        </TableCell>
-                        <TableCell className="table-cell" align="right">
-                          <Typography variant="body2" fontWeight="bold">
-                            {formatCurrency(montant_total)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell className="table-cell" align="right">
-                          <Typography 
-                            variant="body2" 
-                            fontWeight="bold"
-                            color={montant_restant > 0 ? 'error.main' : 'success.main'}
-                          >
-                            {formatCurrency(montant_restant)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          <Chip
-                            label={statusConfig[statut]?.label || statut}
-                            size="small"
-                            className="status-badge"
-                            sx={{ 
-                              bgcolor: statusConfig[statut]?.bgColor,
-                              color: statusConfig[statut]?.color,
-                              fontWeight: 600
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell className="table-cell" align="right">
-                          <Stack direction="row" spacing={1} justifyContent="flex-end" className="actions-container">
-                            <Tooltip title="Détails">
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        {formatDate(facture.date_facture, 'dd/MM/yyyy')}
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center'
+                        }}>
+                          {formatDate(facture.date_echeance, 'dd/MM/yyyy')}
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="body2" fontWeight="bold">
+                          {formatCurrency(facture.montant_total)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography 
+                          variant="body2" 
+                          fontWeight="bold"
+                          color={facture.montant_restant > 0 ? 'error.main' : 'success.main'}
+                        >
+                          {formatCurrency(facture.montant_restant)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={statusConfig[facture.statut]?.label || facture.statut}
+                          size="small"
+                          sx={{ 
+                            bgcolor: statusConfig[facture.statut]?.bgColor,
+                            color: statusConfig[facture.statut]?.color,
+                            fontWeight: 600
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          <Tooltip title="Détails">
+                            <IconButton 
+                              size="small"
+                              onClick={() => setDetailDialog({ 
+                                open: true, 
+                                type: 'facture', 
+                                data: facture 
+                              })}
+                              sx={{ color: theme.palette.info.main }}
+                            >
+                              <ViewIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          {facture.statut !== 'Payée' && (
+                            <Tooltip title="Payer">
                               <IconButton 
                                 size="small"
-                                onClick={() => setDetailDialog({ 
-                                  open: true, 
-                                  type: 'facture', 
-                                  data: validatedData 
-                                })}
-                                sx={{ color: theme.palette.info.main }}
+                                onClick={() => {
+                                  // Préparer les données de la facture normalisées
+                                  const factureData = {
+                                    COD_FACTURE: facture.id,
+                                    NUMERO_FACTURE: facture.numero,
+                                    NOM_BEN: facture.nom_ben,
+                                    PRENOM_BEN: facture.prenom_ben,
+                                    MONTANT_TOTAL: facture.montant_total,
+                                    MONTANT_PAYE: facture.montant_paye || 0,
+                                    MONTANT_RESTANT: facture.montant_restant,
+                                    TELEPHONE: facture.telephone,
+                                    ...facture
+                                  };
+                                  
+                                  console.log('📤 Envoi facture au PaymentDialog:', factureData);
+                                  
+                                  setPaymentDialog({ 
+                                    open: true, 
+                                    type: 'facture', 
+                                    data: factureData 
+                                  });
+                                }}
+                                sx={{ color: theme.palette.success.main }}
                               >
-                                <ViewIcon fontSize="small" />
+                                <PaymentIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                            {statut !== 'Payée' && (
-                              <Tooltip title="Payer">
-                                <IconButton 
-                                  size="small"
-                                  onClick={() => {
-                                    const factureData = {
-                                      COD_FACTURE: validatedData.id || validatedData.COD_FACTURE,
-                                      NUMERO_FACTURE: validatedData.numero || validatedData.numero_facture,
-                                      NOM_BEN: validatedData.nom_ben,
-                                      PRENOM_BEN: validatedData.prenom_ben,
-                                      MONTANT_TOTAL: validatedData.montant_total,
-                                      MONTANT_PAYE: validatedData.montant_paye || 0,
-                                      MONTANT_RESTANT: validatedData.montant_restant,
-                                      TELEPHONE: validatedData.telephone,
-                                      ...validatedData
-                                    };
-                                    
-                                    console.log('📤 Envoi facture au PaymentDialog:', factureData);
-                                    
-                                    setPaymentDialog({ 
-                                      open: true, 
-                                      type: 'facture', 
-                                      data: factureData 
-                                    });
-                                  }}
-                                  sx={{ color: theme.palette.success.main }}
-                                >
-                                  <PaymentIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+                          )}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
           </TableContainer>
           
           {/* Pagination */}
-          <Box className="pagination-container" sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
-            <Typography className="pagination-info">
+          <Box sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
+            <Typography>
               Page {factureFilters.page + 1} sur {Math.ceil(factureFilters.total / factureFilters.limit)}
             </Typography>
             <TablePagination
@@ -1836,20 +1682,18 @@ const ReglementPage = () => {
   
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} locale={fr}>
-      <Container maxWidth="xl" className="reglement-container" sx={{ py: 3 }}>
+      <Container maxWidth="xl" sx={{ py: 3 }}>
         {/* Notification Snackbar */}
         <Snackbar
           open={notification.open}
           autoHideDuration={6000}
           onClose={handleCloseNotification}
           anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-          className="notification-snackbar"
         >
           <Alert 
             onClose={handleCloseNotification} 
             severity={notification.type}
             sx={{ width: '100%' }}
-            className="notification-alert"
             elevation={6}
           >
             {notification.message}
@@ -1857,7 +1701,7 @@ const ReglementPage = () => {
         </Snackbar>
         
         {/* En-tête */}
-        <Box className="dashboard-header" sx={{ mb: 4 }}>
+        <Box sx={{ mb: 4 }}>
           <Grid container alignItems="center" justifyContent="space-between">
             <Grid item xs={12} md={8}>
               <Typography variant="h3" gutterBottom sx={{ 
@@ -1896,12 +1740,11 @@ const ReglementPage = () => {
           borderRadius: 3,
           overflow: 'hidden',
           background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`
-        }} className="tabs-paper">
+        }}>
           <Tabs 
             value={activeTab} 
             onChange={(e, newValue) => setActiveTab(newValue)}
             variant="fullWidth"
-            className="custom-tabs"
           >
             <Tab 
               label={
@@ -1936,7 +1779,7 @@ const ReglementPage = () => {
           </Tabs>
           
           {/* Contenu des onglets */}
-          <Box className="tab-content-container" sx={{ p: 3 }}>
+          <Box sx={{ p: 3 }}>
             <Fade in={activeTab === 0} timeout={300}>
               <Box>{activeTab === 0 && renderDashboard()}</Box>
             </Fade>

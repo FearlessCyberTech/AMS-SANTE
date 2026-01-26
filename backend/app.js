@@ -46464,6 +46464,144 @@ app.get('/api/upload/template/:tableName', authenticateToken, async (req, res) =
   }
 });
 
+app.get('/api/upload/schemas', authenticateToken, async (req, res) => {
+  try {
+    const pool = await dbConfig.getConnection();
+    
+    // Récupérer tous les schémas disponibles dans la base de données hcs_backoffice
+    // Version SQL Server adaptée au schéma hcs_backoffice
+    const query = `
+      SELECT 
+        s.name as schema_name,
+        s.schema_id,
+        ISNULL(u.name, 'dbo') as schema_owner,
+        s.create_date,
+        s.modify_date,
+        COUNT(DISTINCT t.object_id) as table_count,
+        COUNT(DISTINCT v.object_id) as view_count,
+        COUNT(DISTINCT seq.object_id) as sequence_count,
+        COUNT(DISTINCT f.object_id) as function_count
+      FROM sys.schemas s
+      LEFT JOIN sys.tables t ON s.schema_id = t.schema_id
+      LEFT JOIN sys.views v ON s.schema_id = v.schema_id
+      LEFT JOIN sys.sequences seq ON s.schema_id = seq.schema_id
+      LEFT JOIN sys.objects f ON s.schema_id = f.schema_id AND f.type IN ('FN', 'IF', 'TF')
+      LEFT JOIN sys.database_principals u ON s.principal_id = u.principal_id
+      WHERE s.name IN (
+        'archive', 'audit', 'config', 'core', 'facturation', 
+        'metier', 'paiement', 'ref', 'remboursement', 'reseau', 'security'
+      )
+      GROUP BY s.name, s.schema_id, u.name, s.create_date, s.modify_date
+      ORDER BY 
+        CASE 
+          WHEN s.name = 'core' THEN 1
+          WHEN s.name = 'metier' THEN 2
+          WHEN s.name = 'ref' THEN 3
+          WHEN s.name = 'security' THEN 4
+          WHEN s.name = 'facturation' THEN 5
+          WHEN s.name = 'paiement' THEN 6
+          WHEN s.name = 'remboursement' THEN 7
+          WHEN s.name = 'reseau' THEN 8
+          WHEN s.name = 'audit' THEN 9
+          WHEN s.name = 'config' THEN 10
+          WHEN s.name = 'archive' THEN 11
+          ELSE 12
+        END,
+        s.name
+    `;
+    
+    const result = await pool.request().query(query);
+    
+    // Calculer les statistiques globales
+    const totalStats = {
+      totalSchemas: result.recordset.length,
+      totalTables: result.recordset.reduce((sum, schema) => sum + (schema.table_count || 0), 0),
+      totalViews: result.recordset.reduce((sum, schema) => sum + (schema.view_count || 0), 0),
+      totalSequences: result.recordset.reduce((sum, schema) => sum + (schema.sequence_count || 0), 0),
+      totalFunctions: result.recordset.reduce((sum, schema) => sum + (schema.function_count || 0), 0)
+    };
+    
+    // Formater la réponse avec les schémas spécifiques
+    const schemas = result.recordset.map(schema => {
+      // Déterminer la catégorie du schéma
+      let category = 'other';
+      if (['core', 'metier', 'ref'].includes(schema.schema_name)) {
+        category = 'business';
+      } else if (['security', 'audit'].includes(schema.schema_name)) {
+        category = 'security';
+      } else if (['facturation', 'paiement', 'remboursement'].includes(schema.schema_name)) {
+        category = 'financial';
+      } else if (['config', 'reseau', 'archive'].includes(schema.schema_name)) {
+        category = 'system';
+      }
+      
+      return {
+        name: schema.schema_name,
+        owner: schema.schema_owner,
+        tableCount: schema.table_count || 0,
+        viewCount: schema.view_count || 0,
+        sequenceCount: schema.sequence_count || 0,
+        functionCount: schema.function_count || 0,
+        category: category,
+        createdAt: schema.create_date,
+        lastModified: schema.modify_date,
+        metadata: {
+          schemaId: schema.schema_id,
+          // Description par défaut basée sur le schéma
+          description: getSchemaDescription(schema.schema_name)
+        }
+      };
+    });
+    
+    return res.json({
+      success: true,
+      schemas: schemas,
+      statistics: totalStats,
+      metadata: {
+        databaseName: 'hcs_backoffice',
+        totalSchemas: totalStats.totalSchemas,
+        timestamp: new Date().toISOString()
+      }
+    });
+    
+  } catch (error) {
+    console.error('Erreur récupération schémas:', {
+      message: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur serveur lors de la récupération des schémas',
+      error: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        code: error.code,
+        details: error.originalError?.info || null
+      } : undefined
+    });
+  }
+});
+
+// Fonction utilitaire pour obtenir la description d'un schéma
+function getSchemaDescription(schemaName) {
+  const descriptions = {
+    'core': 'Schéma principal contenant les entités fondamentales du système (bénéficiaires, prestataires, centres de santé, etc.)',
+    'metier': 'Schéma dédié aux règles métier, prescriptions, déclarations de remboursement et pathologies',
+    'ref': 'Schéma de référence contenant les tables de paramétrage (pays, régions, villes, etc.)',
+    'security': 'Schéma de sécurité gérant les utilisateurs et les autorisations',
+    'facturation': 'Schéma dédié à la facturation et aux règlements',
+    'paiement': 'Schéma gérant les transactions et programmations de paiement',
+    'remboursement': 'Schéma dédié aux déclarations et historiques de remboursement',
+    'reseau': 'Schéma gérant les activités et configurations du réseau',
+    'audit': 'Schéma de traçabilité et audit du système',
+    'config': 'Schéma de configuration et paramètres système',
+    'archive': 'Schéma d\'archivage des données historiques'
+  };
+  
+  return descriptions[schemaName] || 'Schéma système';
+};
+
 // Route pour vérifier le schéma d'une table
 app.get('/api/upload/schema/:tableName', authenticateToken, async (req, res) => {
   try {
@@ -46569,57 +46707,53 @@ app.get('/api/upload/schema/:tableName', authenticateToken, async (req, res) => 
 });
 
 // Route principale pour l'importation de masse
-app.post('/api/upload/masse', 
-  authenticateToken, 
-  uploadCSV.single('file'),
-  validateImportParams,
-  async (req, res) => {
-    let pool;
-    let transaction;
-    const startTime = Date.now();
+app.post('/api/upload/masse', authenticateToken, uploadCSV.single('file'), validateImportParams, async (req, res) => {
+  try {
+    // Vérifier la présence du fichier
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Aucun fichier fourni'
+      });
+    }
+
+    // Extraire les paramètres d'importation
+    const {
+      table,
+      schema,
+      mapping,
+      delimiter = ',',
+      hasHeader = true,
+      batchSize = 100,
+      importMode = 'upsert',
+      duplicateStrategy = 'skip',
+      errorHandling = 'continue'
+    } = req.importParams;
+
+    console.log(`🚀 Début importation: ${table} (${schema})`);
+    console.log(`📁 Fichier: ${req.file.filename}`);
+
+    // Ouvrir la connexion à la base de données
+    const pool = await dbConfig.getConnection();
     
+    // Initialiser les statistiques
+    const startTime = Date.now();
+    const stats = {
+      total: 0,
+      inserted: 0,
+      updated: 0,
+      skipped: 0,
+      errors: 0,
+      batches: 0
+    };
+
+    const errors = [];
+    
+    // Démarrer une transaction
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
     try {
-      if (!req.file) {
-        return res.status(400).json({
-          success: false,
-          message: 'Aucun fichier fourni'
-        });
-      }
-      
-      const {
-        table,
-        schema,
-        mapping,
-        delimiter,
-        hasHeader,
-        batchSize,
-        importMode,
-        duplicateStrategy,
-        errorHandling
-      } = req.importParams;
-      
-      console.log(`🚀 Début importation: ${table} (${schema})`);
-      console.log(`📁 Fichier: ${req.file.filename}`);
-      console.log(`⚙️ Paramètres: batch=${batchSize}, mode=${importMode}, duplicates=${duplicateStrategy}`);
-      
-      // Ouvrir la connexion à la base
-      pool = await dbConfig.getConnection();
-      transaction = new sql.Transaction(pool);
-      await transaction.begin();
-      
-      // Statistiques
-      const stats = {
-        total: 0,
-        inserted: 0,
-        updated: 0,
-        skipped: 0,
-        errors: 0,
-        batches: 0,
-        startTime: startTime
-      };
-      
-      const errors = [];
-      
       // Lire le fichier CSV
       const fileContent = fs.readFileSync(req.file.path, 'utf8');
       const lines = fileContent.split('\n').filter(line => line.trim());
@@ -46627,167 +46761,159 @@ app.post('/api/upload/masse',
       if (hasHeader && lines.length > 0) {
         lines.shift(); // Supprimer l'en-tête
       }
-      
+
       stats.total = lines.length;
-      
+      console.log(`📊 ${stats.total} lignes à traiter`);
+
       // Traitement par lots
       const totalBatches = Math.ceil(lines.length / batchSize);
-      
+
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         const start = batchIndex * batchSize;
         const end = Math.min(start + batchSize, lines.length);
         const batchLines = lines.slice(start, end);
         
         stats.batches++;
-        
-        try {
-          // Traiter chaque ligne du lot
-          for (let lineIndex = 0; lineIndex < batchLines.length; lineIndex++) {
-            const lineNumber = start + lineIndex + (hasHeader ? 2 : 1);
-            const line = batchLines[lineIndex];
+
+        console.log(`🔄 Traitement du lot ${batchIndex + 1}/${totalBatches} (${batchLines.length} lignes)`);
+
+        // Traiter chaque ligne du lot
+        for (let lineIndex = 0; lineIndex < batchLines.length; lineIndex++) {
+          const lineNumber = start + lineIndex + (hasHeader ? 2 : 1);
+          const line = batchLines[lineIndex];
+
+          try {
+            // Parser la ligne avec le délimiteur
+            const columns = parseCSVLine(line, delimiter);
             
-            try {
-              // Parser la ligne avec le délimiteur
-              const columns = parseCSVLine(line, delimiter);
-              
-              // Préparer les données selon le mapping
-              const data = {};
-              Object.entries(mapping).forEach(([fileColIndex, dbColumn]) => {
-                const colIndex = parseInt(fileColIndex);
-                if (colIndex < columns.length) {
-                  data[dbColumn] = columns[colIndex]?.trim() || null;
-                }
-              });
-              
-              // Valider les données requises
-              const validationError = validateData(table, data);
-              if (validationError) {
-                throw new Error(`Validation: ${validationError}`);
+            // Préparer les données selon le mapping
+            const data = {};
+            Object.entries(mapping).forEach(([fileColIndex, dbColumn]) => {
+              const colIndex = parseInt(fileColIndex);
+              if (colIndex < columns.length) {
+                data[dbColumn] = columns[colIndex]?.trim() || null;
               }
-              
-              // Nettoyer et formater les données
-              const cleanedData = cleanImportData(table, data);
-              
-              // Déterminer si l'enregistrement existe déjà
-              const exists = await checkIfExists(pool, table, schema, cleanedData);
-              
-              if (exists && importMode === 'insert_only') {
-                stats.skipped++;
-                errors.push(`Ligne ${lineNumber}: Enregistrement existe déjà (mode insertion seule)`);
-                continue;
-              }
-              
-              if (!exists && importMode === 'update_only') {
-                stats.skipped++;
-                errors.push(`Ligne ${lineNumber}: Enregistrement non trouvé (mode mise à jour seule)`);
-                continue;
-              }
-              
-              // Insérer ou mettre à jour
-              if (exists) {
-                // Mettre à jour l'enregistrement existant
-                await updateRecord(pool, table, schema, cleanedData, exists, req.user);
-                stats.updated++;
-              } else {
-                // Insérer un nouvel enregistrement
-                await insertRecord(pool, table, schema, cleanedData, req.user);
-                stats.inserted++;
-              }
-              
-            } catch (error) {
-              stats.errors++;
-              errors.push(`Ligne ${lineNumber}: ${error.message}`);
-              
-              if (errorHandling === 'stop') {
-                throw new Error(`Importation arrêtée à la ligne ${lineNumber}: ${error.message}`);
-              }
+            });
+
+            // Valider les données requises
+            const validationError = validateData(table, data);
+            if (validationError) {
+              throw new Error(`Validation: ${validationError}`);
+            }
+
+            // Nettoyer et formater les données
+            const cleanedData = cleanImportData(table, data);
+
+            // Vérifier si l'enregistrement existe déjà
+            const exists = await checkIfExists(pool, table, schema, cleanedData);
+
+            if (exists && importMode === 'insert_only') {
+              stats.skipped++;
+              errors.push(`Ligne ${lineNumber}: Enregistrement existe déjà (mode insertion seule)`);
+              continue;
+            }
+
+            if (!exists && importMode === 'update_only') {
+              stats.skipped++;
+              errors.push(`Ligne ${lineNumber}: Enregistrement non trouvé (mode mise à jour seule)`);
+              continue;
+            }
+
+            // Insérer ou mettre à jour
+            if (exists) {
+              await updateRecord(pool, table, schema, cleanedData, exists, req.user);
+              stats.updated++;
+            } else {
+              await insertRecord(pool, table, schema, cleanedData, req.user);
+              stats.inserted++;
+            }
+
+          } catch (error) {
+            stats.errors++;
+            errors.push(`Ligne ${lineNumber}: ${error.message}`);
+            
+            if (errorHandling === 'stop') {
+              throw new Error(`Importation arrêtée à la ligne ${lineNumber}: ${error.message}`);
             }
           }
-          
-          // Commiter le lot si tout s'est bien passé
-          await transaction.commit();
-          transaction = await pool.transaction();
-          await transaction.begin();
-          
-        } catch (batchError) {
-          // Annuler la transaction en cas d'erreur critique
-          await transaction.rollback();
-          throw batchError;
+        }
+
+        // Commit après chaque lot
+        await transaction.commit();
+        
+        // Démarrer une nouvelle transaction pour le prochain lot (sauf dernier)
+        if (batchIndex < totalBatches - 1) {
+          const newTransaction = new sql.Transaction(pool);
+          await newTransaction.begin();
+          // Réaffecter la variable transaction pour la référence
+          transaction = newTransaction;
         }
       }
-      
-      // Finaliser la transaction
-      await transaction.commit();
-      
+
       // Supprimer le fichier temporaire
-      fs.unlinkSync(req.file.path);
-      
-      const endTime = Date.now();
-      const duration = Math.round((endTime - startTime) / 1000);
-      
-      console.log(`✅ Importation terminée en ${duration}s`);
-      console.log(`📊 Résultats: ${stats.inserted} insérés, ${stats.updated} mis à jour, ${stats.errors} erreurs`);
-      
-      return res.json({
-        success: stats.errors === 0,
-        message: stats.errors === 0 
-          ? `Importation réussie (${stats.inserted} insérés, ${stats.updated} mis à jour)` 
-          : `Importation partielle avec ${stats.errors} erreur(s)`,
-        details: {
-          total: stats.total,
-          inserted: stats.inserted,
-          updated: stats.updated,
-          skipped: stats.skipped,
-          errors: stats.errors,
-          batches: stats.batches,
-          duration: duration
-        },
-        errors: errors.length > 0 ? errors.slice(0, 50) : undefined, // Limiter à 50 erreurs
-        file: req.file.filename,
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (error) {
-      console.error('❌ Erreur importation:', error);
-      
-      // Annuler la transaction si elle existe
-      if (transaction) {
-        try {
-          await transaction.rollback();
-        } catch (rollbackError) {
-          console.error('Erreur rollback:', rollbackError);
-        }
-      }
-      
-      // Supprimer le fichier temporaire en cas d'erreur
-      if (req.file && fs.existsSync(req.file.path)) {
+      if (fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
       }
-      
-      return res.status(500).json({
-        success: false,
-        message: 'Erreur lors de l\'importation',
-        error: error.message,
-        details: {
-          total: 0,
-          inserted: 0,
-          updated: 0,
-          skipped: 0,
-          errors: 1
-        },
-        timestamp: new Date().toISOString()
-      });
-    } finally {
-      if (pool) {
-        try {
-          await pool.close();
-        } catch (closeError) {
-          console.error('Erreur fermeture connexion:', closeError);
-        }
+
+    } catch (batchError) {
+      // Annuler la transaction en cours en cas d'erreur
+      await transaction.rollback();
+      throw batchError;
+    }
+
+    // Calculer la durée totale
+    const endTime = Date.now();
+    const duration = Math.round((endTime - startTime) / 1000);
+
+    console.log(`✅ Importation terminée en ${duration}s`);
+    console.log(`📊 Résultats: ${stats.inserted} insérés, ${stats.updated} mis à jour, ${stats.skipped} ignorés, ${stats.errors} erreurs`);
+
+    return res.status(stats.errors === 0 ? 200 : 207).json({
+      success: stats.errors === 0,
+      message: stats.errors === 0 
+        ? `Importation réussie (${stats.inserted} insérés, ${stats.updated} mis à jour)` 
+        : `Importation partielle avec ${stats.errors} erreur(s)`,
+      details: {
+        total: stats.total,
+        inserted: stats.inserted,
+        updated: stats.updated,
+        skipped: stats.skipped,
+        errors: stats.errors,
+        batches: stats.batches,
+        duration: duration
+      },
+      errors: errors.length > 0 ? errors.slice(0, 50) : undefined,
+      file: req.file.filename,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur importation:', error.message);
+
+    // Nettoyer le fichier temporaire en cas d'erreur
+    if (req.file && fs.existsSync(req.file.path)) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (unlinkError) {
+        console.error('⚠️ Erreur suppression fichier:', unlinkError);
       }
     }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de l\'importation',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      details: {
+        total: 0,
+        inserted: 0,
+        updated: 0,
+        skipped: 0,
+        errors: 1
+      },
+      timestamp: new Date().toISOString()
+    });
   }
-);
+});
 
 // Route pour vérifier la progression d'un import (pour support asynchrone)
 app.get('/api/upload/status/:jobId', authenticateToken, async (req, res) => {

@@ -2,6 +2,7 @@
 require('dotenv').config();
 
 // Importer l'application Express
+const express = require('express');
 const app = require('./app');
 
 // Configuration des middlewares de sécurité et démarrage du serveur
@@ -59,22 +60,25 @@ const apiLimiter = rateLimit({
   }
 });
 
-// === MIDDLEWARES SUPPLÉMENTAIRES ===
+// === APPLICATION DES MIDDLEWARES GLOBAUX ===
 
-// Compression GZIP
+// 1. Helmet pour la sécurité HTTP
+app.use(helmet());
+
+// 2. Compression GZIP
 app.use(compression({
   level: 6,
   threshold: 100 * 1024
 }));
 
-// CORS
+// 3. CORS
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
-// Rate limiting pour l'API
+// 4. Rate limiting pour l'API
 app.use('/api/', apiLimiter);
 
-// Logging structuré
+// 5. Logging structuré
 const logFormat = process.env.NODE_ENV === 'production' 
   ? ':remote-addr - :remote-user [:date[clf]] ":method :url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent" :response-time ms'
   : 'dev';
@@ -115,6 +119,22 @@ app.use((req, res, next) => {
     error: 'Endpoint non trouvé',
     path: req.path,
     method: req.method,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Middleware pour la gestion des erreurs globales
+app.use((err, req, res, next) => {
+  console.error('Erreur serveur:', err);
+  
+  const statusCode = err.statusCode || 500;
+  const message = process.env.NODE_ENV === 'production' 
+    ? 'Une erreur serveur est survenue' 
+    : err.message;
+  
+  res.status(statusCode).json({
+    error: message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
     timestamp: new Date().toISOString()
   });
 });

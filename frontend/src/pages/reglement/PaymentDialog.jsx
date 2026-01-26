@@ -1,4 +1,3 @@
-// components/PaymentDialog.jsx
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -25,8 +24,7 @@ import {
   AccordionSummary,
   AccordionDetails,
   IconButton,
-  Tooltip,
-  alpha
+  Tooltip
 } from '@mui/material';
 import {
   LocalAtm as CashIcon,
@@ -42,47 +40,6 @@ import {
   BugReport as BugReportIcon,
   Receipt as ReceiptIcon
 } from '@mui/icons-material';
-
-// Fonction utilitaire pour valider et formater les données
-const validateData = (data, type = 'transaction') => {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) {
-    return null;
-  }
-  
-  if (type === 'transaction') {
-    return {
-      COD_TRANS: data.COD_TRANS || data.id || null,
-      REFERENCE_TRANSACTION: data.REFERENCE_TRANSACTION || data.reference || 'N/A',
-      BENEFICIAIRE: data.BENEFICIAIRE || data.NOM_BEN || 'N/A',
-      DATE_INITIATION: data.DATE_INITIATION || data.date_initiation,
-      MONTANT: data.MONTANT || data.montant || 0,
-      STATUT_TRANSACTION: data.STATUT_TRANSACTION || data.statut || 'N/A',
-      METHODE_PAIEMENT: data.METHODE_PAIEMENT || data.methode,
-      TYPE_TRANSACTION: data.TYPE_TRANSACTION || data.type_transaction,
-      CANAL: data.CANAL || data.canal,
-      NUMERO_FACTURE: data.NUMERO_FACTURE || data.numero_facture,
-      NOM_CLIENT: data.NOM_CLIENT || data.nom_client,
-      MOYEN_PAIEMENT: data.MOYEN_PAIEMENT || data.moyen_paiement,
-      DESCRIPTION: data.DESCRIPTION || data.description,
-      ...data
-    };
-  } else {
-    return {
-      id: data.id || data.COD_FACTURE || null,
-      numero: data.numero || data.numero_facture || 'N/A',
-      numero_facture: data.numero_facture || data.numero || 'N/A',
-      nom_ben: data.nom_ben || data.NOM_BEN || '',
-      prenom_ben: data.prenom_ben || data.PRE_BEN || '',
-      date_echeance: data.date_echeance || data.DATE_ECHEANCE,
-      date_facture: data.date_facture || data.DATE_FACTURE,
-      montant_total: data.montant_total || data.MONTANT_TOTAL || 0,
-      montant_restant: data.montant_restant || data.MONTANT_RESTANT || 0,
-      statut: data.statut || 'N/A',
-      telephone: data.telephone || data.TELEPHONE,
-      ...data
-    };
-  }
-};
 
 const PaymentDialog = ({ open, type, data, onClose, onSubmit, loading }) => {
   // ==================== ÉTATS ====================
@@ -118,13 +75,12 @@ const PaymentDialog = ({ open, type, data, onClose, onSubmit, loading }) => {
   // ==================== FONCTIONS UTILITAIRES ====================
 
   const formatCurrency = (amount) => {
-    const num = Number(amount) || 0;
     return new Intl.NumberFormat('fr-FR', {
       style: 'currency',
       currency: 'XAF',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(num);
+    }).format(amount || 0);
   };
 
   const generateReference = () => {
@@ -247,8 +203,7 @@ const PaymentDialog = ({ open, type, data, onClose, onSubmit, loading }) => {
       }));
 
       if (data) {
-        const validatedData = validateData(data, 'facture');
-        const extractedInfo = extractFactureInfo(validatedData);
+        const extractedInfo = extractFactureInfo(data);
         console.log('🔍 Info extraite:', extractedInfo);
 
         setClientInfo(extractedInfo);

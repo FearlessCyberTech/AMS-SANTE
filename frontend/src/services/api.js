@@ -1924,68 +1924,29 @@ const ERROR_HANDLING = {
 };
 
 export const importAPI = {
-  // ==============================================
-  // IMPORTATION DE FICHIERS
-  // ==============================================
+  // ========== IMPORTATION DE FICHIERS ==========
 
-  /**
-   * Importer un fichier pour n'importe quelle table
-   * @param {File} file - Fichier à importer
-   * @param {string} table - Nom de la table
-   * @param {Object} options - Options d'importation
-   * @returns {Promise<Object>} Résultat de l'importation
-   */
-  async importFile(file, table, options = {}) {
+  // Importer un fichier CSV/Excel
+  async importFile(file, importParams = {}) {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('table', table.toUpperCase());
       
-      // Options par défaut
-      const defaultOptions = {
-        schema: options.schema || 'core',
-        mapping: JSON.stringify(options.mapping || {}),
-        delimiter: options.delimiter || ',',
-        hasHeader: options.hasHeader !== false,
-        batchSize: options.batchSize || 100,
-        importMode: options.importMode || IMPORT_MODES.UPSERT,
-        duplicateStrategy: options.duplicateStrategy || DUPLICATE_STRATEGIES.UPDATE,
-        errorHandling: options.errorHandling || ERROR_HANDLING.CONTINUE
-      };
-      
-      // Ajouter les options
-      Object.keys(defaultOptions).forEach(key => {
-        const value = defaultOptions[key];
-        if (value !== undefined && value !== null) {
-          formData.append(key, typeof value === 'boolean' ? value.toString() : value);
+      // Ajouter tous les paramètres d'importation
+      Object.keys(importParams).forEach(key => {
+        if (importParams[key] !== undefined && importParams[key] !== null) {
+          if (typeof importParams[key] === 'object') {
+            formData.append(key, JSON.stringify(importParams[key]));
+          } else {
+            formData.append(key, importParams[key]);
+          }
         }
       });
-      
-      // Options supplémentaires
-      if (options.additionalParams) {
-        Object.keys(options.additionalParams).forEach(key => {
-          formData.append(key, options.additionalParams[key]);
-        });
-      }
 
       const response = await fetchAPI('/upload/masse', {
         method: 'POST',
         body: formData,
       });
-      
-      // Ajouter à l'historique
-      if (response.success || response.details?.importedRows > 0) {
-        this.addToHistory({
-          table: table,
-          fileName: file.name,
-          totalRows: response.details?.total || 0,
-          importedRows: response.details?.inserted || 0,
-          errorRows: response.details?.errors || 0,
-          success: response.success,
-          details: response.details,
-          timestamp: new Date().toISOString()
-        });
-      }
       
       return response;
     } catch (error) {
@@ -2004,28 +1965,20 @@ export const importAPI = {
     }
   },
 
-  /**
-   * Valider un fichier avant importation (validation côté serveur)
-   * @param {File} file - Fichier à valider
-   * @param {string} table - Nom de la table
-   * @param {Object} options - Options de validation
-   * @returns {Promise<Object>} Résultat de la validation
-   */
-  async validateFile(file, table, options = {}) {
+  // Valider un fichier avant importation
+  async validateFile(file, importParams = {}) {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('table', table.toUpperCase());
-      formData.append('action', 'validate'); // Indiquer que c'est une validation
+      formData.append('action', 'validate');
       
-      // Options de validation
-      Object.keys(options).forEach(key => {
-        if (options[key] !== undefined && options[key] !== null) {
-          formData.append(key, options[key]);
+      // Ajouter les paramètres de validation
+      Object.keys(importParams).forEach(key => {
+        if (importParams[key] !== undefined && importParams[key] !== null) {
+          formData.append(key, importParams[key]);
         }
       });
 
-      // Appeler l'API d'importation avec un flag de validation
       const response = await fetchAPI('/upload/masse', {
         method: 'POST',
         body: formData,
@@ -2034,137 +1987,41 @@ export const importAPI = {
       return response;
     } catch (error) {
       console.error('❌ Erreur validation fichier:', error);
-      
-      // Fallback: validation côté client
-      return await this.validateFileClient(file, table, options);
-    }
-  },
-
-  /**
-   * Validation côté client (fallback)
-   */
-  async validateFileClient(file, table, options = {}) {
-    try {
-      const errors = [];
-      const warnings = [];
-      
-      // Validation basique du fichier
-      if (!file) {
-        errors.push('Aucun fichier fourni');
-        return {
-          success: false,
-          message: 'Aucun fichier fourni',
-          errors: errors,
-          warnings: warnings
-        };
-      }
-      
-      // Vérifier la taille du fichier
-      if (file.size > 100 * 1024 * 1024) { // 100MB
-        errors.push('Fichier trop volumineux (max 100MB)');
-      }
-      
-      // Vérifier l'extension
-      const fileName = file.name.toLowerCase();
-      if (!fileName.endsWith('.csv') && !fileName.endsWith('.txt') && 
-          !fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
-        warnings.push('Format de fichier non standard. Formats recommandés: CSV, Excel');
-      }
-      
-      // Lire et analyser le fichier
-      const content = await this.readFileContent(file);
-      let parsedData;
-      
-      if (fileName.endsWith('.csv')) {
-        parsedData = this.parseCSV(content, options.delimiter || ',', options.hasHeader !== false);
-      }
-      
-      // Vérifier les données
-      if (parsedData) {
-        if (options.hasHeader && parsedData.length > 0) {
-          const headers = parsedData[0];
-          if (headers.some(h => !h || h.trim() === '')) {
-            warnings.push('Certaines colonnes d\'en-tête sont vides');
-          }
-        }
-        
-        // Vérifier le nombre de colonnes
-        const rowLengths = parsedData.map(row => row.length);
-        const maxCols = Math.max(...rowLengths);
-        const minCols = Math.min(...rowLengths);
-        
-        if (maxCols !== minCols) {
-          errors.push('Nombre de colonnes incohérent dans le fichier');
-        }
-        
-        // Vérifier les données vides
-        const emptyCells = parsedData.reduce((count, row) => {
-          return count + row.filter(cell => !cell || cell.trim() === '').length;
-        }, 0);
-        
-        const totalCells = parsedData.length * maxCols;
-        if (totalCells > 0 && (emptyCells / totalCells) > 0.5) {
-          warnings.push('Plus de 50% des cellules sont vides');
-        }
-      }
-      
-      return {
-        success: errors.length === 0,
-        message: errors.length === 0 ? 'Fichier validé avec succès' : 'Erreurs de validation trouvées',
-        errors: errors,
-        warnings: warnings,
-        validated: true,
-        previewData: parsedData ? parsedData.slice(0, 10) : []
-      };
-    } catch (error) {
-      console.error('❌ Erreur validation client:', error);
       return {
         success: false,
         message: error.message || 'Erreur lors de la validation du fichier',
+        validated: false,
         errors: [error.message],
-        warnings: [],
-        validated: false
+        warnings: []
       };
     }
   },
 
-  // ==============================================
-  // TEMPLATES
-  // ==============================================
+  // ========== TEMPLATES ET SCHEMAS ==========
 
-  /**
-   * Télécharger un template d'importation
-   * @param {string} table - Nom de la table
-   * @param {string} format - Format du template (csv, json, excel)
-   * @param {string} schema - Schéma de la table
-   * @returns {Promise<Object>} Résultat du téléchargement
-   */
+  // Télécharger un template d'importation
   async downloadTemplate(table, format = 'csv', schema = 'core') {
     try {
       if (!table) {
         throw new Error('Table non spécifiée');
       }
       
-      let url;
       let fileName;
+      let url = `/upload/template/${table}`;
       
-      switch (format.toLowerCase()) {
-        case 'excel':
-        case 'xls':
-        case 'xlsx':
-          url = `/upload/template-excel/${table}`;
-          fileName = `template_${table.toLowerCase()}.xls`;
-          break;
-        case 'json':
-          url = `/upload/template/${table}?format=json`;
-          fileName = `template_${table.toLowerCase()}.json`;
-          break;
-        default: // csv par défaut
-          url = `/upload/template/${table}?format=csv`;
-          fileName = `template_${table.toLowerCase()}.csv`;
+      // Déterminer le format
+      if (format === 'excel' || format === 'xlsx' || format === 'xls') {
+        fileName = `template_${table.toLowerCase()}.xlsx`;
+        url = `/upload/template-excel/${table}`;
+      } else if (format === 'json') {
+        fileName = `template_${table.toLowerCase()}.json`;
+        url += '?format=json';
+      } else {
+        fileName = `template_${table.toLowerCase()}.csv`;
+        url += '?format=csv';
       }
       
-      // Ajouter le schéma si spécifié et différent de 'core'
+      // Ajouter le schéma
       if (schema && schema !== 'core') {
         url += url.includes('?') ? `&schema=${schema}` : `?schema=${schema}`;
       }
@@ -2178,11 +2035,10 @@ export const importAPI = {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Erreur HTTP ${response.status}`);
+        throw new Error(`Erreur HTTP ${response.status}`);
       }
 
-      // Gestion du téléchargement
+      // Gérer le téléchargement
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -2209,15 +2065,10 @@ export const importAPI = {
     }
   },
 
-  /**
-   * Obtenir les informations d'un template
-   * @param {string} table - Nom de la table
-   * @param {string} schema - Schéma de la table
-   * @returns {Promise<Object>} Informations du template
-   */
+  // Obtenir les informations d'un template
   async getTemplateInfo(table, schema = 'core') {
     try {
-      const response = await fetchAPI(`/api/upload/template-info/${table}${schema ? `?schema=${schema}` : ''}`);
+      const response = await fetchAPI(`/upload/template-info/${table}${schema ? `?schema=${schema}` : ''}`);
       return response;
     } catch (error) {
       console.error('❌ Erreur récupération infos template:', error);
@@ -2228,19 +2079,26 @@ export const importAPI = {
     }
   },
 
-  // ==============================================
-  // GESTION DES TABLES
-  // ==============================================
+  // Obtenir la structure d'une table
+  async getTableSchema(table, schema = 'core') {
+    try {
+      const response = await fetchAPI(`/upload/schema/${table}?schema=${schema}`);
+      return response;
+    } catch (error) {
+      console.error(`❌ Erreur récupération schéma ${schema}.${table}:`, error);
+      return {
+        success: false,
+        message: error.message || 'Erreur lors de la récupération du schéma'
+      };
+    }
+  },
 
-  /**
-   * Récupérer toutes les tables disponibles depuis la base de données
-   * @param {string} schema - Schéma spécifique (optionnel)
-   * @returns {Promise<Object>} Liste des tables avec leurs métadonnées
-   */
+  // ========== GESTION DES TABLES ==========
+
+  // Récupérer toutes les tables disponibles
   async getAllTables(schema = null) {
     try {
-      // Construire l'URL avec le schéma si spécifié
-      let url = '/api/upload/tables/all';
+      let url = '/upload/tables/all';
       if (schema) {
         url += `?schema=${schema}`;
       }
@@ -2248,291 +2106,73 @@ export const importAPI = {
       const response = await fetchAPI(url);
       
       if (response.success && response.tables) {
-        // Formater les tables pour l'affichage
-        const formattedTables = response.tables.map(table => ({
-          name: table.name || table.TABLE_NAME,
-          schema: table.schema || table.TABLE_SCHEMA || 'dbo',
-          label: table.label || this.formatTableName(table.name || table.TABLE_NAME),
-          description: table.description || `${this.formatTableName(table.name || table.TABLE_NAME)} table`,
-          rowCount: table.rowCount || table.ROW_COUNT || 0,
-          columnsCount: table.columnsCount || table.COLUMNS_COUNT || 0,
-          lastModified: table.lastModified || table.LAST_MODIFIED,
-          canImport: table.canImport !== false
-        }));
-        
+        return response;
+      } else {
+        // Fallback pour le développement
         return {
           success: true,
-          tables: formattedTables,
-          total: formattedTables.length,
-          message: `${formattedTables.length} tables récupérées`
+          tables: [
+            { name: 'BENEFICIAIRE', schema: 'core', label: 'Bénéficiaires', canImport: true },
+            { name: 'PRESTATAIRE', schema: 'core', label: 'Prestataires', canImport: true },
+            { name: 'CENTRE', schema: 'core', label: 'Centres de santé', canImport: true },
+            { name: 'CARTE', schema: 'core', label: 'Cartes bénéficiaires', canImport: true },
+            { name: 'UTILISATEUR', schema: 'security', label: 'Utilisateurs', canImport: false },
+          ],
+          total: 5,
+          message: 'Tables récupérées'
         };
-      } else {
-        // Fallback: Récupérer les tables via une requête système
-        return await this.getAllTablesFallback(schema);
       }
     } catch (error) {
       console.error('❌ Erreur récupération tables:', error);
-      
-      // Fallback: Utiliser une liste statique ou une méthode alternative
-      return await this.getAllTablesFallback(schema);
-    }
-  },
-
-  /**
-   * Fallback pour récupérer les tables (quand la route n'existe pas)
-   */
-  async getAllTablesFallback(schema = null) {
-    try {
-      // Essayer de récupérer via une route alternative ou une requête directe
-      const tables = [];
-      
-      // Listes des tables par schéma (connues)
-      const knownTables = {
-        'core': ['BENEFICIAIRE', 'PRESTATAIRE', 'CENTRE', 'CARTE', 'AFFECTION', 'MEDICAMENT'],
-        'security': ['UTILISATEUR', 'ROLE', 'PERMISSION', 'SESSION_UTILISATEUR'],
-        'config': ['PARAMETRE', 'CONFIGURATION'],
-        'audit': ['SYSTEM_AUDIT', 'AUDIT_LOG']
-      };
-      
-      // Si un schéma spécifique est demandé
-      if (schema && knownTables[schema]) {
-        tables.push(...knownTables[schema].map(name => ({
-          name,
-          schema,
-          label: this.formatTableName(name),
-          description: `Table ${name} dans le schéma ${schema}`,
-          canImport: true
-        })));
-      } else if (!schema) {
-        // Tous les schémas
-        Object.keys(knownTables).forEach(schemaName => {
-          tables.push(...knownTables[schemaName].map(name => ({
-            name,
-            schema: schemaName,
-            label: this.formatTableName(name),
-            description: `Table ${name} dans le schéma ${schemaName}`,
-            canImport: true
-          })));
-        });
-      }
-      
       return {
-        success: true,
-        tables: tables,
-        total: tables.length,
-        message: `${tables.length} tables récupérées (fallback)`
-      };
-    } catch (error) {
-      console.error('❌ Erreur récupération tables fallback:', error);
-      
-      // Dernier recours: liste très basique
-      const basicTables = [
-        { name: 'BENEFICIAIRE', schema: 'core', label: 'Bénéficiaires', description: 'Table des bénéficiaires', canImport: true },
-        { name: 'PRESTATAIRE', schema: 'core', label: 'Prestataires', description: 'Table des prestataires de santé', canImport: true },
-        { name: 'CENTRE', schema: 'core', label: 'Centres', description: 'Table des centres de santé', canImport: true },
-        { name: 'UTILISATEUR', schema: 'security', label: 'Utilisateurs', description: 'Table des utilisateurs', canImport: true },
-        { name: 'CARTE', schema: 'core', label: 'Cartes', description: 'Table des cartes bénéficiaires', canImport: true }
-      ];
-      
-      return {
-        success: true,
-        tables: schema ? basicTables.filter(t => t.schema === schema) : basicTables,
-        total: basicTables.length,
-        message: 'Tables de base récupérées'
+        success: false,
+        message: error.message || 'Erreur lors de la récupération des tables',
+        tables: [],
+        total: 0
       };
     }
   },
 
-  /**
-   * Récupérer les informations détaillées d'une table
-   * @param {string} schema - Schéma de la table
-   * @param {string} table - Nom de la table
-   * @returns {Promise<Object>} Informations détaillées de la table
-   */
-  async getTableInfo(schema, table) {
+  // Obtenir les informations détaillées d'une table
+  async getTableInfo(table, schema = 'core') {
     try {
-      // Essayer d'abord la route de schéma
-      const schemaResponse = await fetchAPI(`/api/upload/schema/${table}?schema=${schema || 'core'}`);
-      
-      if (schemaResponse.success && schemaResponse.schema) {
-        const tableSchema = schemaResponse.schema;
-        
-        // Enrichir avec les informations de template
-        try {
-          const templateInfo = await this.getTemplateInfo(table, schema);
-          if (templateInfo.success && templateInfo.columnDetails) {
-            // Fusionner les informations
-            tableSchema.columns = tableSchema.columns.map(col => {
-              const templateCol = templateInfo.columnDetails.find(tc => tc.name === col.name);
-              if (templateCol) {
-                return {
-                  ...col,
-                  description: templateCol.description || col.description,
-                  example: templateCol.example,
-                  allowedValues: templateCol.values
-                };
-              }
-              return col;
-            });
-          }
-        } catch (e) {
-          console.log('Pas d\'informations de template disponibles');
-        }
-        
-        return {
-          success: true,
-          table: tableSchema.table,
-          schema: tableSchema.schema,
-          columns: tableSchema.columns,
-          metadata: tableSchema.metadata,
-          requiredColumns: tableSchema.columns.filter(col => col.isRequired).map(col => col.name),
-          uniqueColumns: tableSchema.columns.filter(col => col.isUnique).map(col => col.name),
-          primaryKeys: tableSchema.metadata?.primaryKeys || [],
-          foreignKeys: tableSchema.metadata?.foreignKeys || [],
-          indexes: tableSchema.metadata?.indexes || [],
-          rowCount: tableSchema.metadata?.rowCount || 0,
-          description: tableSchema.description || `${table} table in ${schema} schema`
-        };
-      } else {
-        // Fallback: utiliser les informations de template
-        return await this.getTableInfoFallback(schema, table);
-      }
+      const response = await fetchAPI(`/upload/table-info/${table}?schema=${schema}`);
+      return response;
     } catch (error) {
       console.error(`❌ Erreur récupération infos table ${schema}.${table}:`, error);
-      return await this.getTableInfoFallback(schema, table);
-    }
-  },
-
-  /**
-   * Fallback pour les informations de table
-   */
-  async getTableInfoFallback(schema, table) {
-    try {
-      const templateInfo = await this.getTemplateInfo(table, schema);
-      
-      if (templateInfo.success && templateInfo.columnDetails) {
-        const columns = templateInfo.columnDetails.map(col => ({
-          name: col.name,
-          type: col.type || 'varchar',
-          maxLength: col.maxLength || 255,
-          isNullable: !col.required,
-          isRequired: col.required || false,
-          isPrimaryKey: false,
-          isUnique: col.unique || false,
-          description: col.description || `${col.name} column`,
-          example: col.example,
-          allowedValues: col.values
-        }));
-        
-        return {
-          success: true,
-          table: table,
-          schema: schema || 'core',
-          columns: columns,
-          metadata: {
-            totalColumns: columns.length,
-            requiredColumns: columns.filter(col => col.isRequired).length,
-            primaryKeys: [],
-            foreignKeys: [],
-            indexes: []
-          },
-          requiredColumns: columns.filter(col => col.isRequired).map(col => col.name),
-          uniqueColumns: columns.filter(col => col.isUnique).map(col => col.name),
-          primaryKeys: [],
-          foreignKeys: [],
-          indexes: [],
-          rowCount: 0,
-          description: templateInfo.description || `${table} table`
-        };
-      } else {
-        throw new Error('Informations de template non disponibles');
-      }
-    } catch (error) {
-      console.error('Erreur fallback table info:', error);
-      
-      // Table par défaut basée sur le nom
       return {
-        success: true,
-        table: table,
-        schema: schema || 'core',
-        columns: [
-          { name: 'ID', type: 'int', isNullable: false, isRequired: true, isPrimaryKey: true, description: 'Identifiant unique' },
-          { name: 'NOM', type: 'varchar', maxLength: 100, isNullable: false, isRequired: true, description: 'Nom' },
-          { name: 'DESCRIPTION', type: 'varchar', maxLength: 255, isNullable: true, isRequired: false, description: 'Description' },
-          { name: 'DATE_CREATION', type: 'datetime', isNullable: false, isRequired: true, description: 'Date de création' },
-          { name: 'ACTIF', type: 'bit', isNullable: false, isRequired: true, description: 'Statut actif' }
-        ],
-        metadata: {
-          totalColumns: 5,
-          requiredColumns: 4,
-          primaryKeys: ['ID'],
-          foreignKeys: [],
-          indexes: []
-        },
-        requiredColumns: ['ID', 'NOM', 'DATE_CREATION', 'ACTIF'],
-        uniqueColumns: ['ID'],
-        primaryKeys: ['ID'],
-        foreignKeys: [],
-        indexes: [],
-        rowCount: 0,
-        description: `Table ${table}`
+        success: false,
+        message: error.message || 'Erreur lors de la récupération des informations de la table'
       };
     }
   },
 
-  /**
-   * Récupérer les schémas disponibles
-   * @returns {Promise<Object>} Liste des schémas
-   */
+  // Récupérer les schémas disponibles
   async getSchemas() {
     try {
-      // Essayer de récupérer depuis le backend
-      const response = await fetchAPI('/api/upload/schemas');
-      
-      if (response.success && response.schemas) {
-        return response;
-      } else {
-        // Fallback: schémas prédéfinis
-        return {
-          success: true,
-          schemas: ALLOWED_SCHEMAS.map(schema => ({
-            name: schema,
-            description: this.formatSchemaName(schema),
-            tableCount: 0,
-            canImport: ['core', 'security'].includes(schema)
-          })),
-          message: 'Schémas récupérés'
-        };
-      }
+      const response = await fetchAPI('/upload/schemas');
+      return response;
     } catch (error) {
       console.error('❌ Erreur récupération schémas:', error);
       return {
         success: true,
-        schemas: ALLOWED_SCHEMAS.map(schema => ({
-          name: schema,
-          description: this.formatSchemaName(schema),
-          tableCount: 0,
-          canImport: ['core', 'security'].includes(schema)
-        })),
-        message: 'Schémas récupérés (fallback)'
+        schemas: [
+          { name: 'core', description: 'Données principales', canImport: true },
+          { name: 'security', description: 'Sécurité', canImport: false },
+          { name: 'config', description: 'Configuration', canImport: true },
+          { name: 'audit', description: 'Audit', canImport: false }
+        ],
+        message: 'Schémas récupérés'
       };
     }
   },
 
-  // ==============================================
-  // DONNÉES DE RÉFÉRENCE
-  // ==============================================
+  // ========== DONNÉES DE RÉFÉRENCE ==========
 
-  /**
-   * Récupérer les données de référence pour les clés étrangères
-   * @param {string} table - Table de référence
-   * @param {string} column - Colonne de référence
-   * @param {Object} filters - Filtres de recherche
-   * @returns {Promise<Object>} Données de référence
-   */
+  // Récupérer les données de référence pour les clés étrangères
   async getReferenceData(table, column, filters = {}) {
     try {
-      let url = `/api/import/reference-data/${table}/${column}`;
+      let url = `/upload/reference-data/${table}/${column}`;
       
       // Ajouter les filtres
       const queryParams = new URLSearchParams();
@@ -2548,113 +2188,24 @@ export const importAPI = {
       }
       
       const response = await fetchAPI(url);
-      
-      if (response.success && response.data) {
-        return response;
-      } else {
-        // Fallback: générer des données de test
-        return await this.getReferenceDataFallback(table, column, filters);
-      }
+      return response;
     } catch (error) {
       console.error(`❌ Erreur récupération données référence ${table}.${column}:`, error);
-      return await this.getReferenceDataFallback(table, column, filters);
-    }
-  },
-
-  /**
-   * Fallback pour les données de référence
-   */
-  async getReferenceDataFallback(table, column, filters = {}) {
-    try {
-      // Données de référence par défaut basées sur la table et la colonne
-      const referenceData = {
-        'COD_PAY': [
-          { value: 'CMR', label: 'Cameroun' },
-          { value: 'FRA', label: 'France' },
-          { value: 'USA', label: 'États-Unis' },
-          { value: 'GBR', label: 'Royaume-Uni' },
-          { value: 'DEU', label: 'Allemagne' }
-        ],
-        'COD_REGION': [
-          { value: 'REG001', label: 'Région Centre' },
-          { value: 'REG002', label: 'Région Littoral' },
-          { value: 'REG003', label: 'Région Ouest' },
-          { value: 'REG004', label: 'Région Nord' },
-          { value: 'REG005', label: 'Région Sud' }
-        ],
-        'TYPE_PRESTATAIRE': [
-          { value: 'HOPITAL', label: 'Hôpital' },
-          { value: 'CLINIQUE', label: 'Clinique' },
-          { value: 'CABINET', label: 'Cabinet médical' },
-          { value: 'LABORATOIRE', label: 'Laboratoire' },
-          { value: 'PHARMACIE', label: 'Pharmacie' }
-        ],
-        'PROFIL_UTI': [
-          { value: 'ADMINISTRATEUR', label: 'Administrateur' },
-          { value: 'MEDECIN', label: 'Médecin' },
-          { value: 'SECRETAIRE', label: 'Secrétaire' },
-          { value: 'AGENT', label: 'Agent' },
-          { value: 'SUPERVISEUR', label: 'Superviseur' }
-        ],
-        'STATUT_ACE': [
-          { value: 'ASSURE_PRINCIPAL', label: 'Assuré principal' },
-          { value: 'CONJOINT', label: 'Conjoint' },
-          { value: 'ENFANT', label: 'Enfant' },
-          { value: 'ASCENDANT', label: 'Ascendant' }
-        ]
-      };
-      
-      let data = referenceData[column] || [];
-      
-      // Appliquer les filtres
-      if (filters.search) {
-        const search = filters.search.toLowerCase();
-        data = data.filter(item => 
-          item.label.toLowerCase().includes(search) || 
-          (item.value && item.value.toLowerCase().includes(search))
-        );
-      }
-      
-      // Pagination
-      const page = filters.page || 1;
-      const limit = filters.limit || 100;
-      const startIndex = (page - 1) * limit;
-      const paginatedData = data.slice(startIndex, startIndex + limit);
-      
       return {
-        success: true,
-        data: paginatedData,
-        total: data.length,
-        page: page,
-        limit: limit,
-        totalPages: Math.ceil(data.length / limit),
-        message: `Données de référence pour ${column}`
-      };
-    } catch (error) {
-      console.error('Erreur fallback référence data:', error);
-      return {
-        success: true,
+        success: false,
+        message: error.message || 'Erreur lors de la récupération des données de référence',
         data: [],
-        total: 0,
-        message: 'Aucune donnée de référence disponible'
+        total: 0
       };
     }
   },
 
-  // ==============================================
-  // HISTORIQUE ET STATISTIQUES
-  // ==============================================
+  // ========== HISTORIQUE ET STATISTIQUES ==========
 
-  /**
-   * Récupérer l'historique des imports
-   * @param {Object} filters - Filtres de recherche
-   * @returns {Promise<Object>} Historique des imports
-   */
+  // Récupérer l'historique des imports
   async getImportHistory(filters = {}) {
     try {
-      // Construire l'URL avec les filtres
       const queryParams = new URLSearchParams();
-      
       Object.keys(filters).forEach(key => {
         if (filters[key] !== undefined && filters[key] !== '') {
           queryParams.append(key, filters[key]);
@@ -2662,801 +2213,269 @@ export const importAPI = {
       });
       
       const queryString = queryParams.toString();
-      const url = `/api/import/history${queryString ? `?${queryString}` : ''}`;
+      const url = `/upload/history${queryString ? `?${queryString}` : ''}`;
       
       const response = await fetchAPI(url);
-      
-      if (response.success) {
-        return response;
-      } else {
-        // Fallback: historique local
-        return await this.getImportHistoryLocal(filters);
-      }
+      return response;
     } catch (error) {
       console.error('❌ Erreur récupération historique imports:', error);
-      return await this.getImportHistoryLocal(filters);
-    }
-  },
-
-  /**
-   * Récupérer l'historique depuis le stockage local
-   */
-  async getImportHistoryLocal(filters = {}) {
-    try {
-      const history = JSON.parse(localStorage.getItem('importHistory') || '[]');
-      
-      // Appliquer les filtres
-      let filteredHistory = [...history];
-      
-      if (filters.startDate) {
-        filteredHistory = filteredHistory.filter(item => 
-          new Date(item.timestamp) >= new Date(filters.startDate)
-        );
-      }
-      
-      if (filters.endDate) {
-        filteredHistory = filteredHistory.filter(item => 
-          new Date(item.timestamp) <= new Date(filters.endDate)
-        );
-      }
-      
-      if (filters.table) {
-        filteredHistory = filteredHistory.filter(item => 
-          item.table?.toUpperCase().includes(filters.table.toUpperCase())
-        );
-      }
-      
-      if (filters.status) {
-        filteredHistory = filteredHistory.filter(item => 
-          item.status?.toLowerCase() === filters.status.toLowerCase()
-        );
-      }
-      
-      if (filters.user) {
-        filteredHistory = filteredHistory.filter(item => 
-          item.user?.toUpperCase().includes(filters.user.toUpperCase())
-        );
-      }
-      
-      // Trier par date (plus récent en premier)
-      filteredHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      
-      // Pagination
-      const page = filters.page || 1;
-      const limit = filters.limit || 10;
-      const startIndex = (page - 1) * limit;
-      const endIndex = startIndex + limit;
-      const paginatedHistory = filteredHistory.slice(startIndex, endIndex);
-      
-      return {
-        success: true,
-        imports: paginatedHistory,
-        pagination: {
-          total: filteredHistory.length,
-          page: page,
-          limit: limit,
-          totalPages: Math.ceil(filteredHistory.length / limit)
-        },
-        message: 'Historique récupéré depuis le stockage local'
-      };
-    } catch (error) {
-      console.error('❌ Erreur historique local:', error);
       return {
         success: false,
+        message: error.message || 'Erreur lors de la récupération de l\'historique',
         imports: [],
-        pagination: { total: 0, page: 1, limit: 10, totalPages: 0 },
-        message: error.message || 'Erreur lors de la récupération de l\'historique'
+        pagination: { total: 0, page: 1, limit: 10, totalPages: 0 }
       };
     }
   },
 
-  /**
-   * Ajouter une entrée à l'historique
-   * @param {Object} importData - Données de l'importation
-   */
-  addToHistory(importData) {
-    try {
-      const history = JSON.parse(localStorage.getItem('importHistory') || '[]');
-      
-      const historyEntry = {
-        id: `import_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: importData.timestamp || new Date().toISOString(),
-        table: importData.table,
-        schema: importData.schema || 'core',
-        file: importData.fileName,
-        totalRows: importData.totalRows || 0,
-        importedRows: importData.importedRows || 0,
-        errorRows: importData.errorRows || 0,
-        status: importData.success ? 'success' : 
-               (importData.errorRows > 0 ? 'partial' : 'error'),
-        user: localStorage.getItem('username') || 'SYSTEM',
-        userId: localStorage.getItem('userId'),
-        details: importData.details,
-        successRate: importData.totalRows ? 
-          ((importData.importedRows / importData.totalRows) * 100).toFixed(2) : 0
-      };
-      
-      // Ajouter au début du tableau
-      history.unshift(historyEntry);
-      
-      // Limiter à 1000 entrées maximum
-      if (history.length > 1000) {
-        history.pop();
-      }
-      
-      localStorage.setItem('importHistory', JSON.stringify(history));
-      
-      // Émettre un événement pour les composants qui écoutent
-      window.dispatchEvent(new CustomEvent('importHistoryUpdated', { 
-        detail: historyEntry 
-      }));
-      
-    } catch (error) {
-      console.error('❌ Erreur ajout à l\'historique:', error);
-    }
-  },
-
-  /**
-   * Récupérer les statistiques d'importation
-   * @returns {Promise<Object>} Statistiques d'importation
-   */
+  // Récupérer les statistiques d'importation
   async getImportStats() {
     try {
-      const response = await fetchAPI('/import/stats');
-      
-      if (response.success && response.stats) {
-        return response;
-      } else {
-        // Fallback: calculer les statistiques depuis l'historique local
-        return await this.getImportStatsLocal();
-      }
+      const response = await fetchAPI('/upload/stats');
+      return response;
     } catch (error) {
       console.error('❌ Erreur récupération statistiques:', error);
-      return await this.getImportStatsLocal();
-    }
-  },
-
-  /**
-   * Calculer les statistiques depuis l'historique local
-   */
-  async getImportStatsLocal() {
-    try {
-      const history = JSON.parse(localStorage.getItem('importHistory') || '[]');
-      
-      const today = new Date();
-      const last7Days = new Date(today);
-      last7Days.setDate(today.getDate() - 7);
-      const last30Days = new Date(today);
-      last30Days.setDate(today.getDate() - 30);
-      
-      // Statistiques globales
-      const stats = {
-        totalImports: history.length,
-        successfulImports: history.filter(item => item.status === 'success').length,
-        failedImports: history.filter(item => item.status === 'error').length,
-        partialImports: history.filter(item => item.status === 'partial').length,
-        
-        totalRowsImported: history.reduce((sum, item) => sum + (item.importedRows || 0), 0),
-        totalRowsProcessed: history.reduce((sum, item) => sum + (item.totalRows || 0), 0),
-        totalErrors: history.reduce((sum, item) => sum + (item.errorRows || 0), 0),
-        
-        last7Days: {
-          imports: history.filter(item => new Date(item.timestamp) >= last7Days).length,
-          successful: history.filter(item => 
-            item.status === 'success' && new Date(item.timestamp) >= last7Days
-          ).length,
-          failed: history.filter(item => 
-            item.status === 'error' && new Date(item.timestamp) >= last7Days
-          ).length,
-          rowsImported: history
-            .filter(item => new Date(item.timestamp) >= last7Days)
-            .reduce((sum, item) => sum + (item.importedRows || 0), 0)
-        },
-        
-        last30Days: {
-          imports: history.filter(item => new Date(item.timestamp) >= last30Days).length,
-          successful: history.filter(item => 
-            item.status === 'success' && new Date(item.timestamp) >= last30Days
-          ).length,
-          failed: history.filter(item => 
-            item.status === 'error' && new Date(item.timestamp) >= last30Days
-          ).length,
-          rowsImported: history
-            .filter(item => new Date(item.timestamp) >= last30Days)
-            .reduce((sum, item) => sum + (item.importedRows || 0), 0)
-        },
-        
-        byTable: {},
-        byUser: {},
-        bySchema: {},
-        
-        successRate: 0,
-        errorRate: 0,
-        averageSuccessRate: 0
-      };
-      
-      // Calculer les statistiques par table, utilisateur et schéma
-      history.forEach(item => {
-        // Par table
-        if (!stats.byTable[item.table]) {
-          stats.byTable[item.table] = {
-            imports: 0,
-            successful: 0,
-            failed: 0,
-            partial: 0,
-            rowsImported: 0,
-            totalRows: 0
-          };
-        }
-        stats.byTable[item.table].imports++;
-        if (item.status === 'success') stats.byTable[item.table].successful++;
-        if (item.status === 'error') stats.byTable[item.table].failed++;
-        if (item.status === 'partial') stats.byTable[item.table].partial++;
-        stats.byTable[item.table].rowsImported += item.importedRows || 0;
-        stats.byTable[item.table].totalRows += item.totalRows || 0;
-        
-        // Par utilisateur
-        const user = item.user || 'SYSTEM';
-        if (!stats.byUser[user]) {
-          stats.byUser[user] = {
-            imports: 0,
-            successful: 0,
-            rowsImported: 0
-          };
-        }
-        stats.byUser[user].imports++;
-        if (item.status === 'success') stats.byUser[user].successful++;
-        stats.byUser[user].rowsImported += item.importedRows || 0;
-        
-        // Par schéma
-        const schema = item.schema || 'core';
-        if (!stats.bySchema[schema]) {
-          stats.bySchema[schema] = {
-            imports: 0,
-            tables: new Set()
-          };
-        }
-        stats.bySchema[schema].imports++;
-        stats.bySchema[schema].tables.add(item.table);
-      });
-      
-      // Convertir les Sets en Arrays pour la sérialisation
-      Object.keys(stats.bySchema).forEach(schema => {
-        stats.bySchema[schema].tables = Array.from(stats.bySchema[schema].tables);
-      });
-      
-      // Calculer les taux
-      if (stats.totalImports > 0) {
-        stats.successRate = Math.round((stats.successfulImports / stats.totalImports) * 100);
-        stats.errorRate = Math.round((stats.failedImports / stats.totalImports) * 100);
-      }
-      
-      // Taux de réussite moyen (basé sur les lignes)
-      if (stats.totalRowsProcessed > 0) {
-        stats.averageSuccessRate = Math.round(
-          (stats.totalRowsImported / stats.totalRowsProcessed) * 100
-        );
-      }
-      
-      return {
-        success: true,
-        stats: stats,
-        message: 'Statistiques calculées depuis l\'historique local',
-        generatedAt: new Date().toISOString()
-      };
-    } catch (error) {
-      console.error('❌ Erreur statistiques local:', error);
       return {
         success: false,
-        stats: {},
-        message: error.message || 'Erreur lors du calcul des statistiques'
+        message: error.message || 'Erreur lors de la récupération des statistiques',
+        stats: {}
       };
     }
   },
 
-  // ==============================================
-  // UTILITAIRES DE TRANSFORMATION
-  // ==============================================
+  // ========== GESTION DES MAPPINGS ==========
 
-  /**
-   * Mapper les colonnes automatiquement
-   * @param {Array<string>} csvHeaders - En-têtes du fichier CSV
-   * @param {Array<Object>} tableColumns - Colonnes de la table
-   * @returns {Object} Mapping des colonnes
-   */
-  autoMapColumns(csvHeaders, tableColumns) {
-    const mapping = {};
-    const usedColumns = new Set();
-    
-    csvHeaders.forEach((header, index) => {
-      if (!header || header.trim() === '') {
-        mapping[index] = '';
-        return;
-      }
+  // Mapper automatiquement les colonnes
+  async autoMapColumns(file, table, schema = 'core', options = {}) {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('table', table);
+      formData.append('schema', schema);
+      formData.append('action', 'auto-map');
       
-      const cleanHeader = header.trim().toUpperCase()
-        .replace(/[^A-Z0-9_]/g, '_')
-        .replace(/_+/g, '_')
-        .replace(/^_|_$/g, '');
-      
-      // 1. Recherche exacte (nom identique)
-      let matchedColumn = tableColumns.find(col => 
-        col.name.toUpperCase() === cleanHeader
-      );
-      
-      // 2. Recherche sans underscores
-      if (!matchedColumn) {
-        matchedColumn = tableColumns.find(col => 
-          col.name.toUpperCase().replace(/_/g, '') === cleanHeader.replace(/_/g, '')
-        );
-      }
-      
-      // 3. Recherche partielle (contient)
-      if (!matchedColumn) {
-        matchedColumn = tableColumns.find(col => 
-          cleanHeader.includes(col.name.toUpperCase()) || 
-          col.name.toUpperCase().includes(cleanHeader)
-        );
-      }
-      
-      // 4. Recherche par synonymes
-      if (!matchedColumn) {
-        const synonyms = this.getColumnSynonyms(cleanHeader);
-        matchedColumn = tableColumns.find(col => 
-          synonyms.some(synonym => 
-            col.name.toUpperCase().includes(synonym) || 
-            synonym.includes(col.name.toUpperCase())
-          )
-        );
-      }
-      
-      if (matchedColumn && !usedColumns.has(matchedColumn.name)) {
-        mapping[index] = matchedColumn.name;
-        usedColumns.add(matchedColumn.name);
-      } else {
-        mapping[index] = '';
-      }
-    });
-    
-    return mapping;
-  },
-
-  /**
-   * Obtenir les synonymes pour un nom de colonne
-   */
-  getColumnSynonyms(columnName) {
-    const synonymMap = {
-      'NOM': ['NAME', 'LASTNAME', 'LAST_NAME', 'FAMILYNAME'],
-      'PRENOM': ['FIRSTNAME', 'FIRST_NAME', 'GIVENNAME'],
-      'DATE': ['DAT', 'DT', 'TIMESTAMP'],
-      'TELEPHONE': ['PHONE', 'TEL', 'MOBILE', 'CELLPHONE'],
-      'EMAIL': ['MAIL', 'E_MAIL', 'EMAIL_ADDRESS'],
-      'ADRESSE': ['ADDRESS', 'LOCATION', 'STREET'],
-      'VILLE': ['CITY', 'TOWN'],
-      'PAYS': ['COUNTRY', 'NATION'],
-      'CODE': ['COD', 'CD', 'ID', 'IDENTIFIANT'],
-      'LIBELLE': ['LABEL', 'TITLE', 'DESCRIPTION', 'LIB'],
-      'ACTIF': ['ACTIVE', 'ENABLED', 'STATUS'],
-      'CREATION': ['CREATED', 'CREATED_AT', 'DAT_CREATION'],
-      'MODIFICATION': ['MODIFIED', 'UPDATED', 'DAT_MODIFICATION']
-    };
-    
-    const synonyms = [columnName];
-    
-    Object.keys(synonymMap).forEach(key => {
-      if (columnName.includes(key) || synonymMap[key].includes(columnName)) {
-        synonyms.push(...[key, ...synonymMap[key]]);
-      }
-    });
-    
-    return [...new Set(synonyms)];
-  },
-
-  /**
-   * Transformer les données selon les règles de la table
-   * @param {Object} tableInfo - Informations de la table
-   * @param {Object} row - Ligne de données
-   * @param {number} rowIndex - Index de la ligne (pour les erreurs)
-   * @returns {Object} Données transformées et erreurs
-   */
-  transformData(tableInfo, row, rowIndex = 0) {
-    const transformed = {};
-    const errors = [];
-    
-    tableInfo.columns.forEach(column => {
-      const rawValue = row[column.name];
-      let processedValue = rawValue;
-      
-      try {
-        // Gérer les valeurs null/undefined/vides
-        if (rawValue === null || rawValue === undefined || rawValue === '') {
-          if (column.isRequired) {
-            errors.push(`Colonne "${column.name}" est obligatoire (ligne ${rowIndex})`);
-            processedValue = null;
-          } else if (column.defaultValue !== undefined) {
-            processedValue = column.defaultValue;
-          } else {
-            processedValue = null;
-          }
-        } else {
-          // Conversion de type
-          processedValue = this.convertValueByType(rawValue, column.type);
-          
-          // Validation de longueur pour les chaînes
-          if (column.maxLength && typeof processedValue === 'string' && 
-              processedValue.length > column.maxLength) {
-            warnings.push(`La valeur "${rawValue}" dépasse la longueur maximale (${column.maxLength}) pour "${column.name}" (ligne ${rowIndex})`);
-            processedValue = processedValue.substring(0, column.maxLength);
-          }
-          
-          // Validation des valeurs autorisées
-          if (column.allowedValues && column.allowedValues.length > 0) {
-            if (!column.allowedValues.includes(processedValue)) {
-              warnings.push(`La valeur "${rawValue}" n'est pas autorisée pour "${column.name}". Valeurs autorisées: ${column.allowedValues.join(', ')} (ligne ${rowIndex})`);
-            }
-          }
+      // Ajouter les options
+      Object.keys(options).forEach(key => {
+        if (options[key] !== undefined && options[key] !== null) {
+          formData.append(key, options[key]);
         }
-      } catch (error) {
-        errors.push(`Erreur de conversion pour "${column.name}": ${error.message} (ligne ${rowIndex})`);
-        processedValue = null;
-      }
+      });
+
+      const response = await fetchAPI('/upload/auto-map', {
+        method: 'POST',
+        body: formData,
+      });
       
-      transformed[column.name] = processedValue;
-    });
-    
-    return {
-      data: transformed,
-      errors: errors,
-      warnings: warnings
-    };
-  },
-
-  /**
-   * Convertir une valeur selon son type SQL
-   */
-  convertValueByType(value, sqlType) {
-    if (value === null || value === undefined) return null;
-    
-    const type = sqlType.toLowerCase();
-    const strValue = value.toString().trim();
-    
-    switch (true) {
-      case type.includes('int'):
-        const intVal = parseInt(strValue.replace(/[^0-9-]/g, ''));
-        return isNaN(intVal) ? 0 : intVal;
-        
-      case type.includes('decimal'):
-      case type.includes('numeric'):
-      case type.includes('float'):
-      case type.includes('real'):
-      case type.includes('money'):
-        const floatVal = parseFloat(strValue.replace(/[^0-9.-]/g, ''));
-        return isNaN(floatVal) ? 0.0 : floatVal;
-        
-      case type.includes('bit'):
-      case type.includes('bool'):
-        const lowerVal = strValue.toLowerCase();
-        return (
-          lowerVal === '1' || 
-          lowerVal === 'true' || 
-          lowerVal === 'oui' || 
-          lowerVal === 'yes' || 
-          lowerVal === 'vrai' || 
-          lowerVal === 'on'
-        ) ? 1 : 0;
-        
-      case type.includes('date'):
-        try {
-          // Essayer différents formats de date
-          const dateFormats = [
-            'YYYY-MM-DD',
-            'DD/MM/YYYY',
-            'MM/DD/YYYY',
-            'YYYY/MM/DD',
-            'DD-MM-YYYY',
-            'MM-DD-YYYY'
-          ];
-          
-          for (const format of dateFormats) {
-            const date = this.parseDate(strValue, format);
-            if (date && !isNaN(date.getTime())) {
-              return date.toISOString().split('T')[0];
-            }
-          }
-          
-          // Fallback: laisser la valeur d'origine
-          return strValue;
-        } catch (e) {
-          return strValue;
-        }
-        
-      case type.includes('datetime'):
-      case type.includes('timestamp'):
-        try {
-          const date = new Date(strValue);
-          if (!isNaN(date.getTime())) {
-            return date.toISOString();
-          }
-          return strValue;
-        } catch (e) {
-          return strValue;
-        }
-        
-      default: // varchar, nvarchar, text, etc.
-        return strValue;
-    }
-  },
-
-  /**
-   * Parser une date selon un format
-   */
-  parseDate(dateString, format) {
-    const parts = dateString.split(/[\/\-\.]/);
-    if (parts.length !== 3) return null;
-    
-    let day, month, year;
-    
-    switch (format) {
-      case 'YYYY-MM-DD':
-        year = parseInt(parts[0]);
-        month = parseInt(parts[1]) - 1;
-        day = parseInt(parts[2]);
-        break;
-      case 'DD/MM/YYYY':
-        day = parseInt(parts[0]);
-        month = parseInt(parts[1]) - 1;
-        year = parseInt(parts[2]);
-        break;
-      case 'MM/DD/YYYY':
-        month = parseInt(parts[0]) - 1;
-        day = parseInt(parts[1]);
-        year = parseInt(parts[2]);
-        break;
-      default:
-        return null;
-    }
-    
-    // Validation basique
-    if (year < 1900 || year > 2100) return null;
-    if (month < 0 || month > 11) return null;
-    if (day < 1 || day > 31) return null;
-    
-    const date = new Date(year, month, day);
-    if (date.getDate() !== day || date.getMonth() !== month) {
-      return null; // Date invalide (ex: 31 février)
-    }
-    
-    return date;
-  },
-
-  /**
-   * Générer un rapport d'importation
-   * @param {Object} importResult - Résultat de l'importation
-   * @param {Array} errors - Erreurs détaillées
-   * @returns {Object} Rapport d'importation
-   */
-  generateImportReport(importResult, errors = []) {
-    const totalRows = importResult.details?.total || 0;
-    const importedRows = importResult.details?.inserted || 0;
-    const errorRows = importResult.details?.errors || errors.length;
-    
-    const report = {
-      success: importResult.success,
-      message: importResult.message,
-      timestamp: new Date().toISOString(),
-      summary: {
-        totalRows: totalRows,
-        importedRows: importedRows,
-        errorRows: errorRows,
-        successRate: totalRows > 0 ? ((importedRows / totalRows) * 100).toFixed(2) : 0,
-        duration: importResult.details?.duration || 0,
-        table: importResult.table,
-        schema: importResult.schema
-      },
-      details: importResult.details || {},
-      errors: errors.slice(0, 100), // Limiter à 100 erreurs
-      warnings: importResult.warnings || [],
-      recommendations: this.generateRecommendations(importResult, errors)
-    };
-    
-    return report;
-  },
-
-  /**
-   * Générer des recommandations basées sur les résultats
-   */
-  generateRecommendations(importResult, errors) {
-    const recommendations = [];
-    const errorCount = importResult.details?.errors || errors.length;
-    const totalRows = importResult.details?.total || 0;
-    
-    if (errorCount === 0) {
-      recommendations.push('Importation réussie. Aucune action requise.');
-    } else if (errorCount > 0 && errorCount < totalRows * 0.1) {
-      recommendations.push('Peu d\'erreurs détectées. Vous pouvez corriger manuellement les lignes problématiques.');
-      recommendations.push('Consultez le journal d\'erreurs pour plus de détails.');
-    } else if (errorCount >= totalRows * 0.5) {
-      recommendations.push('Taux d\'erreur élevé. Vérifiez le format du fichier et le mapping des colonnes.');
-      recommendations.push('Téléchargez le template officiel pour vérifier le format attendu.');
-      recommendations.push('Contactez l\'administrateur si le problème persiste.');
-    }
-    
-    // Recommandations spécifiques aux types d'erreurs
-    if (errors.some(e => e.includes('date'))) {
-      recommendations.push('Problèmes de date détectés. Assurez-vous que les dates sont au format YYYY-MM-DD.');
-    }
-    
-    if (errors.some(e => e.includes('obligatoire'))) {
-      recommendations.push('Des colonnes obligatoires sont manquantes. Vérifiez le mapping des colonnes.');
-    }
-    
-    if (errors.some(e => e.includes('unique'))) {
-      recommendations.push('Violations de contraintes d\'unicité détectées. Vérifiez les doublons dans votre fichier.');
-    }
-    
-    return recommendations;
-  },
-
-  // ==============================================
-  // UTILITAIRES SUPPLÉMENTAIRES
-  // ==============================================
-
-  /**
-   * Lire le contenu d'un fichier
-   */
-  readFileContent(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      
-      reader.onload = (event) => {
-        resolve(event.target.result);
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur mapping automatique:', error);
+      return {
+        success: false,
+        message: error.message || 'Erreur lors du mapping automatique',
+        mapping: {},
+        suggestions: []
       };
+    }
+  },
+
+  // Valider un mapping
+  async validateMapping(mapping, table, schema = 'core') {
+    try {
+      const response = await fetchAPI('/upload/validate-mapping', {
+        method: 'POST',
+        body: JSON.stringify({ mapping, table, schema }),
+      });
       
-      reader.onerror = (error) => {
-        reject(error);
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur validation mapping:', error);
+      return {
+        success: false,
+        message: error.message || 'Erreur lors de la validation du mapping',
+        valid: false,
+        errors: []
       };
-      
-      if (file.name.toLowerCase().endsWith('.csv') || file.name.toLowerCase().endsWith('.txt')) {
-        reader.readAsText(file, 'UTF-8');
-      } else {
-        reader.readAsBinaryString(file);
-      }
-    });
-  },
-
-  /**
-   * Parser un fichier CSV
-   */
-  parseCSV(content, delimiter = ',', hasHeader = true) {
-    const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
-    const parsedLines = [];
-    
-    // Détecter le délimiteur si non spécifié
-    if (!delimiter || delimiter === 'auto') {
-      delimiter = this.detectDelimiter(content);
     }
-    
-    lines.forEach(line => {
-      const columns = this.parseCSVLine(line, delimiter);
-      parsedLines.push(columns);
-    });
-    
-    return parsedLines;
   },
 
-  /**
-   * Détecter le délimiteur d'un fichier CSV
-   */
-  detectDelimiter(content) {
-    const firstLine = content.split('\n')[0];
-    const delimiters = [',', ';', '\t', '|'];
-    
-    let bestDelimiter = ',';
-    let maxCount = 0;
-    
-    delimiters.forEach(delimiter => {
-      const count = (firstLine.match(new RegExp(delimiter, 'g')) || []).length;
-      if (count > maxCount) {
-        maxCount = count;
-        bestDelimiter = delimiter;
-      }
-    });
-    
-    return bestDelimiter;
-  },
+  // ========== GESTION DES FICHIERS ==========
 
-  /**
-   * Parser une ligne CSV avec gestion des guillemets
-   */
-  parseCSVLine(line, delimiter) {
-    const columns = [];
-    let current = '';
-    let inQuotes = false;
-    let i = 0;
-    
-    while (i < line.length) {
-      const char = line[i];
+  // Télécharger un rapport d'importation
+  async downloadReport(importId, format = 'pdf') {
+    try {
+      const response = await fetchAPI(`/upload/report/${importId}?format=${format}`, {
+        method: 'GET',
+      });
       
-      if (char === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          // Double guillemet à l'intérieur d'un champ
-          current += '"';
-          i += 2;
-        } else {
-          // Début ou fin de guillemets
-          inQuotes = !inQuotes;
-          i++;
-        }
-      } else if (char === delimiter && !inQuotes) {
-        // Fin d'une colonne
-        columns.push(current);
-        current = '';
-        i++;
-      } else {
-        current += char;
-        i++;
-      }
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur téléchargement rapport:', error);
+      return {
+        success: false,
+        message: error.message || 'Erreur lors du téléchargement du rapport'
+      };
     }
-    
-    // Ajouter la dernière colonne
-    columns.push(current);
-    
-    // Nettoyer les guillemets autour des champs
-    return columns.map(col => {
-      if (col.startsWith('"') && col.endsWith('"')) {
-        return col.substring(1, col.length - 1).replace(/""/g, '"');
-      }
-      return col.trim();
-    });
   },
 
-  /**
-   * Formater un nom de table pour l'affichage
-   */
+  // Obtenir les erreurs d'un import spécifique
+  async getImportErrors(importId, limit = 100) {
+    try {
+      const response = await fetchAPI(`/upload/errors/${importId}?limit=${limit}`);
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur récupération erreurs import:', error);
+      return {
+        success: false,
+        message: error.message || 'Erreur lors de la récupération des erreurs',
+        errors: []
+      };
+    }
+  },
+
+  // ========== CONFIGURATION D'IMPORTATION ==========
+
+  // Obtenir la configuration d'importation
+  async getImportConfig() {
+    try {
+      const response = await fetchAPI('/upload/config');
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur récupération configuration:', error);
+      return {
+        success: false,
+        message: error.message || 'Erreur lors de la récupération de la configuration',
+        config: {}
+      };
+    }
+  },
+
+  // Sauvegarder la configuration d'importation
+  async saveImportConfig(config) {
+    try {
+      const response = await fetchAPI('/upload/config', {
+        method: 'POST',
+        body: JSON.stringify(config),
+      });
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur sauvegarde configuration:', error);
+      return {
+        success: false,
+        message: error.message || 'Erreur lors de la sauvegarde de la configuration'
+      };
+    }
+  },
+
+  // ========== OPÉRATIONS BATCH ==========
+
+  // Annuler une importation en cours
+  async cancelImport(importId) {
+    try {
+      const response = await fetchAPI(`/upload/cancel/${importId}`, {
+        method: 'POST',
+      });
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur annulation import:', error);
+      return {
+        success: false,
+        message: error.message || 'Erreur lors de l\'annulation de l\'importation'
+      };
+    }
+  },
+
+  // Redémarrer une importation échouée
+  async retryImport(importId) {
+    try {
+      const response = await fetchAPI(`/upload/retry/${importId}`, {
+        method: 'POST',
+      });
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur redémarrage import:', error);
+      return {
+        success: false,
+        message: error.message || 'Erreur lors du redémarrage de l\'importation'
+      };
+    }
+  },
+
+  // ========== UTILITAIRES ==========
+
+  // Tester la connexion à l'API d'importation
+  async testConnection() {
+    try {
+      const response = await fetchAPI('/upload/test');
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur test connexion:', error);
+      return {
+        success: false,
+        message: error.message || 'Erreur lors du test de connexion'
+      };
+    }
+  },
+
+  // Obtenir les logs d'importation en temps réel
+  async getLiveLogs(importId) {
+    try {
+      const response = await fetchAPI(`/upload/logs/${importId}`);
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur récupération logs:', error);
+      return {
+        success: false,
+        message: error.message || 'Erreur lors de la récupération des logs',
+        logs: []
+      };
+    }
+  },
+
+  // Formater un nom de table pour l'affichage
   formatTableName(tableName) {
     if (!tableName) return '';
     
-    // Remplacer les underscores par des espaces
     let formatted = tableName.replace(/_/g, ' ');
     
-    // Capitaliser chaque mot
     formatted = formatted.toLowerCase()
       .split(' ')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
     
-    // Corrections spécifiques
     const corrections = {
-      'Beneficiaire': 'Bénéficiaire',
-      'Prestataire': 'Prestataire de santé',
-      'Utilisateur': 'Utilisateur',
-      'Centre': 'Centre de santé',
-      'Carte': 'Carte bénéficiaire',
-      'Affection': 'Affection médicale',
-      'Medicament': 'Médicament'
+      'Beneficiaire': 'Bénéficiaires',
+      'Prestataire': 'Prestataires de santé',
+      'Utilisateur': 'Utilisateurs',
+      'Centre': 'Centres de santé',
+      'Carte': 'Cartes bénéficiaires',
+      'Affection': 'Affections médicales',
+      'Medicament': 'Médicaments',
+      'Consultation': 'Consultations',
+      'Examen': 'Examens',
+      'Prescription': 'Prescriptions'
     };
     
     return corrections[formatted] || formatted;
   },
 
-  /**
-   * Formater un nom de schéma
-   */
+  // Formater un nom de schéma
   formatSchemaName(schemaName) {
     const schemaLabels = {
       'core': 'Données principales',
       'security': 'Sécurité',
       'config': 'Configuration',
       'audit': 'Audit',
+      'metier': 'Métier',
       'dbo': 'Base de données'
     };
     
     return schemaLabels[schemaName] || schemaName.toUpperCase();
   },
 
-  /**
-   * Valider les options d'importation
-   */
+  // Valider les options d'importation
   validateImportOptions(options) {
     const errors = [];
     
@@ -3472,86 +2491,30 @@ export const importAPI = {
       errors.push('Délimiteur non supporté');
     }
     
-    if (options.importMode && !Object.values(IMPORT_MODES).includes(options.importMode)) {
-      errors.push('Mode d\'importation non valide');
-    }
-    
     return {
       valid: errors.length === 0,
       errors: errors
     };
   },
 
-  /**
-   * Obtenir la configuration par défaut
-   */
+  // Obtenir la configuration par défaut
   getDefaultConfig() {
     return {
       delimiter: ',',
       hasHeader: true,
       batchSize: 100,
-      importMode: IMPORT_MODES.UPSERT,
-      duplicateStrategy: DUPLICATE_STRATEGIES.UPDATE,
-      errorHandling: ERROR_HANDLING.CONTINUE,
-      maxFileSize: 100 * 1024 * 1024, // 100MB
+      importMode: 'upsert',
+      duplicateStrategy: 'update',
+      errorHandling: 'continue',
+      maxFileSize: 100 * 1024 * 1024,
       allowedExtensions: ['.csv', '.txt', '.xlsx', '.xls'],
-      defaultSchema: 'core'
+      defaultSchema: 'core',
+      validateBeforeImport: true,
+      createBackup: false,
+      notifyOnComplete: false
     };
-  },
-
-  // ==============================================
-  // GESTION DES ERREURS ET JOURNALISATION
-  // ==============================================
-
-  /**
-   * Logger une erreur
-   */
-  logError(context, error, additionalInfo = {}) {
-    const errorLog = {
-      timestamp: new Date().toISOString(),
-      context: context,
-      error: {
-        message: error.message,
-        stack: error.stack,
-        ...additionalInfo
-      },
-      user: localStorage.getItem('username') || 'SYSTEM',
-      url: window.location.href
-    };
-    
-    console.error(`❌ [${context}]`, error, additionalInfo);
-    
-    // Stocker les erreurs dans localStorage (limitées)
-    try {
-      const errors = JSON.parse(localStorage.getItem('importErrors') || '[]');
-      errors.unshift(errorLog);
-      if (errors.length > 100) errors.pop();
-      localStorage.setItem('importErrors', JSON.stringify(errors));
-    } catch (e) {
-      console.error('Erreur lors de la journalisation:', e);
-    }
-  },
-
-  /**
-   * Obtenir les logs d'erreur
-   */
-  getErrorLogs(limit = 50) {
-    try {
-      const errors = JSON.parse(localStorage.getItem('importErrors') || '[]');
-      return errors.slice(0, limit);
-    } catch (error) {
-      return [];
-    }
-  },
-
-  /**
-   * Effacer les logs d'erreur
-   */
-  clearErrorLogs() {
-    localStorage.removeItem('importErrors');
   }
 };
-
 
 
   // services/api.js

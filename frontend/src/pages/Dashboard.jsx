@@ -59,11 +59,16 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import api from '../services/api';
+import { 
+  consultationsAPI, 
+  prestationsAPI, 
+  beneficiairesAPI,
+  paysAPI 
+} from '../services/api';
 import './Dashboard.css';
 import { toast } from 'react-toastify';
 
-// Particle System Component
+// Particle System Component (inchangé)
 const ParticleSystem = ({ particleCount = 50, color = '#3b82f6' }) => {
   const canvasRef = useRef(null);
 
@@ -136,7 +141,7 @@ const ParticleSystem = ({ particleCount = 50, color = '#3b82f6' }) => {
   );
 };
 
-// Glass Card Component
+// Glass Card Component (inchangé)
 const GlassCard = ({ children, className = '', intensity = 'medium', hoverEffect = true, glow = false, onClick }) => {
   const cardRef = useRef(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -398,7 +403,7 @@ const SystemStatus = ({ status, items, loading = false }) => {
   );
 };
 
-// Quick Action Button Component
+// Quick Action Button Component (inchangé)
 const QuickActionButton = ({ icon: Icon, label, color, onClick, index }) => {
   return (
     <motion.button
@@ -429,7 +434,7 @@ const QuickActionButton = ({ icon: Icon, label, color, onClick, index }) => {
   );
 };
 
-// Activity Item Component
+// Activity Item Component (inchangé)
 const ActivityItem = ({ activity, index }) => {
   return (
     <motion.div
@@ -454,7 +459,7 @@ const ActivityItem = ({ activity, index }) => {
   );
 };
 
-// User Profile Component
+// User Profile Component (inchangé)
 const UserProfile = ({ user, onLogout }) => {
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -499,15 +504,56 @@ const UserProfile = ({ user, onLogout }) => {
   );
 };
 
+// Fonctions utilitaires
+const formatDateForAPI = (date) => {
+  if (!date) return '';
+  if (date instanceof Date) {
+    return date.toISOString().split('T')[0];
+  }
+  return date;
+};
+
+const buildQueryString = (params) => {
+  if (!params || Object.keys(params).length === 0) return '';
+  const queryParams = new URLSearchParams();
+  Object.keys(params).forEach(key => {
+    if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+      queryParams.append(key, params[key]);
+    }
+  });
+  return queryParams.toString() ? `?${queryParams.toString()}` : '';
+};
+
+const fetchAPI = async (endpoint, options = {}) => {
+  const token = localStorage.getItem('token');
+  const defaultHeaders = {
+    'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` }),
+    ...options.headers,
+  };
+
+  const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${endpoint}`, {
+    ...options,
+    headers: defaultHeaders,
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+};
+
 // Main Dashboard Component
 const DashboardModern = () => {
   const { user, logout } = useAuth();
   const { t } = useTranslation();
   
   const [dashboardData, setDashboardData] = useState({
+    consultations: [],
+    beneficiaires: [],
+    prestations: [],
     stats: null,
-    systemInfo: null,
-    recapRemboursement: null,
     loading: true,
     error: null
   });
@@ -552,7 +598,9 @@ const DashboardModern = () => {
 
   // Get time ago
   const getTimeAgo = (date) => {
-    const diffMs = new Date() - date;
+    if (!date) return 'Date inconnue';
+    const dateObj = new Date(date);
+    const diffMs = new Date() - dateObj;
     const diffMins = Math.floor(diffMs / (1000 * 60));
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -563,39 +611,125 @@ const DashboardModern = () => {
     return `Il y a ${diffDays} j`;
   };
 
+  // Get period dates
+  const getPeriodDates = (period) => {
+    const now = new Date();
+    const start = new Date();
+    
+    switch(period) {
+      case 'today':
+        start.setHours(0, 0, 0, 0);
+        break;
+      case 'week':
+        start.setDate(now.getDate() - 7);
+        break;
+      case 'month':
+        start.setMonth(now.getMonth() - 1);
+        break;
+      case 'year':
+        start.setFullYear(now.getFullYear() - 1);
+        break;
+      default:
+        start.setMonth(now.getMonth() - 1);
+    }
+    
+    return { startDate: start, endDate: now };
+  };
+
+  // Calculate statistics from real data
+  const calculateStats = useCallback((consultations, beneficiaires, prestations, period) => {
+    const { startDate, endDate } = getPeriodDates(period);
+    
+    // Filter consultations by period
+    const recentConsultations = consultations.filter(consultation => {
+      const consultationDate = new Date(consultation.DATE_CONSULTATION || consultation.date);
+      return consultationDate >= startDate && consultationDate <= endDate;
+    });
+
+    // Calculate unique doctors
+    const doctorsSet = new Set();
+    recentConsultations.forEach(consultation => {
+      if (consultation.NOM_MEDECIN) {
+        doctorsSet.add(consultation.NOM_MEDECIN);
+      }
+    });
+
+    // Calculate monthly revenue (sum of consultation amounts)
+    const monthlyRevenue = recentConsultations.reduce((sum, consultation) => {
+      return sum + (consultation.MONTANT_CONSULTATION || consultation.montant || 0);
+    }, 0);
+
+    // Calculate total prestations amount for period
+    const recentPrestations = prestations.filter(prestation => {
+      const prestationDate = new Date(prestation.DATE_PRESTATION || prestation.created_at);
+      return prestationDate >= startDate && prestationDate <= endDate;
+    });
+
+    const prestationsAmount = recentPrestations.reduce((sum, prestation) => {
+      return sum + (prestation.MONTANT || prestation.montant || 0);
+    }, 0);
+
+    return {
+      totalPatients: beneficiaires.length,
+      totalConsultations: recentConsultations.length,
+      activeDoctors: doctorsSet.size,
+      pendingAppointments: recentConsultations.filter(c => 
+        c.STATUT_PAIEMENT === 'À payer' || c.statut === 'en_attente'
+      ).length,
+      monthlyRevenue: monthlyRevenue + prestationsAmount,
+      patientSatisfaction: Math.floor(Math.random() * 20) + 80 // Simulation
+    };
+  }, []);
+
+  // Calculate remboursement recap from prestations
+  const calculateRemboursementRecap = useCallback((prestations) => {
+    const recentPrestations = prestations.filter(prestation => {
+      const date = new Date(prestation.DATE_PRESTATION || prestation.created_at);
+      const now = new Date();
+      const monthAgo = new Date(now.setMonth(now.getMonth() - 1));
+      return date >= monthAgo;
+    });
+
+    const nbSoumis = recentPrestations.filter(p => 
+      p.STATUT_DECLARATION === 'declare' || p.STATUT === 'soumis'
+    ).length;
+
+    const montantAPayer = recentPrestations.reduce((sum, p) => {
+      if (p.STATUT_PAIEMENT === 'À payer' || p.statut === 'non_paye') {
+        return sum + (p.MONTANT_PRISE_CHARGE || p.montant_prise_charge || 0);
+      }
+      return sum;
+    }, 0);
+
+    const payesMois = recentPrestations.reduce((sum, p) => {
+      if (p.STATUT_PAIEMENT === 'Payé' || p.statut === 'paye') {
+        return sum + (p.MONTANT_PRISE_CHARGE || p.montant_prise_charge || 0);
+      }
+      return sum;
+    }, 0);
+
+    const ticketMoyen = nbSoumis > 0 ? payesMois / nbSoumis : 0;
+
+    return {
+      nbSoumis,
+      montantAPayer,
+      payesMois,
+      ticketMoyen
+    };
+  }, []);
+
   // Fetch dashboard data
   const fetchDashboardData = useCallback(async () => {
     try {
       setRefreshing(true);
       setDashboardData(prev => ({ ...prev, loading: true, error: null }));
       
-      const periodForAPI = mapPeriodToAPI(activePeriod);
-      
       // Fetch all data in parallel
-      const [statsResponse, systemResponse, recapResponse, consultationsResponse] = await Promise.allSettled([
-        api.dashboard.getStats(periodForAPI),
-        api.testConnection(),
-        api.remboursements.getRecap(),
-        api.consultations.getAllConsultations({ limit: 5, sort: 'desc' })
+      const [consultationsResponse, beneficiairesResponse, prestationsResponse] = await Promise.allSettled([
+        consultationsAPI.getAllConsultations({ limit: 100 }),
+        beneficiairesAPI.getAll({ limit: 50 }),
+        prestationsAPI.getAllPrestations({ limit: 100 })
       ]);
-
-      // Process stats
-      let stats = {};
-      if (statsResponse.status === 'fulfilled' && statsResponse.value?.success) {
-        stats = statsResponse.value.stats || {};
-      }
-
-      // Process system info
-      let systemInfo = {};
-      if (systemResponse.status === 'fulfilled') {
-        systemInfo = systemResponse.value || {};
-      }
-
-      // Process remboursement recap
-      let recapRemboursement = {};
-      if (recapResponse.status === 'fulfilled' && recapResponse.value?.success) {
-        recapRemboursement = recapResponse.value.recap || recapResponse.value || {};
-      }
 
       // Process consultations
       let consultations = [];
@@ -603,20 +737,39 @@ const DashboardModern = () => {
         consultations = consultationsResponse.value.consultations || [];
       }
 
+      // Process beneficiaires
+      let beneficiaires = [];
+      if (beneficiairesResponse.status === 'fulfilled' && beneficiairesResponse.value?.success) {
+        beneficiaires = beneficiairesResponse.value.beneficiaires || [];
+      }
+
+      // Process prestations
+      let prestations = [];
+      if (prestationsResponse.status === 'fulfilled' && prestationsResponse.value?.success) {
+        prestations = prestationsResponse.value.prestations || [];
+      }
+
+      // Calculate statistics
+      const stats = calculateStats(consultations, beneficiaires, prestations, activePeriod);
+      
+      // Calculate remboursement recap
+      const recapRemboursement = calculateRemboursementRecap(prestations);
+
       // Generate recent activities
       const activities = generateRealActivities(consultations, stats);
       setRecentActivities(activities);
 
       // Update dashboard data
       setDashboardData({
+        consultations,
+        beneficiaires,
+        prestations,
         stats,
-        systemInfo,
-        recapRemboursement,
         loading: false,
         error: null
       });
 
-      // Update system stats
+      // Update system stats (simulation)
       setSystemStats({
         serverLoad: Math.floor(Math.random() * 40) + 30,
         memoryUsage: Math.floor(Math.random() * 30) + 60
@@ -624,56 +777,44 @@ const DashboardModern = () => {
 
       setLastUpdate(new Date());
       
-      if (statsResponse.status === 'rejected') {
-        console.error('Erreur récupération stats:', statsResponse.reason);
-      }
-
     } catch (error) {
       console.error('Erreur lors du chargement du dashboard:', error);
       setDashboardData({
+        consultations: [],
+        beneficiaires: [],
+        prestations: [],
         stats: generateFallbackStats(),
-        systemInfo: { success: false, message: 'Connection error' },
-        recapRemboursement: generateFallbackRecap(),
         loading: false,
         error: t('loadError')
       });
     } finally {
       setRefreshing(false);
     }
-  }, [activePeriod, t]);
+  }, [activePeriod, t, calculateStats, calculateRemboursementRecap]);
 
-  // Map period to API format
-  const mapPeriodToAPI = (period) => {
-    const map = {
-      'today': 'jour',
-      'week': 'semaine',
-      'month': 'mois',
-      'year': 'annee'
-    };
-    return map[period] || 'mois';
-  };
-
-  // Generate real activities
+  // Generate real activities from consultations
   const generateRealActivities = (consultations, stats) => {
     const activities = [];
     const now = new Date();
     
+    // Add recent consultations
     if (consultations && consultations.length > 0) {
       consultations.slice(0, 3).forEach((consultation, index) => {
         activities.push({
-          id: consultation.COD_CONS || index,
+          id: consultation.COD_CONS || `cons-${index}`,
           icon: Stethoscope,
           text: `Consultation pour ${consultation.NOM_BEN || 'patient'}`,
-          time: getTimeAgo(new Date(now - (index + 1) * 15 * 60000)),
+          time: getTimeAgo(consultation.DATE_CONSULTATION || consultation.date),
           type: 'consultation',
           urgent: consultation.PRIORITE === 'HAUTE'
         });
       });
     }
     
+    // Add pending appointments
     if (stats?.pendingAppointments > 0) {
       activities.push({
-        id: 100,
+        id: 'pending-appointments',
         icon: Calendar,
         text: `${stats.pendingAppointments} rendez-vous en attente`,
         time: getTimeAgo(new Date(now - 30 * 60000)),
@@ -685,7 +826,7 @@ const DashboardModern = () => {
     // Add system activities
     activities.push(
       {
-        id: 101,
+        id: 'auto-save',
         icon: Database,
         text: 'Sauvegarde automatique effectuée',
         time: getTimeAgo(new Date(now - 45 * 60000)),
@@ -693,7 +834,7 @@ const DashboardModern = () => {
         urgent: false
       },
       {
-        id: 102,
+        id: 'new-patient',
         icon: UserPlus,
         text: 'Nouvelle inscription patient',
         time: getTimeAgo(new Date(now - 60 * 60000)),
@@ -713,14 +854,6 @@ const DashboardModern = () => {
     pendingAppointments: 0,
     monthlyRevenue: 0,
     patientSatisfaction: 0
-  });
-
-  // Generate fallback recap
-  const generateFallbackRecap = () => ({
-    nbSoumis: 0,
-    montantAPayer: 0,
-    payesMois: 0,
-    ticketMoyen: 0
   });
 
   // Handle quick action click
@@ -776,6 +909,43 @@ const DashboardModern = () => {
       console.error('Erreur lors de la déconnexion:', error);
     }
   };
+
+  // Calculate chart data from real consultations
+  const calculateChartData = useCallback((consultations) => {
+    const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul'];
+    const now = new Date();
+    
+    return months.map((month, index) => {
+      const monthStart = new Date(now.getFullYear(), index, 1);
+      const monthEnd = new Date(now.getFullYear(), index + 1, 0);
+      
+      const monthConsultations = consultations.filter(consultation => {
+        const consultationDate = new Date(consultation.DATE_CONSULTATION || consultation.date);
+        return consultationDate >= monthStart && consultationDate <= monthEnd;
+      });
+      
+      const totalAmount = monthConsultations.reduce((sum, consultation) => {
+        return sum + (consultation.MONTANT_CONSULTATION || consultation.montant || 0);
+      }, 0);
+      
+      // Normalize for chart (0-100%)
+      const maxAmount = Math.max(...months.map((_, i) => {
+        const mStart = new Date(now.getFullYear(), i, 1);
+        const mEnd = new Date(now.getFullYear(), i + 1, 0);
+        const mCons = consultations.filter(c => {
+          const date = new Date(c.DATE_CONSULTATION || c.date);
+          return date >= mStart && date <= mEnd;
+        });
+        return mCons.reduce((s, c) => s + (c.MONTANT_CONSULTATION || c.montant || 0), 0);
+      }));
+      
+      return {
+        label: month,
+        value: maxAmount > 0 ? (totalAmount / maxAmount) * 100 : 0,
+        amount: totalAmount
+      };
+    });
+  }, []);
 
   // Initialize dashboard data
   useEffect(() => {
@@ -907,8 +1077,8 @@ const DashboardModern = () => {
     { 
       icon: Server, 
       label: 'Serveur API', 
-      status: dashboardData.systemInfo?.success ? 'active' : 'error', 
-      value: dashboardData.systemInfo?.success ? 'Connecté' : 'Erreur' 
+      status: dashboardData.consultations.length > 0 ? 'active' : 'error', 
+      value: dashboardData.consultations.length > 0 ? 'Connecté' : 'Erreur' 
     },
     { 
       icon: Database, 
@@ -942,16 +1112,8 @@ const DashboardModern = () => {
     }
   ];
 
-  // Prepare chart data (based on real stats)
-  const chartData = [
-    { label: 'Jan', value: Math.min(stats.totalConsultations || 0, 100) },
-    { label: 'Fév', value: Math.min((stats.totalConsultations || 0) * 0.8, 100) },
-    { label: 'Mar', value: Math.min((stats.totalConsultations || 0) * 0.6, 100) },
-    { label: 'Avr', value: Math.min((stats.totalConsultations || 0) * 0.9, 100) },
-    { label: 'Mai', value: Math.min((stats.totalConsultations || 0) * 0.7, 100) },
-    { label: 'Jun', value: Math.min((stats.totalConsultations || 0) * 0.85, 100) },
-    { label: 'Jul', value: Math.min((stats.totalConsultations || 0) * 0.75, 100) }
-  ];
+  // Calculate chart data from real consultations
+  const chartData = calculateChartData(dashboardData.consultations);
 
   if (dashboardData.loading && !refreshing) {
     return (
@@ -1056,7 +1218,7 @@ const DashboardModern = () => {
             </form>
 
             <div className="header-actions-modern">
-              {/* <motion.button
+              <motion.button
                 className="theme-toggle"
                 onClick={toggleDarkMode}
                 whileHover={{ scale: 1.05 }}
@@ -1087,7 +1249,7 @@ const DashboardModern = () => {
                 <span className="notification-badge">3</span>
               </motion.button>
 
-              <UserProfile user={user} onLogout={handleLogout} /> */}
+              <UserProfile user={user} onLogout={handleLogout} />
             </div>
           </div>
         </div>
@@ -1168,6 +1330,9 @@ const DashboardModern = () => {
                     >
                       <div className="chart-bar-fill" />
                       <div className="chart-bar-label">{item.label}</div>
+                      <div className="chart-bar-tooltip">
+                        {formatCurrency(item.amount)}
+                      </div>
                     </motion.div>
                   ))}
                 </div>
@@ -1215,7 +1380,7 @@ const DashboardModern = () => {
           <div className="system-remboursement-grid">
             {/* System Status */}
             <SystemStatus 
-              status={dashboardData.systemInfo?.success ? 'active' : 'error'}
+              status={dashboardData.consultations.length > 0 ? 'active' : 'error'}
               items={systemStatusItems}
               loading={dashboardData.loading}
             />
@@ -1236,7 +1401,9 @@ const DashboardModern = () => {
                     <FileText size={20} />
                   </div>
                   <div className="stat-content">
-                    <h4>{formatNumber(dashboardData.recapRemboursement?.nbSoumis || 0)}</h4>
+                    <h4>{formatNumber(dashboardData.prestations.filter(p => 
+                      p.STATUT_DECLARATION === 'declare' || p.STATUT === 'soumis'
+                    ).length)}</h4>
                     <p>Déclarations soumises</p>
                   </div>
                 </div>
@@ -1246,7 +1413,12 @@ const DashboardModern = () => {
                     <DollarSign size={20} />
                   </div>
                   <div className="stat-content">
-                    <h4>{formatCurrency(dashboardData.recapRemboursement?.montantAPayer || 0)}</h4>
+                    <h4>{formatCurrency(dashboardData.prestations.reduce((sum, p) => {
+                      if (p.STATUT_PAIEMENT === 'À payer' || p.statut === 'non_paye') {
+                        return sum + (p.MONTANT_PRISE_CHARGE || p.montant_prise_charge || 0);
+                      }
+                      return sum;
+                    }, 0))}</h4>
                     <p>Montant à payer</p>
                   </div>
                 </div>
@@ -1256,7 +1428,12 @@ const DashboardModern = () => {
                     <CheckCircle size={20} />
                   </div>
                   <div className="stat-content">
-                    <h4>{formatCurrency(dashboardData.recapRemboursement?.payesMois || 0)}</h4>
+                    <h4>{formatCurrency(dashboardData.prestations.reduce((sum, p) => {
+                      if (p.STATUT_PAIEMENT === 'Payé' || p.statut === 'paye') {
+                        return sum + (p.MONTANT_PRISE_CHARGE || p.montant_prise_charge || 0);
+                      }
+                      return sum;
+                    }, 0))}</h4>
                     <p>Payés ce mois</p>
                   </div>
                 </div>
