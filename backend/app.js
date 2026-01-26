@@ -7165,6 +7165,9 @@ app.put('/api/beneficiaires/:id/photo', authenticateToken, async (req, res) => {
 app.post('/api/beneficiaires', authenticateToken, async (req, res) => {
   // Utiliser le middleware multer pour gérer la photo
   upload.single('photo')(req, res, async function(err) {
+    // DÉCLARER photoFileName ICI, AU DÉBUT DE LA FONCTION
+    let photoFileName = null;
+    
     try {
       if (err instanceof multer.MulterError) {
         console.error('❌ Erreur Multer:', err);
@@ -7237,7 +7240,7 @@ app.post('/api/beneficiaires', authenticateToken, async (req, res) => {
         await transaction.begin();
         
         // Gérer la photo si présente - DÉPLACER VERS LE BON DOSSIER
-        let photoFileName = null;
+        // photoFileName est déjà déclarée plus haut, on la met à jour ici
         if (req.file) {
           // S'assurer que le dossier de destination existe
           const uploadsDir = path.join(__dirname, 'uploads');
@@ -7417,7 +7420,7 @@ app.post('/api/beneficiaires', authenticateToken, async (req, res) => {
         
       } catch (error) {
         await transaction.rollback();
-        // Supprimer la photo si erreur SQL
+        // Supprimer la photo si erreur SQL - photoFileName est maintenant accessible
         if (photoFileName) {
           const photoPath = path.join(__dirname, 'uploads', 'beneficiaires', photoFileName);
           if (fs.existsSync(photoPath)) {
@@ -7446,6 +7449,233 @@ app.post('/api/beneficiaires', authenticateToken, async (req, res) => {
     }
   });
 });
+
+// Route pour récupérer le dernier identifiant national AMS
+app.get('/api/beneficiaires/last-identifiant', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    console.log('🔍 Récupération du dernier identifiant national...');
+    
+    const pool = await dbConfig.getConnection();
+    
+    // Requête pour obtenir le dernier identifiant national (le plus grand numéro)
+    const query = `
+      SELECT TOP 1 IDENTIFIANT_NATIONAL 
+      FROM [core].[BENEFICIAIRE] 
+      WHERE IDENTIFIANT_NATIONAL LIKE 'AMS%'
+        AND RETRAIT_DATE IS NULL
+        AND ISNUMERIC(SUBSTRING(IDENTIFIANT_NATIONAL, 4, LEN(IDENTIFIANT_NATIONAL))) = 1
+      ORDER BY 
+        CAST(SUBSTRING(IDENTIFIANT_NATIONAL, 4, LEN(IDENTIFIANT_NATIONAL)) AS BIGINT) DESC,
+        IDENTIFIANT_NATIONAL DESC
+    `;
+    
+    const result = await pool.request().query(query);
+    
+    if (result.recordset.length > 0) {
+      const lastId = result.recordset[0].IDENTIFIANT_NATIONAL;
+      console.log('✅ Dernier identifiant trouvé:', lastId);
+      
+      return res.json({
+        success: true,
+        lastIdentifiant: lastId,
+        message: 'Dernier identifiant national récupéré avec succès'
+      });
+    } else {
+      console.log('ℹ️ Aucun identifiant national AMS trouvé, retour à zéro');
+      return res.json({
+        success: true,
+        lastIdentifiant: null,
+        message: 'Aucun identifiant national trouvé'
+      });
+    }
+  } catch (error) {
+    console.error('❌ Erreur récupération dernier identifiant:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur serveur: ' + error.message
+    });
+  }
+});
+
+// Route alternative plus robuste
+app.get('/api/beneficiaires/last-identifiant-alt', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    console.log('🔍 Récupération alternative du dernier identifiant national...');
+    
+    const pool = await dbConfig.getConnection();
+    
+    // Récupérer tous les identifiants AMS
+    const query = `
+      SELECT IDENTIFIANT_NATIONAL 
+      FROM [core].[BENEFICIAIRE] 
+      WHERE IDENTIFIANT_NATIONAL LIKE 'AMS%'
+        AND RETRAIT_DATE IS NULL
+      ORDER BY IDENTIFIANT_NATIONAL DESC
+    `;
+    
+    const result = await pool.request().query(query);
+    
+    if (result.recordset.length === 0) {
+      console.log('ℹ️ Aucun identifiant national trouvé');
+      return res.json({
+        success: true,
+        lastIdentifiant: null,
+        maxNumber: 0,
+        message: 'Aucun identifiant national trouvé'
+      });
+    }
+    
+    // Traiter côté serveur pour éviter les erreurs de conversion
+    let maxNum = 0;
+    let lastIdentifiant = null;
+    
+    result.recordset.forEach(record => {
+      const idNat = record.IDENTIFIANT_NATIONAL;
+      if (idNat && idNat.startsWith('AMS')) {
+        // Extraire la partie numérique
+        const numPart = idNat.substring(3); // Retire "AMS"
+        const num = parseInt(numPart, 10);
+        
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+          lastIdentifiant = idNat;
+        }
+      }
+    });
+    
+    console.log('✅ Dernier identifiant trouvé:', lastIdentifiant, '(numéro:', maxNum, ')');
+    
+    return res.json({
+      success: true,
+      lastIdentifiant: lastIdentifiant,
+      maxNumber: maxNum,
+      nextNumber: maxNum + 1,
+      nextIdentifiant: `AMS${(maxNum + 1).toString().padStart(6, '0')}`,
+      message: 'Dernier identifiant national récupéré avec succès'
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur récupération dernier identifiant (alt):', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur serveur: ' + error.message
+    });
+  }
+});
+
+// Route pour générer le prochain identifiant national
+app.get('/api/beneficiaires/next-identifiant', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    console.log('🔢 Génération du prochain identifiant national...');
+    
+    const pool = await dbConfig.getConnection();
+    const transaction = pool.transaction();
+    
+    try {
+      await transaction.begin();
+      
+      // Récupérer le dernier identifiant avec verrou pour éviter les conflits
+      const query = `
+        SELECT TOP 1 IDENTIFIANT_NATIONAL 
+        FROM [core].[BENEFICIAIRE] WITH (UPDLOCK, ROWLOCK)
+        WHERE IDENTIFIANT_NATIONAL LIKE 'AMS%'
+          AND RETRAIT_DATE IS NULL
+        ORDER BY 
+          CAST(SUBSTRING(IDENTIFIANT_NATIONAL, 4, LEN(IDENTIFIANT_NATIONAL)) AS BIGINT) DESC
+      `;
+      
+      const result = await transaction.request().query(query);
+      
+      let nextNum = 1;
+      
+      if (result.recordset.length > 0) {
+        const lastId = result.recordset[0].IDENTIFIANT_NATIONAL;
+        const numPart = lastId.substring(3);
+        const lastNum = parseInt(numPart, 10);
+        
+        if (!isNaN(lastNum)) {
+          nextNum = lastNum + 1;
+        }
+      }
+      
+      const nextId = `AMS${nextNum.toString().padStart(6, '0')}`;
+      
+      await transaction.commit();
+      
+      console.log('✅ Prochain identifiant généré:', nextId);
+      
+      return res.json({
+        success: true,
+        nextIdentifiant: nextId,
+        nextNumber: nextNum,
+        message: 'Prochain identifiant national généré avec succès'
+      });
+      
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  } catch (error) {
+    console.error('❌ Erreur génération prochain identifiant:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur serveur: ' + error.message
+    });
+  }
+});
+
+// Route pour vérifier si un identifiant national existe déjà
+app.get('/api/beneficiaires/check-identifiant/:identifiant', authenticateToken, async (req, res) => {
+  try {
+    const { identifiant } = req.params;
+    const user = req.user;
+    
+    console.log('🔎 Vérification identifiant national:', identifiant);
+    
+    if (!identifiant || identifiant.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Identifiant national requis'
+      });
+    }
+    
+    const pool = await dbConfig.getConnection();
+    
+    const query = `
+      SELECT COUNT(*) as count 
+      FROM [core].[BENEFICIAIRE] 
+      WHERE IDENTIFIANT_NATIONAL = @identifiant 
+        AND RETRAIT_DATE IS NULL
+    `;
+    
+    const result = await pool.request()
+      .input('identifiant', sql.VarChar(20), identifiant.trim())
+      .query(query);
+    
+    const exists = result.recordset[0].count > 0;
+    
+    console.log('✅ Vérification terminée:', identifiant, 'existe:', exists);
+    
+    return res.json({
+      success: true,
+      exists: exists,
+      identifiant: identifiant,
+      message: exists ? 'Identifiant déjà utilisé' : 'Identifiant disponible'
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur vérification identifiant:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur serveur: ' + error.message
+    });
+  }
+});
+
+
 
 // 6. Mettre à jour un bénéficiaire
 app.put('/api/beneficiaires/:id', authenticateToken, async (req, res) => {
@@ -11182,9 +11412,9 @@ app.delete('/api/evacuations/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== ROUTES CENTRES DE SANTÉ (Table CENTRE) ====================
 
-//====Centre de sante =================
-// GET /api/centres - Liste des centres de santé
+// GET /api/centres - Liste des centres de santé (EXISTANT, à conserver)
 app.get('/api/centres', authenticateToken, async (req, res) => {
   try {
     const { search = '', actif = '' } = req.query;
@@ -11196,21 +11426,17 @@ app.get('/api/centres', authenticateToken, async (req, res) => {
         COD_CEN as id,
         LIB_CEN as nom,
         NUM_ADR as adresse,
-        -- Utilisation des colonnes de téléphone disponibles dans la table
         TR1_CEN as telephone1,
         TR2_CEN as telephone2,
         TR3_CEN as telephone3,
-        -- Pas de colonne email dans la table, on utilise NULL
         NULL as email,
         TYP_CEN as type_centre,
-        -- Détermination de l'état actif basé sur AGR_CEN ou DEB_CEN/FIN_CEN
         CASE 
           WHEN AGR_CEN = 1 AND (FIN_CEN IS NULL OR FIN_CEN > GETDATE()) THEN 1 
           ELSE 0 
         END as actif,
         DEB_CEN as date_debut,
         FIN_CEN as date_fin,
-        -- Autres colonnes disponibles
         COD_PAY,
         COD_PAI,
         OBS_CEN,
@@ -11267,24 +11493,19 @@ app.get('/api/centres', authenticateToken, async (req, res) => {
       id: centre.id,
       nom: centre.nom,
       adresse: centre.adresse,
-      // Récupération du premier téléphone non vide
       telephone: centre.telephone1 || centre.telephone2 || centre.telephone3 || '',
       email: centre.email,
       type_centre: centre.type_centre,
-      type: centre.type_centre, // Alias pour compatibilité
+      type: centre.type_centre,
       actif: centre.actif,
       date_debut: centre.date_debut,
       date_fin: centre.date_fin,
-      // Ajout d'autres champs utiles
       COD_CEN: centre.id,
       LIB_CEN: centre.nom,
       NUM_ADR: centre.adresse,
       TYP_CEN: centre.type_centre,
-      // Pour compatibilité avec le frontend qui attend TELEPHONE
       TELEPHONE: centre.telephone1 || centre.telephone2 || centre.telephone3 || '',
-      // Pour compatibilité avec le frontend qui attend EMAIL
       EMAIL: centre.email,
-      // Champs supplémentaires
       COD_PAY: centre.COD_PAY,
       COD_PAI: centre.COD_PAI,
       OBS_CEN: centre.OBS_CEN,
@@ -11308,8 +11529,8 @@ app.get('/api/centres', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/centres-sante/:id - Récupérer un centre par son ID
-app.get('/api/centres-sante/:id', authenticateToken, async (req, res) => {
+// GET /api/centres/:id - Récupérer un centre par son ID (REMPLACE centres-sante)
+app.get('/api/centres/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const pool = await dbConfig.getConnection();
@@ -11317,40 +11538,39 @@ app.get('/api/centres-sante/:id', authenticateToken, async (req, res) => {
     const query = `
       SELECT 
         COD_CEN as id,
-        NOM_CENTRE as nom,
-        TYPE_CENTRE as type,
-        CATEGORIE_CENTRE as categorie,
+        LIB_CEN as nom,
         NUM_ADR as adresse,
-        TELEPHONE,
-        EMAIL,
-        SITE_WEB,
-        STATUT,
-        ACTIF,
+        TR1_CEN as telephone1,
+        TR2_CEN as telephone2,
+        TR3_CEN as telephone3,
+        TYP_CEN as type_centre,
+        CASE 
+          WHEN AGR_CEN = 1 AND (FIN_CEN IS NULL OR FIN_CEN > GETDATE()) THEN 1 
+          ELSE 0 
+        END as actif,
+        DEB_CEN as date_debut,
+        FIN_CEN as date_fin,
         COD_PAY,
-        COD_REGION as region,
-        DATE_CREATION as date_creation,
-        DIRECTEUR,
-        NOMBRE_LITS as capacite_lits,
-        NOMBRE_MEDECINS,
-        NOMBRE_INFIRMIERS,
-        SPECIALITES,
-        EQUIPEMENTS,
-        HORAIRES_OUVERTURE,
-        URGENCES_24H,
-        LABORATOIRE,
-        PHARMACIE,
-        RADIOLOGIE,
-        CHIRURGIE,
-        MATERNITE,
-        PEDIATRIE,
-        AGREMENT_NUMERO as agrement_numero,
-        DATE_AGREMENT,
-        DATE_EXPIRATION_AGREMENT,
+        COD_PAI,
+        OBS_CEN,
+        ORD_CEN,
+        AUT_CEN,
+        NUM_RIB,
+        ENR_CEN,
+        TPS_CEN,
+        TVA_CEN,
+        DEB_AGR,
+        FIN_AGR,
+        BIO_CEN,
         COD_CREUTIL,
         COD_MODUTIL,
         DAT_CREUTIL,
-        DAT_MODUTIL
-      FROM [hcs_backoffice].[core].[CENTRE_SANTE]
+        DAT_MODUTIL,
+        COD_TAR,
+        NCP_CEN,
+        PRM_CEN,
+        COD_NAT
+      FROM [hcs_backoffice].[core].[CENTRE]
       WHERE COD_CEN = @id
     `;
     
@@ -11365,9 +11585,42 @@ app.get('/api/centres-sante/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    const centre = result.recordset[0];
+    
+    // Formater pour le frontend
+    const centreFormatted = {
+      id: centre.id,
+      nom: centre.nom,
+      adresse: centre.adresse,
+      telephone: centre.telephone1 || centre.telephone2 || centre.telephone3 || '',
+      email: centre.email || null,
+      type_centre: centre.type_centre,
+      type: centre.type_centre,
+      actif: centre.actif,
+      date_debut: centre.date_debut,
+      date_fin: centre.date_fin,
+      // Compatibilité avec ancienne structure
+      COD_CEN: centre.id,
+      LIB_CEN: centre.nom,
+      NUM_ADR: centre.adresse,
+      TYP_CEN: centre.type_centre,
+      TELEPHONE: centre.telephone1 || centre.telephone2 || centre.telephone3 || '',
+      EMAIL: centre.email,
+      STATUT: centre.actif ? 'Actif' : 'Inactif',
+      // Champs supplémentaires
+      COD_PAY: centre.COD_PAY,
+      COD_PAI: centre.COD_PAI,
+      OBS_CEN: centre.OBS_CEN,
+      ORD_CEN: centre.ORD_CEN,
+      AUT_CEN: centre.AUT_CEN,
+      TR1_CEN: centre.telephone1,
+      TR2_CEN: centre.telephone2,
+      TR3_CEN: centre.telephone3
+    };
+
     return res.json({
       success: true,
-      centre: result.recordset[0]
+      centre: centreFormatted
     });
 
   } catch (error) {
@@ -11380,114 +11633,104 @@ app.get('/api/centres-sante/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/centres-sante - Créer un nouveau centre
-app.post('/api/centres-sante', authenticateToken, async (req, res) => {
+// POST /api/centres - Créer un nouveau centre (REMPLACE centres-sante)
+app.post('/api/centres', authenticateToken, async (req, res) => {
   try {
     const pool = await dbConfig.getConnection();
     const {
-      NOM_CENTRE,
-      TYPE_CENTRE,
-      CATEGORIE_CENTRE,
+      LIB_CEN,
+      TYP_CEN,
       NUM_ADR,
-      TELEPHONE,
-      EMAIL,
-      SITE_WEB,
-      STATUT = 'Actif',
+      TR1_CEN,
+      TR2_CEN,
+      TR3_CEN,
       COD_PAY = 'SN',
-      COD_REGION,
-      DIRECTEUR,
-      NOMBRE_LITS = 0,
-      NOMBRE_MEDECINS = 0,
-      NOMBRE_INFIRMIERS = 0,
-      SPECIALITES,
-      EQUIPEMENTS,
-      HORAIRES_OUVERTURE,
-      URGENCES_24H = 0,
-      LABORATOIRE = 0,
-      PHARMACIE = 0,
-      RADIOLOGIE = 0,
-      CHIRURGIE = 0,
-      MATERNITE = 0,
-      PEDIATRIE = 0,
-      AGREMENT_NUMERO,
-      DATE_AGREMENT,
-      DATE_EXPIRATION_AGREMENT,
+      COD_PAI,
+      OBS_CEN,
+      ORD_CEN,
+      AUT_CEN,
+      NUM_RIB,
+      ENR_CEN,
+      TPS_CEN,
+      TVA_CEN,
+      DEB_AGR,
+      FIN_AGR,
+      DEB_CEN,
+      FIN_CEN,
+      BIO_CEN,
+      AGR_CEN = 1,
+      COD_TAR,
+      NCP_CEN,
+      PRM_CEN,
+      COD_NAT,
       COD_CREUTIL
     } = req.body;
     
     // Validation des données requises
-    if (!NOM_CENTRE || !TYPE_CENTRE || !COD_REGION) {
+    if (!LIB_CEN || !TYP_CEN) {
       return res.status(400).json({
         success: false,
-        message: 'Les champs NOM_CENTRE, TYPE_CENTRE et COD_REGION sont obligatoires'
+        message: 'Les champs LIB_CEN et TYP_CEN sont obligatoires'
       });
     }
     
     const query = `
-      INSERT INTO [hcs_backoffice].[core].[CENTRE_SANTE] (
-        NOM_CENTRE,
-        TYPE_CENTRE,
-        CATEGORIE_CENTRE,
+      INSERT INTO [hcs_backoffice].[core].[CENTRE] (
+        LIB_CEN,
+        TYP_CEN,
         NUM_ADR,
-        TELEPHONE,
-        EMAIL,
-        SITE_WEB,
-        STATUT,
-        ACTIF,
+        TR1_CEN,
+        TR2_CEN,
+        TR3_CEN,
         COD_PAY,
-        COD_REGION,
-        DATE_CREATION,
-        DIRECTEUR,
-        NOMBRE_LITS,
-        NOMBRE_MEDECINS,
-        NOMBRE_INFIRMIERS,
-        SPECIALITES,
-        EQUIPEMENTS,
-        HORAIRES_OUVERTURE,
-        URGENCES_24H,
-        LABORATOIRE,
-        PHARMACIE,
-        RADIOLOGIE,
-        CHIRURGIE,
-        MATERNITE,
-        PEDIATRIE,
-        AGREMENT_NUMERO,
-        DATE_AGREMENT,
-        DATE_EXPIRATION_AGREMENT,
+        COD_PAI,
+        OBS_CEN,
+        ORD_CEN,
+        AUT_CEN,
+        NUM_RIB,
+        ENR_CEN,
+        TPS_CEN,
+        TVA_CEN,
+        DEB_AGR,
+        FIN_AGR,
+        DEB_CEN,
+        FIN_CEN,
+        BIO_CEN,
+        AGR_CEN,
+        COD_TAR,
+        NCP_CEN,
+        PRM_CEN,
+        COD_NAT,
         COD_CREUTIL,
         COD_MODUTIL,
         DAT_CREUTIL,
         DAT_MODUTIL
       ) VALUES (
-        @NOM_CENTRE,
-        @TYPE_CENTRE,
-        @CATEGORIE_CENTRE,
+        @LIB_CEN,
+        @TYP_CEN,
         @NUM_ADR,
-        @TELEPHONE,
-        @EMAIL,
-        @SITE_WEB,
-        @STATUT,
-        1,
+        @TR1_CEN,
+        @TR2_CEN,
+        @TR3_CEN,
         @COD_PAY,
-        @COD_REGION,
-        GETDATE(),
-        @DIRECTEUR,
-        @NOMBRE_LITS,
-        @NOMBRE_MEDECINS,
-        @NOMBRE_INFIRMIERS,
-        @SPECIALITES,
-        @EQUIPEMENTS,
-        @HORAIRES_OUVERTURE,
-        @URGENCES_24H,
-        @LABORATOIRE,
-        @PHARMACIE,
-        @RADIOLOGIE,
-        @CHIRURGIE,
-        @MATERNITE,
-        @PEDIATRIE,
-        @AGREMENT_NUMERO,
-        @DATE_AGREMENT,
-        @DATE_EXPIRATION_AGREMENT,
+        @COD_PAI,
+        @OBS_CEN,
+        @ORD_CEN,
+        @AUT_CEN,
+        @NUM_RIB,
+        @ENR_CEN,
+        @TPS_CEN,
+        @TVA_CEN,
+        @DEB_AGR,
+        @FIN_AGR,
+        @DEB_CEN,
+        @FIN_CEN,
+        @BIO_CEN,
+        @AGR_CEN,
+        @COD_TAR,
+        @NCP_CEN,
+        @PRM_CEN,
+        @COD_NAT,
         @COD_CREUTIL,
         @COD_CREUTIL,
         GETDATE(),
@@ -11500,33 +11743,31 @@ app.post('/api/centres-sante', authenticateToken, async (req, res) => {
     const request = pool.request();
     
     // Ajouter tous les paramètres
-    request.input('NOM_CENTRE', sql.NVarChar, NOM_CENTRE);
-    request.input('TYPE_CENTRE', sql.NVarChar, TYPE_CENTRE);
-    request.input('CATEGORIE_CENTRE', sql.NVarChar, CATEGORIE_CENTRE || 'Public');
+    request.input('LIB_CEN', sql.NVarChar, LIB_CEN);
+    request.input('TYP_CEN', sql.NVarChar, TYP_CEN);
     request.input('NUM_ADR', sql.NVarChar, NUM_ADR || '');
-    request.input('TELEPHONE', sql.NVarChar, TELEPHONE || '');
-    request.input('EMAIL', sql.NVarChar, EMAIL || '');
-    request.input('SITE_WEB', sql.NVarChar, SITE_WEB || '');
-    request.input('STATUT', sql.NVarChar, STATUT);
+    request.input('TR1_CEN', sql.NVarChar, TR1_CEN || '');
+    request.input('TR2_CEN', sql.NVarChar, TR2_CEN || '');
+    request.input('TR3_CEN', sql.NVarChar, TR3_CEN || '');
     request.input('COD_PAY', sql.NVarChar, COD_PAY);
-    request.input('COD_REGION', sql.NVarChar, COD_REGION);
-    request.input('DIRECTEUR', sql.NVarChar, DIRECTEUR || '');
-    request.input('NOMBRE_LITS', sql.Int, NOMBRE_LITS);
-    request.input('NOMBRE_MEDECINS', sql.Int, NOMBRE_MEDECINS);
-    request.input('NOMBRE_INFIRMIERS', sql.Int, NOMBRE_INFIRMIERS);
-    request.input('SPECIALITES', sql.NVarChar, SPECIALITES || '');
-    request.input('EQUIPEMENTS', sql.NVarChar, EQUIPEMENTS || '');
-    request.input('HORAIRES_OUVERTURE', sql.NVarChar, HORAIRES_OUVERTURE || '');
-    request.input('URGENCES_24H', sql.Bit, URGENCES_24H);
-    request.input('LABORATOIRE', sql.Bit, LABORATOIRE);
-    request.input('PHARMACIE', sql.Bit, PHARMACIE);
-    request.input('RADIOLOGIE', sql.Bit, RADIOLOGIE);
-    request.input('CHIRURGIE', sql.Bit, CHIRURGIE);
-    request.input('MATERNITE', sql.Bit, MATERNITE);
-    request.input('PEDIATRIE', sql.Bit, PEDIATRIE);
-    request.input('AGREMENT_NUMERO', sql.NVarChar, AGREMENT_NUMERO || '');
-    request.input('DATE_AGREMENT', sql.Date, DATE_AGREMENT || null);
-    request.input('DATE_EXPIRATION_AGREMENT', sql.Date, DATE_EXPIRATION_AGREMENT || null);
+    request.input('COD_PAI', sql.NVarChar, COD_PAI || '');
+    request.input('OBS_CEN', sql.NVarChar, OBS_CEN || '');
+    request.input('ORD_CEN', sql.Int, ORD_CEN || 0);
+    request.input('AUT_CEN', sql.NVarChar, AUT_CEN || '');
+    request.input('NUM_RIB', sql.NVarChar, NUM_RIB || '');
+    request.input('ENR_CEN', sql.NVarChar, ENR_CEN || '');
+    request.input('TPS_CEN', sql.Decimal(10, 2), TPS_CEN || 0);
+    request.input('TVA_CEN', sql.Decimal(10, 2), TVA_CEN || 0);
+    request.input('DEB_AGR', sql.DateTime, DEB_AGR || null);
+    request.input('FIN_AGR', sql.DateTime, FIN_AGR || null);
+    request.input('DEB_CEN', sql.DateTime, DEB_CEN || GETDATE());
+    request.input('FIN_CEN', sql.DateTime, FIN_CEN || null);
+    request.input('BIO_CEN', sql.NVarChar, BIO_CEN || '');
+    request.input('AGR_CEN', sql.Bit, AGR_CEN);
+    request.input('COD_TAR', sql.NVarChar, COD_TAR || '');
+    request.input('NCP_CEN', sql.NVarChar, NCP_CEN || '');
+    request.input('PRM_CEN', sql.NVarChar, PRM_CEN || '');
+    request.input('COD_NAT', sql.NVarChar, COD_NAT || '');
     request.input('COD_CREUTIL', sql.NVarChar, COD_CREUTIL || 'SYSTEM');
     
     const result = await request.query(query);
@@ -11547,8 +11788,8 @@ app.post('/api/centres-sante', authenticateToken, async (req, res) => {
   }
 });
 
-// PUT /api/centres-sante/:id - Mettre à jour un centre
-app.put('/api/centres-sante/:id', authenticateToken, async (req, res) => {
+// PUT /api/centres/:id - Mettre à jour un centre (REMPLACE centres-sante)
+app.put('/api/centres/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const pool = await dbConfig.getConnection();
@@ -11556,7 +11797,7 @@ app.put('/api/centres-sante/:id', authenticateToken, async (req, res) => {
     // Vérifier si le centre existe
     const checkQuery = `
       SELECT COD_CEN 
-      FROM [hcs_backoffice].[core].[CENTRE_SANTE] 
+      FROM [hcs_backoffice].[core].[CENTRE] 
       WHERE COD_CEN = @id
     `;
     
@@ -11574,7 +11815,7 @@ app.put('/api/centres-sante/:id', authenticateToken, async (req, res) => {
     // Récupérer les données actuelles
     const currentDataQuery = `
       SELECT * 
-      FROM [hcs_backoffice].[core].[CENTRE_SANTE] 
+      FROM [hcs_backoffice].[core].[CENTRE] 
       WHERE COD_CEN = @id
     `;
     
@@ -11587,35 +11828,33 @@ app.put('/api/centres-sante/:id', authenticateToken, async (req, res) => {
     const updatedData = { ...currentData, ...req.body };
     
     const updateQuery = `
-      UPDATE [hcs_backoffice].[core].[CENTRE_SANTE]
+      UPDATE [hcs_backoffice].[core].[CENTRE]
       SET
-        NOM_CENTRE = @NOM_CENTRE,
-        TYPE_CENTRE = @TYPE_CENTRE,
-        CATEGORIE_CENTRE = @CATEGORIE_CENTRE,
+        LIB_CEN = @LIB_CEN,
+        TYP_CEN = @TYP_CEN,
         NUM_ADR = @NUM_ADR,
-        TELEPHONE = @TELEPHONE,
-        EMAIL = @EMAIL,
-        SITE_WEB = @SITE_WEB,
-        STATUT = @STATUT,
+        TR1_CEN = @TR1_CEN,
+        TR2_CEN = @TR2_CEN,
+        TR3_CEN = @TR3_CEN,
         COD_PAY = @COD_PAY,
-        COD_REGION = @COD_REGION,
-        DIRECTEUR = @DIRECTEUR,
-        NOMBRE_LITS = @NOMBRE_LITS,
-        NOMBRE_MEDECINS = @NOMBRE_MEDECINS,
-        NOMBRE_INFIRMIERS = @NOMBRE_INFIRMIERS,
-        SPECIALITES = @SPECIALITES,
-        EQUIPEMENTS = @EQUIPEMENTS,
-        HORAIRES_OUVERTURE = @HORAIRES_OUVERTURE,
-        URGENCES_24H = @URGENCES_24H,
-        LABORATOIRE = @LABORATOIRE,
-        PHARMACIE = @PHARMACIE,
-        RADIOLOGIE = @RADIOLOGIE,
-        CHIRURGIE = @CHIRURGIE,
-        MATERNITE = @MATERNITE,
-        PEDIATRIE = @PEDIATRIE,
-        AGREMENT_NUMERO = @AGREMENT_NUMERO,
-        DATE_AGREMENT = @DATE_AGREMENT,
-        DATE_EXPIRATION_AGREMENT = @DATE_EXPIRATION_AGREMENT,
+        COD_PAI = @COD_PAI,
+        OBS_CEN = @OBS_CEN,
+        ORD_CEN = @ORD_CEN,
+        AUT_CEN = @AUT_CEN,
+        NUM_RIB = @NUM_RIB,
+        ENR_CEN = @ENR_CEN,
+        TPS_CEN = @TPS_CEN,
+        TVA_CEN = @TVA_CEN,
+        DEB_AGR = @DEB_AGR,
+        FIN_AGR = @FIN_AGR,
+        DEB_CEN = @DEB_CEN,
+        FIN_CEN = @FIN_CEN,
+        BIO_CEN = @BIO_CEN,
+        AGR_CEN = @AGR_CEN,
+        COD_TAR = @COD_TAR,
+        NCP_CEN = @NCP_CEN,
+        PRM_CEN = @PRM_CEN,
+        COD_NAT = @COD_NAT,
         COD_MODUTIL = @COD_MODUTIL,
         DAT_MODUTIL = GETDATE()
       WHERE COD_CEN = @id
@@ -11624,33 +11863,31 @@ app.put('/api/centres-sante/:id', authenticateToken, async (req, res) => {
     const updateRequest = pool.request();
     
     updateRequest.input('id', sql.Int, id);
-    updateRequest.input('NOM_CENTRE', sql.NVarChar, updatedData.NOM_CENTRE);
-    updateRequest.input('TYPE_CENTRE', sql.NVarChar, updatedData.TYPE_CENTRE);
-    updateRequest.input('CATEGORIE_CENTRE', sql.NVarChar, updatedData.CATEGORIE_CENTRE);
-    updateRequest.input('NUM_ADR', sql.NVarChar, updatedData.NUM_ADR);
-    updateRequest.input('TELEPHONE', sql.NVarChar, updatedData.TELEPHONE);
-    updateRequest.input('EMAIL', sql.NVarChar, updatedData.EMAIL);
-    updateRequest.input('SITE_WEB', sql.NVarChar, updatedData.SITE_WEB);
-    updateRequest.input('STATUT', sql.NVarChar, updatedData.STATUT);
-    updateRequest.input('COD_PAY', sql.NVarChar, updatedData.COD_PAY);
-    updateRequest.input('COD_REGION', sql.NVarChar, updatedData.COD_REGION);
-    updateRequest.input('DIRECTEUR', sql.NVarChar, updatedData.DIRECTEUR);
-    updateRequest.input('NOMBRE_LITS', sql.Int, updatedData.NOMBRE_LITS);
-    updateRequest.input('NOMBRE_MEDECINS', sql.Int, updatedData.NOMBRE_MEDECINS);
-    updateRequest.input('NOMBRE_INFIRMIERS', sql.Int, updatedData.NOMBRE_INFIRMIERS);
-    updateRequest.input('SPECIALITES', sql.NVarChar, updatedData.SPECIALITES);
-    updateRequest.input('EQUIPEMENTS', sql.NVarChar, updatedData.EQUIPEMENTS);
-    updateRequest.input('HORAIRES_OUVERTURE', sql.NVarChar, updatedData.HORAIRES_OUVERTURE);
-    updateRequest.input('URGENCES_24H', sql.Bit, updatedData.URGENCES_24H);
-    updateRequest.input('LABORATOIRE', sql.Bit, updatedData.LABORATOIRE);
-    updateRequest.input('PHARMACIE', sql.Bit, updatedData.PHARMACIE);
-    updateRequest.input('RADIOLOGIE', sql.Bit, updatedData.RADIOLOGIE);
-    updateRequest.input('CHIRURGIE', sql.Bit, updatedData.CHIRURGIE);
-    updateRequest.input('MATERNITE', sql.Bit, updatedData.MATERNITE);
-    updateRequest.input('PEDIATRIE', sql.Bit, updatedData.PEDIATRIE);
-    updateRequest.input('AGREMENT_NUMERO', sql.NVarChar, updatedData.AGREMENT_NUMERO);
-    updateRequest.input('DATE_AGREMENT', sql.Date, updatedData.DATE_AGREMENT || null);
-    updateRequest.input('DATE_EXPIRATION_AGREMENT', sql.Date, updatedData.DATE_EXPIRATION_AGREMENT || null);
+    updateRequest.input('LIB_CEN', sql.NVarChar, updatedData.LIB_CEN);
+    updateRequest.input('TYP_CEN', sql.NVarChar, updatedData.TYP_CEN);
+    updateRequest.input('NUM_ADR', sql.NVarChar, updatedData.NUM_ADR || '');
+    updateRequest.input('TR1_CEN', sql.NVarChar, updatedData.TR1_CEN || '');
+    updateRequest.input('TR2_CEN', sql.NVarChar, updatedData.TR2_CEN || '');
+    updateRequest.input('TR3_CEN', sql.NVarChar, updatedData.TR3_CEN || '');
+    updateRequest.input('COD_PAY', sql.NVarChar, updatedData.COD_PAY || 'SN');
+    updateRequest.input('COD_PAI', sql.NVarChar, updatedData.COD_PAI || '');
+    updateRequest.input('OBS_CEN', sql.NVarChar, updatedData.OBS_CEN || '');
+    updateRequest.input('ORD_CEN', sql.Int, updatedData.ORD_CEN || 0);
+    updateRequest.input('AUT_CEN', sql.NVarChar, updatedData.AUT_CEN || '');
+    updateRequest.input('NUM_RIB', sql.NVarChar, updatedData.NUM_RIB || '');
+    updateRequest.input('ENR_CEN', sql.NVarChar, updatedData.ENR_CEN || '');
+    updateRequest.input('TPS_CEN', sql.Decimal(10, 2), updatedData.TPS_CEN || 0);
+    updateRequest.input('TVA_CEN', sql.Decimal(10, 2), updatedData.TVA_CEN || 0);
+    updateRequest.input('DEB_AGR', sql.DateTime, updatedData.DEB_AGR || null);
+    updateRequest.input('FIN_AGR', sql.DateTime, updatedData.FIN_AGR || null);
+    updateRequest.input('DEB_CEN', sql.DateTime, updatedData.DEB_CEN || null);
+    updateRequest.input('FIN_CEN', sql.DateTime, updatedData.FIN_CEN || null);
+    updateRequest.input('BIO_CEN', sql.NVarChar, updatedData.BIO_CEN || '');
+    updateRequest.input('AGR_CEN', sql.Bit, updatedData.AGR_CEN !== undefined ? updatedData.AGR_CEN : 1);
+    updateRequest.input('COD_TAR', sql.NVarChar, updatedData.COD_TAR || '');
+    updateRequest.input('NCP_CEN', sql.NVarChar, updatedData.NCP_CEN || '');
+    updateRequest.input('PRM_CEN', sql.NVarChar, updatedData.PRM_CEN || '');
+    updateRequest.input('COD_NAT', sql.NVarChar, updatedData.COD_NAT || '');
     updateRequest.input('COD_MODUTIL', sql.NVarChar, updatedData.COD_MODUTIL || 'SYSTEM');
     
     await updateRequest.query(updateQuery);
@@ -11670,16 +11907,16 @@ app.put('/api/centres-sante/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// DELETE /api/centres-sante/:id - Supprimer un centre (soft delete)
-app.delete('/api/centres-sante/:id', authenticateToken, async (req, res) => {
+// DELETE /api/centres/:id - Désactiver un centre (soft delete) (REMPLACE centres-sante)
+app.delete('/api/centres/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const pool = await dbConfig.getConnection();
-    const user = req.user; // L'utilisateur est ajouté par le middleware authenticateToken
+    const user = req.user;
     
     const query = `
-      UPDATE [hcs_backoffice].[core].[CENTRE_SANTE]
-      SET ACTIF = 0, COD_MODUTIL = @codModUtil, DAT_MODUTIL = GETDATE()
+      UPDATE [hcs_backoffice].[core].[CENTRE]
+      SET AGR_CEN = 0, COD_MODUTIL = @codModUtil, DAT_MODUTIL = GETDATE()
       WHERE COD_CEN = @id
     `;
     
@@ -11698,67 +11935,83 @@ app.delete('/api/centres-sante/:id', authenticateToken, async (req, res) => {
     
     return res.json({
       success: true,
-      message: 'Centre de santé supprimé avec succès'
+      message: 'Centre de santé désactivé avec succès'
     });
 
   } catch (error) {
-    console.error(`❌ Erreur suppression centre ${req.params.id}:`, error);
+    console.error(`❌ Erreur désactivation centre ${req.params.id}:`, error);
     return res.status(500).json({
       success: false,
-      message: 'Erreur lors de la suppression du centre de santé',
+      message: 'Erreur lors de la désactivation du centre de santé',
       error: error.message
     });
   }
 });
 
-// GET /api/centres-sante/export - Exporter tous les centres
-app.get('/api/centres-sante/export', authenticateToken, async (req, res) => {
+// GET /api/centres/export - Exporter tous les centres (REMPLACE centres-sante/export)
+app.get('/api/centres/export', authenticateToken, async (req, res) => {
   try {
     const pool = await dbConfig.getConnection();
     
     const query = `
       SELECT 
         COD_CEN as id,
-        NOM_CENTRE as nom,
-        TYPE_CENTRE as type,
-        CATEGORIE_CENTRE as categorie,
+        LIB_CEN as nom,
+        TYP_CEN as type_centre,
         NUM_ADR as adresse,
-        TELEPHONE,
-        EMAIL,
-        SITE_WEB,
-        STATUT,
-        ACTIF,
+        TR1_CEN as telephone1,
+        TR2_CEN as telephone2,
+        TR3_CEN as telephone3,
         COD_PAY,
-        COD_REGION as region,
-        DATE_CREATION as date_creation,
-        DIRECTEUR,
-        NOMBRE_LITS as capacite_lits,
-        NOMBRE_MEDECINS,
-        NOMBRE_INFIRMIERS,
-        SPECIALITES,
-        EQUIPEMENTS,
-        HORAIRES_OUVERTURE,
-        URGENCES_24H,
-        LABORATOIRE,
-        PHARMACIE,
-        RADIOLOGIE,
-        CHIRURGIE,
-        MATERNITE,
-        PEDIATRIE,
-        AGREMENT_NUMERO as agrement_numero,
-        DATE_AGREMENT,
-        DATE_EXPIRATION_AGREMENT
-      FROM [hcs_backoffice].[core].[CENTRE_SANTE]
-      WHERE ACTIF = 1
-      ORDER BY NOM_CENTRE
+        COD_PAI,
+        CASE 
+          WHEN AGR_CEN = 1 AND (FIN_CEN IS NULL OR FIN_CEN > GETDATE()) THEN 'Actif' 
+          ELSE 'Inactif' 
+        END as statut,
+        AGR_CEN as actif,
+        DEB_CEN as date_debut,
+        FIN_CEN as date_fin,
+        OBS_CEN,
+        ORD_CEN,
+        AUT_CEN,
+        NUM_RIB,
+        ENR_CEN,
+        TPS_CEN,
+        TVA_CEN,
+        DEB_AGR,
+        FIN_AGR,
+        BIO_CEN,
+        COD_TAR,
+        NCP_CEN,
+        PRM_CEN,
+        COD_NAT
+      FROM [hcs_backoffice].[core].[CENTRE]
+      ORDER BY LIB_CEN
     `;
     
     const result = await pool.request().query(query);
     
+    // Formater pour l'export
+    const centresExport = result.recordset.map(centre => ({
+      id: centre.id,
+      nom: centre.nom,
+      type: centre.type_centre,
+      adresse: centre.adresse,
+      telephone: centre.telephone1 || centre.telephone2 || centre.telephone3 || '',
+      pays: centre.COD_PAY,
+      paiement: centre.COD_PAI,
+      statut: centre.statut,
+      date_debut: centre.date_debut,
+      date_fin: centre.date_fin,
+      observations: centre.OBS_CEN,
+      ordre: centre.ORD_CEN,
+      autorisation: centre.AUT_CEN
+    }));
+    
     return res.json({
       success: true,
-      centres: result.recordset,
-      count: result.recordset.length,
+      centres: centresExport,
+      count: centresExport.length,
       exportDate: new Date().toISOString()
     });
 
@@ -11767,6 +12020,94 @@ app.get('/api/centres-sante/export', authenticateToken, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Erreur lors de l\'export des centres de santé',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/centres/search - Recherche de centres (NOUVELLE route pour le frontend)
+app.get('/api/centres/search', authenticateToken, async (req, res) => {
+  try {
+    const { search = '', limit = 20 } = req.query;
+    const pool = await dbConfig.getConnection();
+    
+    let query = `
+      SELECT TOP(${parseInt(limit)})
+        COD_CEN as id,
+        LIB_CEN as nom,
+        NUM_ADR as adresse,
+        TR1_CEN as telephone1,
+        TR2_CEN as telephone2,
+        TR3_CEN as telephone3,
+        TYP_CEN as type_centre,
+        CASE 
+          WHEN AGR_CEN = 1 AND (FIN_CEN IS NULL OR FIN_CEN > GETDATE()) THEN 1 
+          ELSE 0 
+        END as actif,
+        DEB_CEN as date_debut,
+        FIN_CEN as date_fin,
+        COD_PAY,
+        COD_PAI,
+        OBS_CEN
+      FROM [hcs_backoffice].[core].[CENTRE]
+      WHERE AGR_CEN = 1 AND (FIN_CEN IS NULL OR FIN_CEN > GETDATE())
+    `;
+    
+    // Ajouter le filtre de recherche si présent
+    if (search && search.trim().length >= 2) {
+      query += ` AND (
+        LIB_CEN LIKE '%' + @search + '%' 
+        OR NUM_ADR LIKE '%' + @search + '%'
+        OR TR1_CEN LIKE '%' + @search + '%'
+        OR TR2_CEN LIKE '%' + @search + '%'
+        OR TR3_CEN LIKE '%' + @search + '%'
+      )`;
+    }
+    
+    query += ' ORDER BY LIB_CEN';
+    
+    const request = pool.request();
+    if (search && search.trim().length >= 2) {
+      request.input('search', sql.VarChar(100), search);
+    }
+    
+    const result = await request.query(query);
+    
+    // Formater les résultats
+    const centres = result.recordset.map(centre => ({
+      id: centre.id,
+      nom: centre.nom,
+      adresse: centre.adresse,
+      telephone: centre.telephone1 || centre.telephone2 || centre.telephone3 || '',
+      type_centre: centre.type_centre,
+      type: centre.type_centre,
+      actif: centre.actif,
+      date_debut: centre.date_debut,
+      date_fin: centre.date_fin,
+      // Compatibilité frontend
+      COD_CEN: centre.id,
+      NOM_CENTRE: centre.nom,
+      NUM_ADR: centre.adresse,
+      TELEPHONE: centre.telephone1 || centre.telephone2 || centre.telephone3 || '',
+      TYPE_CENTRE: centre.type_centre,
+      STATUT: centre.actif ? 'Actif' : 'Inactif',
+      // Pour le composant NetworkPage
+      name: centre.nom,
+      code: centre.id.toString(),
+      region: centre.COD_PAI || 'Non spécifiée'
+    }));
+    
+    return res.json({
+      success: true,
+      centres: centres,
+      count: centres.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur recherche centres:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la recherche des centres',
       error: error.message
     });
   }
@@ -25491,7 +25832,7 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
       pool.request().query(`
         SELECT COUNT(*) as total 
         FROM [core].[PRESTATAIRE] 
-        WHERE TYPE_PRESTATAIRE = 'Medecin' AND ACTIF = 1
+        WHERE TYPE_PRESTATAIRE = 'MEDECIN' AND ACTIF = 1
       `),
       
       pool.request().query(`
@@ -27440,6 +27781,22 @@ app.get('/api/beneficiaires', authenticateToken, async (req, res) => {
     });
   }
 });
+
+// Dans votre backend
+app.get('/api/beneficiaires/:id/photo', async (req, res) => {
+  try {
+    const beneficiaire = await Beneficiaire.findByPk(req.params.id);
+    if (!beneficiaire || !beneficiaire.PHOTO) {
+      return res.status(404).json({ error: 'Photo non trouvée' });
+    }
+    
+    const photoPath = path.join(__dirname, 'uploads/beneficiaires', beneficiaire.PHOTO);
+    res.sendFile(photoPath);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 // Route pour récupérer un bénéficiaire par son ID
 app.get('/api/beneficiaires/:id', authenticateToken, async (req, res) => {

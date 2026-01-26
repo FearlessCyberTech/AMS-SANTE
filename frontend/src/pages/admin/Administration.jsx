@@ -708,29 +708,30 @@ const AdminPage = () => {
 
   // ==================== GESTION DES UTILISATEURS ====================
 
-  const showCreateUserModal = () => {
-    setSelectedUser(null);
-    userForm.resetFields();
-    
-    let defaultCOD_PAY = 'CMF';
-    if (currentUser && !currentUser.super_admin) {
-      defaultCOD_PAY = currentUser.cod_pay || 'CMF';
-    }
-    
-    userForm.setFieldsValue({
-      COD_PAY: defaultCOD_PAY,
-      SEX_UTI: 'M',
-      PROFIL_UTI: 'Utilisateur',
-      ACTIF: true,
-      SUPER_ADMIN: false,
-      LANGUE_UTI: 'fr',
-      TIMEZONE_UTI: 'Africa/Douala',
-      DATE_FORMAT: 'DD/MM/YYYY',
-      THEME_UTI: 'light',
-      roleIds: [],
-    });
-    setUserModalVisible(true);
-  };
+ const showCreateUserModal = () => {
+  setSelectedUser(null);
+  userForm.resetFields();
+  
+  let defaultCOD_PAY = 'CMF';
+  if (currentUser && !currentUser.super_admin) {
+    defaultCOD_PAY = currentUser.cod_pay || 'CMF';
+  }
+  
+  userForm.setFieldsValue({
+    COD_PAY: defaultCOD_PAY,
+    SEX_UTI: 'M',
+    PROFIL_UTI: 'Utilisateur',
+    ACTIF: true,
+    SUPER_ADMIN: false,
+    LANGUE_UTI: 'fr',
+    TIMEZONE_UTI: 'Africa/Douala',
+    DATE_FORMAT: 'DD/MM/YYYY',
+    THEME_UTI: 'light',
+    roleIds: [],
+    // NE PAS pré-remplir le mot de passe
+  });
+  setUserModalVisible(true);
+};
 
   const showEditUserModal = async (user) => {
     setSelectedUser(user);
@@ -834,97 +835,84 @@ const AdminPage = () => {
     }
   };
 
-  const handleUserSubmit = async (values) => {
-    try {
-      let userData = {
-        ...values,
-        roles: values.roleIds || [],
-      };
+ const handleUserSubmit = async (values) => {
+  try {
+    let userData = {
+      ...values,
+      roles: values.roleIds || [],
+    };
 
-      // Hacher le mot de passe si fourni
-      if (values.mot_de_passe) {
-        try {
-          const hashedPassword = await adminAPI.hashPasswordSHA256(values.mot_de_passe);
-          userData.PWD_UTI = hashedPassword;
-        } catch (hashError) {
-          console.error('Erreur hachage mot de passe:', hashError);
-          // Fallback: utiliser un mot de passe aléatoire
-          const randomPassword = adminAPI.generateRandomPassword();
-          userData.mot_de_passe = randomPassword;
-        }
-      }
-
-      if (currentUser && !currentUser.super_admin) {
-        userData.COD_PAY = currentUser.cod_pay || 'CMF';
-      }
-
-      if (selectedUser) {
-        // Mise à jour
-        const response = await adminAPI.updateUtilisateur(selectedUser.id, userData);
-        if (response?.success) {
-          message.success('Utilisateur mis à jour avec succès');
-          setUserModalVisible(false);
-          loadUtilisateurs();
-        } else {
-          throw new Error(response?.message || 'Erreur lors de la mise à jour');
-        }
-      } else {
-        // Création
-        const response = await adminAPI.createUtilisateur(userData);
-        if (response?.success) {
-          if (response.generatedPassword) {
-            Modal.info({
-              title: 'Utilisateur créé avec succès',
-              content: (
-                <div>
-                  <p>L'utilisateur a été créé avec succès.</p>
-                  <Alert
-                    message="Informations de connexion"
-                    description={
-                      <div>
-                        <p>Login: <strong>{values.LOG_UTI}</strong></p>
-                        <p>Mot de passe: <strong>{response.generatedPassword}</strong></p>
-                        <p style={{ fontSize: '12px', color: '#666', marginTop: 8 }}>
-                          Notez ces informations car elles ne seront plus affichées.
-                        </p>
-                      </div>
-                    }
-                    type="warning"
-                    showIcon
-                  />
-                </div>
-              ),
-              onOk: () => {
-                setUserModalVisible(false);
-                loadUtilisateurs();
-              },
-            });
-          } else {
-            message.success('Utilisateur créé avec succès');
-            setUserModalVisible(false);
-            loadUtilisateurs();
-          }
-        } else {
-          throw new Error(response?.message || 'Erreur lors de la création');
-        }
-      }
-    } catch (error) {
-      console.error('Erreur lors de la soumission:', error);
-      
-      let errorMessage = error.message;
-      if (error.message.includes('login existe déjà')) {
-        errorMessage = 'Ce nom d\'utilisateur est déjà utilisé';
-      } else if (error.message.includes('email existe déjà')) {
-        errorMessage = 'Cette adresse email est déjà utilisée';
-      } else if (error.message.includes('403')) {
-        errorMessage = 'Vous n\'avez pas les autorisations nécessaires';
-      } else if (error.message.includes('pays')) {
-        errorMessage = 'Vous ne pouvez créer des utilisateurs que pour votre pays';
-      }
-      
-      message.error(errorMessage);
+    // MODIFICATION : Vérifier que le mot de passe est fourni pour la création
+    if (!selectedUser && !values.mot_de_passe) {
+      message.error('Le mot de passe est requis pour la création d\'un utilisateur');
+      return;
     }
-  };
+
+    // Hacher le mot de passe si fourni
+    if (values.mot_de_passe) {
+      try {
+        const hashedPassword = await adminAPI.hashPasswordSHA256(values.mot_de_passe);
+        userData.PWD_UTI = hashedPassword;
+      } catch (hashError) {
+        console.error('Erreur hachage mot de passe:', hashError);
+        message.error('Erreur lors du traitement du mot de passe');
+        return; // Arrêter l'exécution en cas d'erreur
+      }
+    }
+
+    // SUPPRIMER cette partie qui génère un mot de passe aléatoire :
+    // } catch (hashError) {
+    //   console.error('Erreur hachage mot de passe:', hashError);
+    //   // Fallback: utiliser un mot de passe aléatoire
+    //   const randomPassword = adminAPI.generateRandomPassword();
+    //   userData.mot_de_passe = randomPassword;
+    // }
+
+    if (currentUser && !currentUser.super_admin) {
+      userData.COD_PAY = currentUser.cod_pay || 'CMF';
+    }
+
+    if (selectedUser) {
+      // Mise à jour - mot de passe optionnel
+      const response = await adminAPI.updateUtilisateur(selectedUser.id, userData);
+      if (response?.success) {
+        message.success('Utilisateur mis à jour avec succès');
+        setUserModalVisible(false);
+        loadUtilisateurs();
+      } else {
+        throw new Error(response?.message || 'Erreur lors de la mise à jour');
+      }
+    } else {
+      // Création - mot de passe obligatoire
+      // MODIFICATION : Supprimer l'affichage du mot de passe généré
+      const response = await adminAPI.createUtilisateur(userData);
+      if (response?.success) {
+        message.success('Utilisateur créé avec succès');
+        setUserModalVisible(false);
+        loadUtilisateurs();
+      } else {
+        throw new Error(response?.message || 'Erreur lors de la création');
+      }
+    }
+  } catch (error) {
+    console.error('Erreur lors de la soumission:', error);
+    
+    let errorMessage = error.message;
+    if (error.message.includes('login existe déjà')) {
+      errorMessage = 'Ce nom d\'utilisateur est déjà utilisé';
+    } else if (error.message.includes('email existe déjà')) {
+      errorMessage = 'Cette adresse email est déjà utilisée';
+    } else if (error.message.includes('403')) {
+      errorMessage = 'Vous n\'avez pas les autorisations nécessaires';
+    } else if (error.message.includes('pays')) {
+      errorMessage = 'Vous ne pouvez créer des utilisateurs que pour votre pays';
+    } else if (error.message.includes('mot de passe')) {
+      errorMessage = 'Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule, un chiffre et un caractère spécial';
+    }
+    
+    message.error(errorMessage);
+  }
+};
 
   // ==================== GESTION DES RÔLES ====================
 

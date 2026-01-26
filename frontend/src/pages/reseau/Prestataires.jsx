@@ -4462,52 +4462,58 @@ const GestionPrestataires = () => {
                         </Stack>
                         
                         {/* Menu contextuel */}
-                        <Menu
-                          anchorEl={anchorEl}
-                          open={Boolean(anchorEl) && selectedMenuId === prestataire.id}
-                          onClose={handleMenuClose}
-                          anchorOrigin={{
-                            vertical: 'bottom',
-                            horizontal: 'right',
-                          }}
-                          transformOrigin={{
-                            vertical: 'top',
-                            horizontal: 'right',
-                          }}
-                        >
-                          <MenuItem 
-                            onClick={() => {
-                              handleChangeStatus(prestataire.id, 'Actif');
-                              handleMenuClose();
-                            }}
-                            disabled={isPrestataireActif(prestataire) || loading.action}
-                          >
-                            <CheckCircleIcon fontSize="small" sx={{ mr: 1, color: 'success.main' }} />
-                            Activer (1)
-                          </MenuItem>
-                          <MenuItem 
-                            onClick={() => {
-                              handleChangeStatus(prestataire.id, 'Inactif');
-                              handleMenuClose();
-                            }}
-                            disabled={!isPrestataireActif(prestataire) || loading.action}
-                          >
-                            <BlockIcon fontSize="small" sx={{ mr: 1, color: 'error.main' }} />
-                            Désactiver (0)
-                          </MenuItem>
-                          <Divider />
-                          <MenuItem 
-                            onClick={() => {
-                              handleDeletePrestataire(prestataire.id);
-                              handleMenuClose();
-                            }}
-                            sx={{ color: 'error.main' }}
-                            disabled={loading.action}
-                          >
-                            <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
-                            Supprimer définitivement
-                          </MenuItem>
-                        </Menu>
+                       {/* Menu contextuel */}
+<Menu
+  anchorEl={anchorEl}
+  open={Boolean(anchorEl) && selectedMenuId === prestataire.id}
+  onClose={handleMenuClose}
+  anchorOrigin={{
+    vertical: 'bottom',
+    horizontal: 'right',
+  }}
+  transformOrigin={{
+    vertical: 'top',
+    horizontal: 'right',
+  }}
+>
+  <MenuItem 
+    onClick={() => {
+      handleChangeStatus(prestataire.id, 'Actif');
+      handleMenuClose();
+    }}
+    disabled={isPrestataireActif(prestataire) || loading.action}
+  >
+    <CheckCircleIcon fontSize="small" sx={{ mr: 1, color: 'success.main' }} />
+    Activer (1)
+  </MenuItem>
+  <MenuItem 
+    onClick={() => {
+      handleChangeStatus(prestataire.id, 'Inactif');
+      handleMenuClose();
+    }}
+    disabled={!isPrestataireActif(prestataire) || loading.action}
+  >
+    <BlockIcon fontSize="small" sx={{ mr: 1, color: 'error.main' }} />
+    Désactiver (0)
+  </MenuItem>
+  
+  {/* Remplacez le Divider par un MenuItem avec un Divider à l'intérieur */}
+  <MenuItem disabled sx={{ p: 0, my: 0.5 }}>
+    <Divider sx={{ width: '100%' }} />
+  </MenuItem>
+  
+  <MenuItem 
+    onClick={() => {
+      handleDeletePrestataire(prestataire.id);
+      handleMenuClose();
+    }}
+    sx={{ color: 'error.main' }}
+    disabled={loading.action}
+  >
+    <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+    Supprimer définitivement
+  </MenuItem>
+</Menu>
                       </TableCell>
                     </TableRow>
                   ))

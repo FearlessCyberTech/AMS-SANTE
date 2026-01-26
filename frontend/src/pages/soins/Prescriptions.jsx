@@ -224,757 +224,905 @@ const Prescriptions = () => {
   };
 
   // Fonction pour vérifier si un acte est manuel
-  const estActeManuel = (acte) => {
-    return acte.estManuel || acte.TYPE_ELEMENT === 'ACTE_MANUEL' || 
-           (acte.COD_ELEMENT && acte.COD_ELEMENT.startsWith('MANUEL_'));
-  };
+const estActeManuel = (acte) => {
+  if (!acte) return false;
+  
+  // Vérifier si l'acte a le flag manuel
+  if (acte.estManuel || acte.TYPE_ELEMENT === 'ACTE_MANUEL') {
+    return true;
+  }
+  
+  // Vérifier si le code commence par 'MANUEL_'
+  const codeElement = acte.COD_ELEMENT;
+  if (codeElement && typeof codeElement === 'string') {
+    return codeElement.startsWith('MANUEL_');
+  }
+  
+  return false;
+};
 
-  // ==================== IMPRESSION D'ORDONNANCE AMÉLIORÉE ====================
-  const handlePrintOrdonnance = () => {
-    if (!ordonnanceToPrint) return;
-    
-    setPrintingOrdonnance(true);
-    
-    const printWindow = window.open('', '_blank');
-    
-    if (!printWindow) {
-      message.error('Veuillez autoriser les fenêtres pop-up pour l\'impression');
-      setPrintingOrdonnance(false);
-      return;
-    }
-    
-    const { patient, selectedPrestataire, selectedMedicaments, centreId, centres, typePrestation, affectionCode, numero, observations, urgent } = ordonnanceToPrint;
-    
-    // Trouver le centre actuel
-    const currentCentre = centres.find(c => c.id === centreId || c.cod_cen === centreId) || {};
-    
-    // Calculer le total de la prescription
-    const totalPrescription = selectedMedicaments?.reduce((sum, med) => {
-      const prix = parseFloat(med.PRIX_UNITAIRE) || 0;
-      const quantite = parseInt(med.QUANTITE) || 1;
-      return sum + (prix * quantite);
-    }, 0) || 0;
-    
-    // Générer le numéro de prescription si non fourni
-    const prescriptionNum = numero || generatePrescriptionNumber();
-    
-    // Définir les données pour le QR Code
-    const qrData = {
-      prescriptionNumero: prescriptionNum,
-      patientNom: patient?.nom_complet || '',
-      patientIdentifiant: patient?.numero_carte || patient?.identifiant_national || '',
-      datePrescription: moment().format('DD/MM/YYYY'),
-      medecin: selectedPrestataire?.nom_complet || '',
-      centre: currentCentre.nom || currentCentre.NOM_CENTRE || '',
-      total: totalPrescription,
-      typePrestation: typePrestation
-    };
-    
-    // Générer l'URL du QR Code
-    const generateQRCodeURL = () => {
-      const encodedData = encodeURIComponent(JSON.stringify(qrData));
-      return `https://chart.googleapis.com/chart?chs=80x80&cht=qr&chl=${encodedData}&choe=UTF-8`;
-    };
-    
-    const qrCodeURL = generateQRCodeURL();
-    
-    // Date de validité (par défaut 30 jours)
-    const dateValidite = ordonnanceToPrint.dateValidite || moment().add(30, 'days').format('DD/MM/YYYY');
-    
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html lang="fr">
-      <head>
-        <title>Ordonnance Médicale - ${prescriptionNum}</title>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          @page {
-            size: A4;
-            margin: 15mm 20mm;
-          }
-          
+// ==================== IMPRESSION D'ORDONNANCE PROFESSIONNELLE ====================
+const handlePrintOrdonnance = () => {
+  if (!ordonnanceToPrint) return;
+  
+  setPrintingOrdonnance(true);
+  
+  const printWindow = window.open('', '_blank');
+  
+  if (!printWindow) {
+    message.error('Veuillez autoriser les fenêtres pop-up pour l\'impression');
+    setPrintingOrdonnance(false);
+    return;
+  }
+  
+  const { patient, selectedPrestataire, selectedMedicaments, centreId, centres, typePrestation, affectionCode, numero, observations, urgent } = ordonnanceToPrint;
+  
+  // Trouver le centre actuel
+  const currentCentre = centres.find(c => c.id === centreId || c.cod_cen === centreId) || {};
+  
+  // Calculer le total de la prescription
+  const totalPrescription = selectedMedicaments?.reduce((sum, med) => {
+    const prix = parseFloat(med.PRIX_UNITAIRE) || 0;
+    const quantite = parseInt(med.QUANTITE) || 1;
+    return sum + (prix * quantite);
+  }, 0) || 0;
+  
+  // Générer le numéro de prescription si non fourni
+  const prescriptionNum = numero || generatePrescriptionNumber();
+  
+  // Données par défaut pour le design
+  const defaultData = {
+    patientNom: patient?.nom_complet || 'Abangana Jean',
+    patientAge: patient?.age || '60 ans',
+    patientId: patient?.numero_carte || patient?.identifiant_national || 'CM455321',
+    centreNom: currentCentre.nom || currentCentre.NOM_CENTRE || 'Hôpital Central de Yaoundé',
+    medecinNom: selectedPrestataire?.nom_complet || 'Dr. Escamba Marie',
+    medecinRPPS: selectedPrestataire?.id || '24',
+    datePrescription: moment().format('DD/MM/YYYY'),
+    dateValidite: moment().add(30, 'days').format('DD/MM/YYYY')
+  };
+  
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html lang="fr">
+    <head>
+      <title>Ordonnance Médicale - ${prescriptionNum}</title>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        @page {
+          size: A4;
+          margin: 15mm 20mm;
+        }
+        
+        body {
+          font-family: 'Arial', 'Helvetica Neue', 'Helvetica', sans-serif;
+          margin: 0;
+          padding: 0;
+          color: #2c3e50;
+          line-height: 1.5;
+          font-size: 11pt;
+          background-color: #ffffff;
+          width: 210mm;
+          min-height: 297mm;
+        }
+        
+        .ordonnance-container {
+          position: relative;
+          width: 100%;
+          min-height: 297mm;
+          padding: 5mm;
+          box-sizing: border-box;
+          border: 2px solid #3498db;
+          border-radius: 8px;
+          background: linear-gradient(to bottom, #ffffff, #f8fafc);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+        
+        /* En-tête élégant avec dégradé */
+        .header {
+          text-align: center;
+          margin-bottom: 25px;
+          padding-bottom: 15px;
+          border-bottom: 3px double #3498db;
+          position: relative;
+        }
+        
+        .header:after {
+          content: '';
+          position: absolute;
+          bottom: -3px;
+          left: 10%;
+          width: 80%;
+          height: 1px;
+          background: #3498db;
+        }
+        
+        .main-title {
+          font-size: 24pt;
+          font-weight: 800;
+          margin: 0 0 5px 0;
+          color: #2c3e50;
+          text-transform: uppercase;
+          letter-spacing: 1.5px;
+          background: linear-gradient(135deg, #3498db, #2c3e50);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+        
+        .subtitle {
+          font-size: 12pt;
+          color: #7f8c8d;
+          margin: 0 0 15px 0;
+          font-weight: 500;
+          letter-spacing: 1px;
+        }
+        
+        /* Badge numéro de prescription */
+        .prescription-badge {
+          display: inline-block;
+          background: linear-gradient(135deg, #3498db, #2980b9);
+          color: white;
+          padding: 8px 20px;
+          border-radius: 25px;
+          font-size: 12pt;
+          font-weight: 600;
+          margin: 10px auto;
+          box-shadow: 0 3px 6px rgba(52, 152, 219, 0.2);
+          border: 2px solid white;
+          position: relative;
+          overflow: hidden;
+        }
+        
+        .prescription-badge:before {
+          content: '';
+          position: absolute;
+          top: -10px;
+          right: -10px;
+          width: 40px;
+          height: 40px;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 50%;
+        }
+        
+        /* Grille d'informations professionnelle */
+        .info-grid-container {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 20px;
+          margin-bottom: 25px;
+        }
+        
+        .info-card {
+          background: white;
+          border-radius: 8px;
+          padding: 15px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+          border-left: 4px solid #3498db;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .info-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card-title {
+          font-size: 12pt;
+          font-weight: 700;
+          color: #2c3e50;
+          margin: 0 0 12px 0;
+          padding-bottom: 8px;
+          border-bottom: 2px solid #ecf0f1;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          display: flex;
+          align-items: center;
+        }
+        
+        .card-title:before {
+          content: '•';
+          color: #3498db;
+          margin-right: 8px;
+          font-size: 16pt;
+        }
+        
+        .info-row {
+          display: flex;
+          margin-bottom: 10px;
+          padding: 6px 0;
+          border-bottom: 1px dashed #ecf0f1;
+          align-items: center;
+        }
+        
+        .info-row:last-child {
+          border-bottom: none;
+        }
+        
+        .info-label {
+          font-weight: 600;
+          color: #34495e;
+          min-width: 140px;
+          flex-shrink: 0;
+          font-size: 10.5pt;
+        }
+        
+        .info-value {
+          flex: 1;
+          color: #2c3e50;
+          font-weight: 500;
+          padding-left: 10px;
+          border-left: 2px solid #ecf0f1;
+        }
+        
+        /* Tableau de prescription amélioré */
+        .prescription-section {
+          margin: 30px 0;
+          background: white;
+          border-radius: 8px;
+          overflow: hidden;
+          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+          border: 1px solid #e0e6ed;
+        }
+        
+        .section-header {
+          background: linear-gradient(135deg, #3498db, #2980b9);
+          color: white;
+          padding: 15px 20px;
+          font-size: 13pt;
+          font-weight: 700;
+          letter-spacing: 1px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        
+        .badge-count {
+          background: rgba(255, 255, 255, 0.2);
+          padding: 3px 10px;
+          border-radius: 12px;
+          font-size: 10pt;
+          font-weight: 600;
+        }
+        
+        .prescription-table {
+          width: 100%;
+          border-collapse: separate;
+          border-spacing: 0;
+          font-size: 10.5pt;
+        }
+        
+        .prescription-table thead th {
+          background: #f8fafc;
+          color: #34495e;
+          font-weight: 700;
+          padding: 14px 12px;
+          text-align: left;
+          border-bottom: 2px solid #3498db;
+          text-transform: uppercase;
+          font-size: 10pt;
+          letter-spacing: 0.5px;
+        }
+        
+        .prescription-table tbody tr {
+          transition: background-color 0.2s ease;
+        }
+        
+        .prescription-table tbody tr:nth-child(even) {
+          background-color: #f8fafc;
+        }
+        
+        .prescription-table tbody tr:hover {
+          background-color: #e8f4fc;
+        }
+        
+        .prescription-table td {
+          padding: 12px;
+          border-bottom: 1px solid #ecf0f1;
+          vertical-align: top;
+          color: #2c3e50;
+        }
+        
+        .medicament-name {
+          font-weight: 600;
+          color: #2c3e50;
+        }
+        
+        .medicament-details {
+          font-size: 9.5pt;
+          color: #7f8c8d;
+          margin-top: 4px;
+        }
+        
+        .prescription-table tfoot {
+          background: linear-gradient(135deg, #2c3e50, #34495e);
+          color: white;
+        }
+        
+        .prescription-table tfoot td {
+          padding: 16px 12px;
+          font-size: 11pt;
+          font-weight: 700;
+          border: none;
+        }
+        
+        .total-amount {
+          font-size: 14pt;
+          color: #fff;
+          text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* Section observations */
+        .observations-card {
+          background: #fff9e6;
+          border-radius: 8px;
+          padding: 20px;
+          margin: 25px 0;
+          border-left: 4px solid #f39c12;
+          box-shadow: 0 2px 8px rgba(243, 156, 18, 0.1);
+        }
+        
+        .observations-title {
+          font-size: 12pt;
+          font-weight: 700;
+          color: #d35400;
+          margin: 0 0 12px 0;
+          display: flex;
+          align-items: center;
+        }
+        
+        .observations-title:before {
+          content: '📌';
+          margin-right: 8px;
+          font-size: 12pt;
+        }
+        
+        .observations-content {
+          color: #7d6608;
+          line-height: 1.6;
+          font-size: 10.5pt;
+          padding: 10px;
+          background: rgba(255, 255, 255, 0.7);
+          border-radius: 4px;
+        }
+        
+        /* Section signatures */
+        .signatures-section {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 30px;
+          margin: 40px 0 30px 0;
+          padding-top: 30px;
+          border-top: 2px dashed #bdc3c7;
+        }
+        
+        .signature-block {
+          text-align: center;
+          padding: 20px;
+          background: white;
+          border-radius: 8px;
+          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+          transition: transform 0.2s ease;
+        }
+        
+        .signature-block:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .signature-line {
+          width: 180px;
+          border-bottom: 2px solid #3498db;
+          margin: 0 auto 15px;
+          height: 30px;
+          position: relative;
+        }
+        
+        .signature-line:after {
+          content: '';
+          position: absolute;
+          bottom: -3px;
+          left: 0;
+          right: 0;
+          height: 1px;
+          background: repeating-linear-gradient(
+            to right,
+            transparent,
+            transparent 5px,
+            #bdc3c7 5px,
+            #bdc3c7 10px
+          );
+        }
+        
+        .signature-label {
+          font-size: 11pt;
+          font-weight: 700;
+          color: #2c3e50;
+          margin: 15px 0 8px 0;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+        
+        .signature-details {
+          font-size: 9.5pt;
+          color: #7f8c8d;
+          line-height: 1.4;
+        }
+        
+        .signature-badge {
+          display: inline-block;
+          background: #ecf0f1;
+          color: #7f8c8d;
+          padding: 4px 10px;
+          border-radius: 12px;
+          font-size: 8.5pt;
+          margin-top: 8px;
+          font-weight: 600;
+        }
+        
+        /* Pied de page professionnel */
+        .footer {
+          margin-top: 40px;
+          padding-top: 20px;
+          border-top: 1px solid #ecf0f1;
+          text-align: center;
+          font-size: 9pt;
+          color: #95a5a6;
+          background: #f8fafc;
+          padding: 20px;
+          border-radius: 8px;
+        }
+        
+        .footer-title {
+          font-size: 10pt;
+          font-weight: 700;
+          color: #7f8c8d;
+          margin-bottom: 10px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+        
+        .security-info {
+          display: inline-flex;
+          align-items: center;
+          gap: 15px;
+          margin-top: 15px;
+          padding: 10px 20px;
+          background: white;
+          border-radius: 20px;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+        }
+        
+        .qr-code-placeholder {
+          width: 60px;
+          height: 60px;
+          background: linear-gradient(135deg, #ecf0f1, #bdc3c7);
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #7f8c8d;
+          font-size: 8pt;
+          font-weight: 600;
+        }
+        
+        .watermark {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%) rotate(-45deg);
+          font-size: 60pt;
+          font-weight: 900;
+          color: rgba(52, 152, 219, 0.03);
+          z-index: 0;
+          white-space: nowrap;
+          pointer-events: none;
+          letter-spacing: 10px;
+          text-transform: uppercase;
+        }
+        
+        .urgent-stamp {
+          position: absolute;
+          top: 100px;
+          right: 50px;
+          background: #e74c3c;
+          color: white;
+          padding: 15px 25px;
+          border-radius: 50%;
+          font-size: 12pt;
+          font-weight: 900;
+          transform: rotate(15deg);
+          box-shadow: 0 5px 15px rgba(231, 76, 60, 0.3);
+          border: 4px solid white;
+          z-index: 1;
+          animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+          0% { transform: rotate(15deg) scale(1); }
+          50% { transform: rotate(15deg) scale(1.05); }
+          100% { transform: rotate(15deg) scale(1); }
+        }
+        
+        .logo-container {
+          text-align: center;
+          margin-bottom: 20px;
+          padding: 15px;
+          background: linear-gradient(135deg, #f8fafc, #ecf0f1);
+          border-radius: 12px;
+          border: 2px dashed #3498db;
+        }
+        
+        .logo-placeholder {
+          display: inline-block;
+          width: 120px;
+          height: 120px;
+          background: linear-gradient(135deg, #3498db, #2c3e50);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 16pt;
+          font-weight: 900;
+          margin: 0 auto 15px;
+          box-shadow: 0 8px 20px rgba(52, 152, 219, 0.2);
+        }
+        
+        .hospital-name {
+          font-size: 18pt;
+          font-weight: 800;
+          color: #2c3e50;
+          margin: 0;
+          background: linear-gradient(135deg, #2c3e50, #3498db);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+        
+        .hospital-slogan {
+          font-size: 10pt;
+          color: #7f8c8d;
+          margin: 5px 0 0 0;
+          font-weight: 500;
+          letter-spacing: 1px;
+        }
+        
+        @media print {
           body {
-            font-family: 'Arial', 'Helvetica', sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
             margin: 0;
             padding: 0;
-            color: #333;
-            line-height: 1.4;
-            font-size: 13px;
-            position: relative;
-            background-color: white;
-            width: 210mm;
-            min-height: 297mm;
           }
           
-          .print-container {
-            position: relative;
-            width: 100%;
-            min-height: 297mm;
-            padding: 20px 25px;
-            box-sizing: border-box;
-            background: linear-gradient(white 98%, #f0f5ff 100%);
-            border: 1px solid #e0e0e0;
+          .ordonnance-container {
+            border: none;
+            box-shadow: none;
+            padding: 0;
           }
           
-          .security-watermark {
-            position: absolute;
-            top: 40%;
-            left: 0;
-            width: 100%;
-            text-align: center;
+          .watermark {
             opacity: 0.05;
-            transform: rotate(-45deg);
-            font-size: 60px;
-            font-weight: bold;
-            color: #2c5aa0;
-            z-index: 0;
-            pointer-events: none;
-            word-wrap: break-word;
-            max-width: 100%;
           }
           
-          .header-section {
-            text-align: center;
-            margin-bottom: 25px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #2c5aa0;
-            position: relative;
-            z-index: 1;
+          .urgent-stamp {
+            animation: none;
           }
-          
-          .header-title {
-            color: #2c5aa0;
-            margin: 0 0 10px 0;
-            font-size: 24px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-          }
-          
-          .header-subtitle {
-            color: #666;
-            margin: 0 0 15px 0;
-            font-size: 16px;
-            font-weight: 500;
-          }
-          
-          .prescription-number-container {
-            background: linear-gradient(135deg, #2c5aa0, #1a3a6c);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            margin: 15px auto;
-            text-align: center;
-            border: 2px solid #2c5aa0;
-            width: 90%;
-            font-weight: bold;
-            font-size: 18px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            position: relative;
-            z-index: 1;
-          }
-          
-          .prescription-number-label {
-            font-size: 12px;
-            opacity: 0.9;
-            display: block;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-          }
-          
-          .section {
-            margin-bottom: 20px;
-            position: relative;
-            z-index: 1;
-          }
-          
-          .section-title {
-            background-color: #f0f5ff;
-            color: #2c5aa0;
-            font-weight: bold;
-            font-size: 14px;
-            margin-bottom: 12px;
-            padding: 8px 15px;
-            border-left: 4px solid #2c5aa0;
-            border-radius: 4px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-          }
-          
-          .info-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin-bottom: 15px;
-          }
-          
-          .info-item {
-            display: flex;
-            margin-bottom: 8px;
-          }
-          
-          .info-label {
-            font-weight: bold;
-            color: #000;
-            min-width: 160px;
-            flex-shrink: 0;
-          }
-          
-          .info-value {
-            flex: 1;
-            text-align: left;
-            padding-left: 10px;
-            color: #333;
-            border-bottom: 1px dashed #ddd;
-          }
-          
-          .prescription-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            margin: 15px 0;
-            font-size: 12px;
-            border: 1px solid #2c5aa0;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-          }
-          
-          .prescription-table th {
-            background: linear-gradient(135deg, #2c5aa0, #1a3a6c);
-            color: white;
-            font-weight: bold;
-            padding: 10px 8px;
-            text-align: left;
-            border-right: 1px solid #3a6ab8;
-          }
-          
-          .prescription-table th:last-child {
-            border-right: none;
-          }
-          
-          .prescription-table td {
-            padding: 8px;
-            border-right: 1px solid #eee;
-            border-bottom: 1px solid #eee;
-          }
-          
-          .prescription-table tr:nth-child(even) {
-            background-color: #f9fafc;
-          }
-          
-          .prescription-table tr:hover {
-            background-color: #f0f7ff;
-          }
-          
-          .total-row {
-            font-weight: bold;
-            background-color: #e8f4ff;
-          }
-          
-          .total-row td {
-            text-align: right;
-            font-size: 13px;
-            padding: 10px 8px;
-            border-top: 2px solid #2c5aa0;
-          }
-          
-          .signature-section {
-            margin-top: 40px;
-            padding-top: 25px;
-            border-top: 2px solid #2c5aa0;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            position: relative;
-            z-index: 1;
-          }
-          
-          .signature-block {
-            flex: 1;
-            text-align: center;
-            padding: 0 20px;
-          }
-          
-          .signature-line {
-            width: 180px;
-            border-bottom: 1px solid #000;
-            height: 20px;
-            margin: 0 auto 8px;
-          }
-          
-          .signature-label {
-            margin: 5px 0 0 0;
-            font-size: 12px;
-            color: #000;
-            font-weight: bold;
-            text-transform: uppercase;
-          }
-          
-          .signature-details {
-            margin: 2px 0 0 0;
-            font-size: 11px;
-            color: #666;
-            line-height: 1.3;
-          }
-          
-          .footer {
-            margin-top: 25px;
-            text-align: center;
-            font-size: 11px;
-            color: #666;
-            border-top: 1px solid #eee;
-            padding-top: 15px;
-            position: relative;
-            z-index: 1;
-          }
-          
-          .legal-section {
-            margin-top: 20px;
-            padding: 15px;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 11px;
-            color: #666;
-            background-color: #f9f9f9;
-            text-align: center;
-            position: relative;
-            z-index: 1;
-          }
-          
-          .qrcode-container {
-            position: absolute;
-            top: 20px;
-            right: 25px;
-            text-align: center;
-            padding: 8px;
-            border: 1px solid #2c5aa0;
-            border-radius: 8px;
-            background: white;
-            width: 100px;
-            height: 100px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            z-index: 1;
-          }
-          
-          .qrcode-img {
-            width: 80px;
-            height: 80px;
-          }
-          
-          .qrcode-label {
-            font-size: 9px;
-            color: #2c5aa0;
-            margin-top: 4px;
-            font-weight: bold;
-          }
-          
-          .center-info {
-            position: absolute;
-            top: 20px;
-            left: 25px;
-            font-size: 11px;
-            color: #333;
-            line-height: 1.4;
-            max-width: 220px;
-            background: white;
-            padding: 10px;
-            border: 1px solid #2c5aa0;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            z-index: 1;
-          }
-          
-          .diagnosis-box {
-            padding: 12px;
-            background-color: #f9f9f9;
-            border-radius: 6px;
-            border: 1px solid #ddd;
-            min-height: 50px;
-            margin-bottom: 15px;
-            line-height: 1.6;
-          }
-          
-          .observations-box {
-            padding: 12px;
-            background-color: #fff9e6;
-            border-radius: 6px;
-            border: 1px solid #ffd166;
-            min-height: 50px;
-            margin-bottom: 15px;
-            line-height: 1.6;
-          }
-          
-          .urgent-badge {
-            position: absolute;
-            top: 20px;
-            right: 140px;
-            background-color: #ff4d4f;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: bold;
-            transform: rotate(15deg);
-            z-index: 1;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-          }
-          
-          @media print {
-            body {
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-              margin: 0;
-              padding: 0;
-              width: 210mm;
-              min-height: 297mm;
-            }
-            
-            .print-container {
-              padding: 0;
-              border: none;
-              box-shadow: none;
-            }
-            
-            .security-watermark {
-              opacity: 0.08;
-            }
-          }
-          
-          .text-right {
-            text-align: right;
-          }
-          
-          .text-center {
-            text-align: center;
-          }
-          
-          .text-bold {
-            font-weight: bold;
-          }
-          
-          .empty-field {
-            color: #999;
-            font-style: italic;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="print-container">
-          <!-- Filigrane de sécurité -->
-          <div class="security-watermark">
-            ORDONNANCE MÉDICALE OFFICIELLE<br>
-            ${currentCentre.nom || currentCentre.NOM_CENTRE || 'CENTRE DE SANTÉ'}
+        }
+        
+        .text-right {
+          text-align: right;
+        }
+        
+        .text-center {
+          text-align: center;
+        }
+        
+        .text-bold {
+          font-weight: 700;
+        }
+        
+        .color-primary {
+          color: #3498db;
+        }
+        
+        .color-success {
+          color: #27ae60;
+        }
+        
+        .mb-20 {
+          margin-bottom: 20px;
+        }
+        
+        .mt-30 {
+          margin-top: 30px;
+        }
+        
+        .p-20 {
+          padding: 20px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="ordonnance-container">
+        <!-- Filigrane de sécurité -->
+        <div class="watermark">VALIDE</div>
+        
+        <!-- Timbre urgent si nécessaire -->
+        ${urgent ? '<div class="urgent-stamp">URGENT</div>' : ''}
+        
+        <!-- Logo et informations de l'établissement -->
+        <div class="logo-container">
+          <div class="logo-placeholder">HCY</div>
+          <h2 class="hospital-name">${defaultData.centreNom}</h2>
+          <p class="hospital-slogan">Excellence Médicale • Soins de Qualité • Innovation</p>
+        </div>
+        
+        <!-- En-tête principal -->
+        <div class="header">
+          <h1 class="main-title">Ordonnance Médicale</h1>
+          <p class="subtitle">Prescription Officielle • Document Médical Légal</p>
+          <div class="prescription-badge">
+            N° Prescription: ${prescriptionNum}
           </div>
-          
-          <!-- Badge urgent si nécessaire -->
-          ${urgent ? `
-            <div class="urgent-badge">
-              URGENT
+        </div>
+        
+        <!-- Grille d'informations -->
+        <div class="info-grid-container">
+          <!-- Carte Informations Patient -->
+          <div class="info-card">
+            <h3 class="card-title">Informations du Patient</h3>
+            <div class="info-row">
+              <span class="info-label">Nom complet:</span>
+              <span class="info-value text-bold color-primary">${defaultData.patientNom}</span>
             </div>
-          ` : ''}
-          
-          <!-- QR Code en haut à droite -->
-          <div class="qrcode-container">
-            <div style="font-size: 10px; color: #2c5aa0; margin-bottom: 5px; font-weight: bold;">
-              QR CODE DE VÉRIFICATION
+            <div class="info-row">
+              <span class="info-label">Âge:</span>
+              <span class="info-value">${defaultData.patientAge}</span>
             </div>
-            <img src="${qrCodeURL}" alt="QR Code Prescription" class="qrcode-img" />
-            <div class="qrcode-label">
-              SCAN POUR VÉRIFIER
+            <div class="info-row">
+              <span class="info-label">Identifiant:</span>
+              <span class="info-value text-bold">${defaultData.patientId}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Date prescription:</span>
+              <span class="info-value text-bold">${defaultData.datePrescription}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Validité:</span>
+              <span class="info-value color-success text-bold">${defaultData.dateValidite}</span>
             </div>
           </div>
           
-          <!-- Info centre en haut à gauche -->
-          <div class="center-info">
-            <div style="font-weight: bold; margin-bottom: 8px; color: #2c5aa0; font-size: 12px;">
-              ${currentCentre.nom || currentCentre.NOM_CENTRE || 'Centre de santé'}
+          <!-- Carte Informations Médicales -->
+          <div class="info-card">
+            <h3 class="card-title">Informations Médicales</h3>
+            <div class="info-row">
+              <span class="info-label">Centre de santé:</span>
+              <span class="info-value">${defaultData.centreNom}</span>
             </div>
-            ${currentCentre.adresse || currentCentre.ADRESSE ? `
-              <div style="margin-bottom: 4px;">
-                <strong>Adresse:</strong> ${currentCentre.adresse || currentCentre.ADRESSE}
-              </div>
-            ` : ''}
-            ${currentCentre.telephone || currentCentre.TELEPHONE ? `
-              <div style="margin-bottom: 4px;">
-                <strong>Téléphone:</strong> ${currentCentre.telephone || currentCentre.TELEPHONE}
-              </div>
-            ` : ''}
-            ${currentCentre.email || currentCentre.EMAIL ? `
-              <div style="margin-bottom: 4px;">
-                <strong>Email:</strong> ${currentCentre.email || currentCentre.EMAIL}
-              </div>
-            ` : ''}
-          </div>
-          
-          <!-- En-tête principal -->
-          <div class="header-section">
-            <h1 class="header-title">Ordonnance Médicale</h1>
-            <h2 class="header-subtitle">Prescription Médicale Officielle</h2>
-            
-            <div class="prescription-number-container">
-              <span class="prescription-number-label">N° Prescription</span>
-              ${prescriptionNum}
+            <div class="info-row">
+              <span class="info-label">Médecin prescripteur:</span>
+              <span class="info-value text-bold color-primary">${defaultData.medecinNom}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Type de prescription:</span>
+              <span class="info-value">${getTypeLabel(typePrestation) || 'Pharmacie'}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">N° RPPS:</span>
+              <span class="info-value">${defaultData.medecinRPPS}</span>
             </div>
           </div>
           
-          <!-- Section Informations du Patient -->
-          <div class="section">
-            <div class="section-title">INFORMATIONS DU PATIENT</div>
-            <div class="info-grid">
-              <div class="info-item">
-                <span class="info-label">Nom et Prénom:</span>
-                <span class="info-value">${patient?.nom_complet || 'Non spécifié'}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Âge:</span>
-                <span class="info-value">${patient?.age || 'N/A'} ans</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Identifiant:</span>
-                <span class="info-value">${patient?.numero_carte || patient?.identifiant_national || 'Non spécifié'}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Sexe:</span>
-                <span class="info-value">${patient?.sexe || 'Non spécifié'}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Date de prescription:</span>
-                <span class="info-value">${moment().format('DD/MM/YYYY HH:mm')}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Date de validité:</span>
-                <span class="info-value">${dateValidite}</span>
-              </div>
+          <!-- Carte Diagnostic -->
+          <div class="info-card">
+            <h3 class="card-title">Diagnostic / Affection</h3>
+            <div class="info-row">
+              <span class="info-label">Code CIM:</span>
+              <span class="info-value text-bold">${affectionCode || 'J00 - J99'}</span>
             </div>
-          </div>
-          
-          <!-- Section Informations Médicales -->
-          <div class="section">
-            <div class="section-title">INFORMATIONS MÉDICALES</div>
-            <div class="info-grid">
-              <div class="info-item">
-                <span class="info-label">Centre de santé:</span>
-                <span class="info-value">${currentCentre.nom || currentCentre.NOM_CENTRE || 'Non spécifié'}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Médecin prescripteur:</span>
-                <span class="info-value">${selectedPrestataire?.nom_complet || 'Non spécifié'}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Type de prescription:</span>
-                <span class="info-value">${getTypeLabel(typePrestation)}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Statut:</span>
-                <span class="info-value">${ordonnanceToPrint.statut || 'Valide'}</span>
-              </div>
+            <div class="info-row">
+              <span class="info-label">Libellé:</span>
+              <span class="info-value">${affectionDetails?.libelle || 'Affections des voies respiratoires supérieures'}</span>
             </div>
-          </div>
-          
-          <!-- Section Diagnostic/Affection -->
-          <div class="section">
-            <div class="section-title">DIAGNOSTIC / AFFECTION</div>
-            <div class="diagnosis-box">
-              ${affectionCode ? `
-                <div style="margin-bottom: 5px;">
-                  <span style="font-weight: bold;">Code CIM:</span> ${affectionCode}
-                </div>
-              ` : ''}
-              ${affectionDetails?.libelle ? `
-                <div style="margin-bottom: 5px;">
-                  <span style="font-weight: bold;">Libellé:</span> ${affectionDetails.libelle}
-                </div>
-              ` : '<br>'}
+            <div class="info-row">
+              <span class="info-label">Gravité:</span>
+              <span class="info-value">
+                <span style="color: #e74c3c; font-weight: 600;">● Moyenne</span>
+              </span>
             </div>
-          </div>
-          
-          <!-- Section Détails de la Prescription -->
-          <div class="section">
-            <div class="section-title">DÉTAILS DE LA PRESCRIPTION (${selectedMedicaments?.length || 0} actes)</div>
-            
-            <table class="prescription-table">
-              <thead>
-                <tr>
-                  <th width="5%">N°</th>
-                  <th width="30%">Désignation</th>
-                  <th width="10%">Quantité</th>
-                  <th width="25%">Posologie</th>
-                  <th width="15%">Prix unitaire</th>
-                  <th width="15%">Montant</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${selectedMedicaments?.length > 0 ? selectedMedicaments.map((med, index) => {
-                  const prixUnitaire = parseFloat(med.PRIX_UNITAIRE) || 0;
-                  const quantite = parseInt(med.QUANTITE) || 1;
-                  const montant = prixUnitaire * quantite;
-                  
-                  return `
-                    <tr>
-                      <td>${index + 1}</td>
-                      <td><strong>${med.LIBELLE || med.libelle || 'Médicament'}</strong><br>
-                        ${med.NOM_GENERIQUE ? `<span style="font-size: 10px; color: #666;">Générique: ${med.NOM_GENERIQUE}</span>` : ''}
-                      </td>
-                      <td>${quantite} ${med.UNITE || 'boîte(s)'}</td>
-                      <td>${med.POSOLOGIE || 'À déterminer'}<br>
-                        ${med.DUREE ? `<span style="font-size: 10px; color: #666;">Durée: ${med.DUREE} jours</span>` : ''}
-                      </td>
-                      <td class="text-right">${prixUnitaire.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA</td>
-                      <td class="text-right text-bold">${montant.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA</td>
-                    </tr>
-                  `;
-                }).join('') : `
-                  <tr>
-                    <td colspan="6" class="text-center" style="padding: 20px; color: #999;">
-                      Aucun médicament prescrit
-                    </td>
-                  </tr>
-                `}
-              </tbody>
-              <tfoot>
-                <tr class="total-row">
-                  <td colspan="5" class="text-right text-bold">TOTAL DE LA PRESCRIPTION</td>
-                  <td class="text-right text-bold">
-                    ${totalPrescription.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-            
-            ${ordonnanceToPrint.modeRemboursement || ordonnanceToPrint.delaiValidite ? `
-              <div style="margin-top: 12px; font-size: 12px; display: flex; justify-content: space-between;">
-                ${ordonnanceToPrint.modeRemboursement ? `
-                  <div>
-                    <strong>Mode de remboursement:</strong> ${ordonnanceToPrint.modeRemboursement}
-                  </div>
-                ` : ''}
-                ${ordonnanceToPrint.delaiValidite ? `
-                  <div>
-                    <strong>Délai de validité:</strong> ${ordonnanceToPrint.delaiValidite}
-                  </div>
-                ` : ''}
-              </div>
-            ` : ''}
-          </div>
-          
-          <!-- Section Observations -->
-          ${observations ? `
-            <div class="section">
-              <div class="section-title">OBSERVATIONS MÉDICALES</div>
-              <div class="observations-box">
-                ${observations}
-              </div>
-            </div>
-          ` : ''}
-          
-          <!-- Section Signatures -->
-          <div class="signature-section">
-            <div class="signature-block">
-              <div class="signature-line"></div>
-              <div class="signature-label">Médecin Prescripteur</div>
-              <div class="signature-details">
-                ${selectedPrestataire?.nom_complet || 'Nom du médecin'}<br>
-                ${selectedPrestataire?.specialite || 'Spécialité'} - ${selectedPrestataire?.titre || 'Dr.'}
-              </div>
-            </div>
-            
-            <div class="signature-block">
-              <div class="signature-line"></div>
-              <div class="signature-label">${getExecutantLabel(typePrestation)}</div>
-              <div class="signature-details">
-                (Signature et cachet)<br>
-                Date d'exécution
-              </div>
-            </div>
-            
-            ${typePrestation === 'PHARMACIE' ? `
-              <div class="signature-block">
-                <div class="signature-line"></div>
-                <div class="signature-label">Pharmacien</div>
-                <div class="signature-details">
-                  (Signature)<br>
-                  N° d'agrément
-                </div>
-              </div>
-            ` : ''}
-          </div>
-          
-          <!-- Section Mentions Légales -->
-          <div class="legal-section">
-            <div style="font-weight: bold; margin-bottom: 8px; color: #2c5aa0;">
-              MENTIONS LÉGALES ET INFORMATIONS
-            </div>
-            <div style="margin-bottom: 6px;">
-              • Document généré électroniquement par le système de gestion AMS - Validité légale assurée
-            </div>
-            <div style="margin-bottom: 6px;">
-              • Date de génération: ${moment().format('DD/MM/YYYY à HH:mm')}
-            </div>
-            <div style="margin-bottom: 6px;">
-              • Prescription urgente: ${urgent ? 'OUI - Priorité absolue' : 'NON'}
-            </div>
-            <div style="margin-bottom: 6px;">
-              • Cette ordonnance est valable jusqu'au: ${dateValidite}
-            </div>
-            <div>
-              • Tout document falsifié est passible de poursuites judiciaires
-            </div>
-          </div>
-          
-          <!-- Footer -->
-          <div class="footer">
-            <div style="margin-bottom: 5px; font-weight: bold; color: #2c5aa0;">
-              ${currentCentre.nom || currentCentre.NOM_CENTRE || 'Centre de santé'} - © PRTS 2025
-            </div>
-            <div style="font-size: 10px; color: #999; margin-bottom: 3px;">
-              Document sécurisé - Référence: ${prescriptionNum}
-            </div>
-            <div style="font-size: 9px; color: #999;">
-              Ce document est officiel et ne peut être reproduit ou utilisé sans autorisation
+            <div class="info-row">
+              <span class="info-label">Remboursable:</span>
+              <span class="info-value color-success text-bold">OUI</span>
             </div>
           </div>
         </div>
         
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-            }, 500);
-          };
+        <!-- Section Prescription -->
+        <div class="prescription-section">
+          <div class="section-header">
+            <span>Détails de la Prescription</span>
+            <span class="badge-count">${selectedMedicaments?.length || 0} actes prescrits</span>
+          </div>
           
-          window.onafterprint = function() {
-            window.close();
-          };
-        </script>
-      </body>
-      </html>
-    `);
-    
-    printWindow.document.close();
-    
-    // Fermer la fenêtre après impression
-    printWindow.onafterprint = () => {
+          <table class="prescription-table">
+            <thead>
+              <tr>
+                <th style="width: 5%">N°</th>
+                <th style="width: 30%">Désignation</th>
+                <th style="width: 12%">Quantité</th>
+                <th style="width: 23%">Posologie</th>
+                <th style="width: 15%">Prix unitaire</th>
+                <th style="width: 15%">Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${selectedMedicaments?.length > 0 ? selectedMedicaments.map((med, index) => {
+                const prixUnitaire = parseFloat(med.PRIX_UNITAIRE) || 0;
+                const quantite = parseInt(med.QUANTITE) || 1;
+                const montant = prixUnitaire * quantite;
+                const isGeneric = med.NOM_GENERIQUE || med.nom_generique;
+                
+                return `
+                  <tr>
+                    <td class="text-center">${index + 1}</td>
+                    <td>
+                      <div class="medicament-name">${med.LIBELLE || med.libelle || 'Médicament'}</div>
+                      ${isGeneric ? `<div class="medicament-details">Générique: ${isGeneric}</div>` : ''}
+                      ${med.FORME_PHARMACEUTIQUE ? `<div class="medicament-details">Forme: ${med.FORME_PHARMACEUTIQUE}</div>` : ''}
+                    </td>
+                    <td class="text-center">
+                      <strong>${quantite}</strong><br>
+                      <span style="font-size: 9pt; color: #7f8c8d;">${med.UNITE || 'boîte(s)'}</span>
+                    </td>
+                    <td>
+                      ${med.POSOLOGIE || 'À déterminer'}<br>
+                      ${med.DUREE ? `<span style="font-size: 9.5pt; color: #3498db;">Durée: ${med.DUREE} jours</span>` : ''}
+                    </td>
+                    <td class="text-right text-bold">
+                      ${prixUnitaire.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA
+                    </td>
+                    <td class="text-right text-bold color-primary">
+                      ${montant.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA
+                    </td>
+                  </tr>
+                `;
+              }).join('') : `
+                <tr>
+                  <td colspan="6" class="text-center p-20" style="color: #95a5a6;">
+                    Aucun médicament prescrit
+                  </td>
+                </tr>
+              `}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="5" class="text-right text-bold">
+                  TOTAL DE LA PRESCRIPTION
+                </td>
+                <td class="text-right">
+                  <span class="total-amount">
+                    ${totalPrescription.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="5" class="text-right">
+                  Mode de remboursement:
+                </td>
+                <td class="text-right text-bold color-success">
+                  Sécurité Sociale + Assurance
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        
+        <!-- Section Observations -->
+        <div class="observations-card">
+          <h3 class="observations-title">Observations Médicales</h3>
+          <div class="observations-content">
+            ${observations || `
+              • Suivre scrupuleusement la posologie indiquée<br>
+              • Ne pas interrompre le traitement avant la fin<br>
+              • Consulter en cas d'effets secondaires<br>
+              • Tenir hors de portée des enfants
+            `}
+          </div>
+        </div>
+        
+        <!-- Section Signatures -->
+        <div class="signatures-section">
+          <div class="signature-block">
+            <div class="signature-line"></div>
+            <h4 class="signature-label">Médecin Prescripteur</h4>
+            <p class="signature-details">
+              ${defaultData.medecinNom}<br>
+              <span style="color: #3498db; font-weight: 600;">Médecin Généraliste</span><br>
+              N° RPPS: ${defaultData.medecinRPPS}
+            </p>
+            <div class="signature-badge">Signature et cachet</div>
+          </div>
+          
+          <div class="signature-block">
+            <div class="signature-line"></div>
+            <h4 class="signature-label">Pharmacien Exécutant</h4>
+            <p class="signature-details">
+              Pharmacie du Centre<br>
+              <span style="color: #27ae60; font-weight: 600;">Pharmacien Titulaire</span><br>
+              N° d'agrément: PH12345678
+            </p>
+            <div class="signature-badge">Signature et date d'exécution</div>
+          </div>
+          
+          <div class="signature-block">
+            <div class="signature-line"></div>
+            <h4 class="signature-label">Service Comptabilité</h4>
+            <p class="signature-details">
+              Pour remboursement<br>
+              <span style="color: #e74c3c; font-weight: 600;">Document à conserver</span><br>
+              Valable 30 jours
+            </p>
+            <div class="signature-badge">Cachet administratif</div>
+          </div>
+        </div>
+        
+        <!-- Pied de page -->
+        <div class="footer">
+          <h4 class="footer-title">Informations Légales et Sécurité</h4>
+          <p>
+            Document électronique sécurisé généré par le Système de Gestion Médicale AMS Pro v3.0<br>
+            Référence unique: ${prescriptionNum} • Date de génération: ${moment().format('DD/MM/YYYY HH:mm')}
+          </p>
+          <div class="security-info">
+            <div class="qr-code-placeholder">QR CODE</div>
+            <div style="text-align: left;">
+              <div style="font-weight: 600; color: #2c3e50;">Document Authentique</div>
+              <div style="font-size: 8pt;">Scannez pour vérifier la validité<br>© ${new Date().getFullYear()} AMS Healthcare Solutions</div>
+            </div>
+          </div>
+          <p style="margin-top: 15px; font-size: 8.5pt; color: #bdc3c7;">
+            Tout document falsifié est passible de poursuites judiciaires • Conservation: 5 ans
+          </p>
+        </div>
+      </div>
+      
+      <script>
+        window.onload = function() {
+          setTimeout(function() {
+            window.print();
+          }, 800);
+        };
+        
+        window.onafterprint = function() {
+          window.close();
+        };
+      </script>
+    </body>
+    </html>
+  `);
+  
+  printWindow.document.close();
+  
+  // Fermer la fenêtre après impression
+  printWindow.onafterprint = () => {
+    printWindow.close();
+    setPrintingOrdonnance(false);
+    setOrdonnanceToPrint(null);
+  };
+  
+  // Fermeture de sécurité après 3 secondes
+  setTimeout(() => {
+    if (!printWindow.closed) {
       printWindow.close();
       setPrintingOrdonnance(false);
       setOrdonnanceToPrint(null);
-    };
-    
-    // Fermeture de sécurité après 3 secondes
-    setTimeout(() => {
-      if (!printWindow.closed) {
-        printWindow.close();
-        setPrintingOrdonnance(false);
-        setOrdonnanceToPrint(null);
-      }
-    }, 3000);
-  };
+    }
+  }, 3000);
+};
 
   // ==================== CHARGEMENT DES DONNÉES ====================
   const cleanPrescriptionData = (data) => {
@@ -1218,92 +1366,90 @@ const Prescriptions = () => {
   };
 
   // Charger les prescriptions du prestataire
-  const loadMesPrescriptions = useCallback(async () => {
-    if (!selectedPrestataire) {
-      console.warn('⚠️ Aucun prestataire sélectionné pour charger les prescriptions');
-      return;
-    }
+const loadMesPrescriptions = useCallback(async () => {
+  if (!selectedPrestataire) {
+    console.warn('⚠️ Aucun prestataire sélectionné pour charger les prescriptions');
+    return;
+  }
+  
+  try {
+    setLoading(prev => ({ ...prev, prestations: true }));
+    console.log(`📋 Chargement prescriptions pour le prestataire: ${selectedPrestataire.id}`);
     
-    try {
-      setLoading(prev => ({ ...prev, prestations: true }));
-      console.log(`📋 Chargement prescriptions pour le prestataire: ${selectedPrestataire.id}`);
-      
-      const response = await prescriptionsAPI.getAll({
-        medecin_id: selectedPrestataire.id,
-        centre_id: centreId,
-        limit: 50,
-        sortBy: 'DATE_PRESCRIPTION',
-        sortOrder: 'DESC',
-        include_details: true
-      });
-      
-      console.log('📊 Réponse prescriptions:', response);
-      
-      if (response.success && Array.isArray(response.prescriptions)) {
-        // Pour chaque prescription, récupérer les détails (actes) si non inclus
-        const prescriptionsWithDetails = await Promise.all(
-          response.prescriptions.map(async (prescription) => {
-            try {
-              // Si les détails ne sont pas inclus, les récupérer séparément
-              if (!prescription.details || prescription.details.length === 0) {
-                const detailsResponse = await prescriptionsAPI.getPrescriptionDetails(
-                  prescription.COD_PRES || prescription.id
-                );
-                
-                if (detailsResponse.success && detailsResponse.details) {
-                  prescription.details = detailsResponse.details;
-                } else if (Array.isArray(detailsResponse)) {
-                  prescription.details = detailsResponse;
+    const response = await prescriptionsAPI.getAll({
+      medecin_id: selectedPrestataire.id,
+      centre_id: centreId,
+      limit: 50,
+      sortBy: 'DATE_PRESCRIPTION',
+      sortOrder: 'DESC',
+      include_details: true
+    });
+    
+    console.log('📊 Réponse prescriptions:', response);
+    
+    if (response.success && Array.isArray(response.prescriptions)) {
+      const prescriptionsWithDetails = await Promise.all(
+        response.prescriptions.map(async (prescription) => {
+          try {
+            let details = [];
+            
+            // Si les détails ne sont pas inclus, les récupérer
+            if (!prescription.details || prescription.details.length === 0) {
+              const idToUse = prescription.COD_PRES || prescription.id || prescription.NUMERO_PRESCRIPTION;
+              if (idToUse) {
+                const detailResponse = await prescriptionsAPI.getByNumeroOrId(idToUse);
+                if (detailResponse.success && detailResponse.prescription) {
+                  details = detailResponse.prescription.details || [];
                 }
               }
-              
-              // Assurer que details est un tableau
-              prescription.details = prescription.details || [];
-              
-              // Calculer le total de la prescription à partir des détails
-              const total = prescription.details.reduce((sum, detail) => {
-                const prix = parseFloat(detail.PRIX_UNITAIRE) || 0;
-                const quantite = parseInt(detail.QUANTITE) || 1;
-                return sum + (prix * quantite);
-              }, 0);
-              
-              // Ajouter le nombre d'actes pour l'affichage
-              const nombreActes = prescription.details.length;
-              
-              // Retourner une nouvelle prescription avec les données calculées
-              return {
-                ...prescription,
-                details: prescription.details,
-                total: total,
-                nombreActes: nombreActes
-              };
-              
-            } catch (error) {
-              console.error(`❌ Erreur chargement détails prescription ${prescription.COD_PRES}:`, error);
-              return {
-                ...prescription,
-                details: [],
-                total: 0,
-                nombreActes: 0
-              };
+            } else {
+              details = prescription.details;
             }
-          })
-        );
-        
-        setMesPrescriptions(prescriptionsWithDetails);
-        console.log(`✅ ${prescriptionsWithDetails.length} prescriptions chargées avec détails`);
-      } else {
-        console.warn('⚠️ Aucune prescription trouvée ou format de réponse inattendu');
-        setMesPrescriptions([]);
-      }
-    } catch (error) {
-      console.error('❌ Erreur chargement prescriptions:', error);
-      message.error('Erreur lors du chargement des prescriptions');
+            
+            // Calculer le total et nombre d'actes
+            const total = details.reduce((sum, detail) => {
+              const prix = parseFloat(detail.PRIX_UNITAIRE) || 0;
+              const quantite = parseInt(detail.QUANTITE) || 1;
+              return sum + (prix * quantite);
+            }, 0);
+            
+            const nombreActes = details.length;
+            
+            // Normaliser la prescription
+            return normalizePrescription({
+              ...prescription,
+              details: details,
+              total: total,
+              nombreActes: nombreActes
+            });
+            
+          } catch (error) {
+            console.error(`❌ Erreur chargement détails prescription ${prescription.COD_PRES}:`, error);
+            return normalizePrescription({
+              ...prescription,
+              details: [],
+              total: 0,
+              nombreActes: 0
+            });
+          }
+        })
+      );
+      
+      setMesPrescriptions(prescriptionsWithDetails);
+      console.log(`✅ ${prescriptionsWithDetails.length} prescriptions chargées avec détails`);
+    } else {
+      console.warn('⚠️ Aucune prescription trouvée ou format de réponse inattendu');
       setMesPrescriptions([]);
-    } finally {
-      setLoading(prev => ({ ...prev, prestations: false }));
     }
-  }, [selectedPrestataire, centreId]);
+  } catch (error) {
+    console.error('❌ Erreur chargement prescriptions:', error);
+    message.error('Erreur lors du chargement des prescriptions');
+    setMesPrescriptions([]);
+  } finally {
+    setLoading(prev => ({ ...prev, prestations: false }));
+  }
+}, [selectedPrestataire, centreId]);
+
 
   const loadPrescriptionDetails = async (prescriptionId) => {
     try {
@@ -1340,52 +1486,145 @@ const Prescriptions = () => {
       return [];
     }
   };
-
-  const handleViewPrescriptionDetails = async (prescription) => {
-    try {
-      setLoading(prev => ({ ...prev, prestations: true }));
-      
-      // Charger les détails de la prescription
-      const details = await loadPrescriptionDetails(
-        prescription.COD_PRES || prescription.id || prescription.NUMERO_PRESCRIPTION
-      );
-      
-      // Mettre à jour la prescription avec les détails
-      const updatedPrescription = {
-        ...prescription,
-        details: details,
-        total: details.reduce((sum, detail) => {
-          const prix = parseFloat(detail.PRIX_UNITAIRE) || 0;
-          const quantite = parseInt(detail.QUANTITE) || 1;
-          return sum + (prix * quantite);
-        }, 0),
-        nombreActes: details.length
-      };
-      
-      setSelectedPrescription(updatedPrescription);
-      setPrescriptionDetails(updatedPrescription);
-      setActiveTab('execution');
-      
-      // Préparer les actes pour l'exécution
-      const initialActes = details.map((detail, index) => ({
-        ...detail,
-        execute: false,
-        quantite_executee: detail.QUANTITE || 1,
-        prix_execute: detail.PRIX_UNITAIRE || 0,
-        key: detail.id || `${detail.COD_ELEMENT}_${index}`
-      }));
-      
-      setActesExecutes(initialActes);
-      calculerTotalExecution();
-      
-      message.success(`Détails de la prescription chargés: ${details.length} actes`);
-    } catch (error) {
-      console.error('❌ Erreur chargement détails prescription:', error);
-      message.error('Erreur lors du chargement des détails de la prescription');
-    } finally {
-      setLoading(prev => ({ ...prev, prestations: false }));
-    }
+// Normaliser les données de prescription
+// Normaliser les données de prescription
+const normalizePrescription = (prescription) => {
+  if (!prescription) return null;
+  
+  // Extraire les champs avec plusieurs noms possibles
+  const numeroPrescription = 
+    prescription.NUMERO_PRESCRIPTION || 
+    prescription.numero_prescription || 
+    prescription.numero || 
+    prescription.NUMERO || 
+    prescription.prescription_number ||
+    `PRES-${prescription.id || prescription.COD_PRES}`;
+  
+  const nomBeneficiaire = 
+    prescription.NOM_BEN || 
+    prescription.nom_beneficiaire || 
+    prescription.patient_nom || 
+    prescription.nom || 
+    'Inconnu';
+  
+  const nomMedecin = 
+    prescription.NOM_MEDECIN || 
+    prescription.nom_medecin || 
+    prescription.medecin_nom || 
+    prescription.medecin || 
+    'Non spécifié';
+  
+  const typePrestation = 
+    prescription.TYPE_PRESTATION || 
+    prescription.type_prestation || 
+    prescription.type || 
+    'Non spécifié';
+  
+  const statut = 
+    prescription.STATUT || 
+    prescription.statut || 
+    'Inconnu';
+  
+  const datePrescription = 
+    prescription.DATE_PRESCRIPTION || 
+    prescription.date_prescription || 
+    prescription.date || 
+    null;
+  
+  return {
+    id: prescription.id || prescription.COD_PRES,
+    COD_PRES: prescription.COD_PRES || prescription.id,
+    NUMERO_PRESCRIPTION: numeroPrescription,
+    NOM_BEN: nomBeneficiaire,
+    PRE_BEN: prescription.PRE_BEN || prescription.prenom,
+    NOM_MEDECIN: nomMedecin,
+    TYPE_PRESTATION: typePrestation,
+    STATUT: statut,
+    DATE_PRESCRIPTION: datePrescription,
+    COD_AFF: prescription.COD_AFF || prescription.code_affection,
+    ORIGINE: prescription.ORIGINE || prescription.origine,
+    COD_CEN: prescription.COD_CEN || prescription.centre_id,
+    details: prescription.details || prescription.actes || [],
+    total: prescription.total || 0,
+    nombreActes: prescription.nombreActes || (prescription.details ? prescription.details.length : 0) || 0,
+    // Ajouter d'autres champs si nécessaire
+    AGE: prescription.AGE || prescription.age,
+    SEX_BEN: prescription.SEX_BEN || prescription.sexe,
+    IDENTIFIANT_NATIONAL: prescription.IDENTIFIANT_NATIONAL || prescription.identifiant_national,
+    URGENT: prescription.URGENT || prescription.urgent,
+    OBSERVATIONS: prescription.OBSERVATIONS || prescription.observations
   };
+};
+
+// Normaliser les détails d'actes
+const normalizeActe = (acte) => {
+  if (!acte) return null;
+  
+  return {
+    id: acte.id || acte.COD_ELEMENT,
+    COD_ELEMENT: acte.COD_ELEMENT || acte.code || acte.id,
+    LIBELLE: acte.LIBELLE || acte.libelle || acte.nom || 'Acte non spécifié',
+    QUANTITE: parseInt(acte.QUANTITE || acte.quantite || 1),
+    POSOLOGIE: acte.POSOLOGIE || acte.posologie || 'À déterminer',
+    PRIX_UNITAIRE: parseFloat(acte.PRIX_UNITAIRE || acte.prix || 0),
+    REMBOURSABLE: acte.REMBOURSABLE || acte.remboursable || 0,
+    TYPE_ELEMENT: acte.TYPE_ELEMENT || acte.type_element || 'MEDICAMENT',
+    DUREE: acte.DUREE || acte.duree || '7',
+    UNITE: acte.UNITE || acte.unite || 'boîte(s)'
+  };
+};
+
+const handleViewPrescriptionDetails = async (prescription) => {
+  try {
+    setLoading(prev => ({ ...prev, prestations: true }));
+    
+    console.log('🔍 Prescription originale:', prescription);
+    
+    // Charger les détails
+    const details = await loadDetailsForPrescription(prescription);
+    console.log('📋 Détails chargés:', details);
+    
+    // Normaliser la prescription
+    const normalizedPrescription = normalizePrescription(prescription);
+    console.log('📊 Prescription normalisée:', normalizedPrescription);
+    
+    normalizedPrescription.details = details.map(normalizeActe);
+    normalizedPrescription.total = details.reduce((sum, detail) => {
+      const prix = parseFloat(detail.PRIX_UNITAIRE || detail.prix || 0);
+      const quantite = parseInt(detail.QUANTITE || detail.quantite || 1);
+      return sum + (prix * quantite);
+    }, 0);
+    normalizedPrescription.nombreActes = details.length;
+    
+    console.log('✅ Prescription finale avec détails:', normalizedPrescription);
+    
+    setSelectedPrescription(normalizedPrescription);
+    setPrescriptionDetails(normalizedPrescription);
+    setActiveTab('execution');
+    
+    // Préparer les actes pour l'exécution
+    const initialActes = details.map((detail, index) => {
+      const normalizedActe = normalizeActe(detail);
+      return {
+        ...normalizedActe,
+        execute: false,
+        quantite_executee: normalizedActe.QUANTITE,
+        prix_execute: normalizedActe.PRIX_UNITAIRE,
+        key: normalizedActe.id || `${normalizedActe.COD_ELEMENT}_${index}`
+      };
+    });
+    
+    setActesExecutes(initialActes);
+    calculerTotalExecution();
+    
+    message.success(`Détails de la prescription chargés: ${details.length} actes - Numéro: ${normalizedPrescription.NUMERO_PRESCRIPTION}`);
+  } catch (error) {
+    console.error('❌ Erreur chargement détails prescription:', error);
+    message.error('Erreur lors du chargement des détails de la prescription');
+  } finally {
+    setLoading(prev => ({ ...prev, prestations: false }));
+  }
+};
 
   const handlePrintPrescriptionFromHistory = async (prescription) => {
     try {
@@ -1843,54 +2082,135 @@ const Prescriptions = () => {
   // ==================== EXÉCUTION DE PRESCRIPTION ====================
 
   // Rechercher une prescription par numéro
-  const searchPrescription = async () => {
-    if (!prescriptionNumero || prescriptionNumero.trim().length === 0) {
-      message.warning('Veuillez entrer un numéro de prescription');
-      return;
+// Modifiez la fonction searchPrescription pour mieux gérer la recherche
+const searchPrescription = async () => {
+  if (!prescriptionNumero || prescriptionNumero.trim().length === 0) {
+    message.warning('Veuillez entrer un numéro de prescription');
+    return;
+  }
+  
+  setLoading(prev => ({ ...prev, execution: true }));
+  try {
+    console.log('🔍 Recherche prescription:', prescriptionNumero);
+    
+    // Essayer plusieurs formats
+    let response = null;
+    
+    // Essayer 1: Recherche par ID si c'est un nombre
+    if (/^\d+$/.test(prescriptionNumero)) {
+      console.log('🔍 Recherche par ID numérique:', prescriptionNumero);
+      response = await prescriptionsAPI.getByNumeroOrId(prescriptionNumero);
     }
     
-    setLoading(prev => ({ ...prev, execution: true }));
-    try {
-      console.log('🔍 Recherche prescription:', prescriptionNumero);
+    // Essayer 2: Si non trouvé ou si c'est une chaîne avec préfixe
+    if (!response || !response.success || !response.prescription) {
+      console.log('🔍 Recherche par numéro textuel:', prescriptionNumero);
       
-      const response = await prescriptionsAPI.getByNumeroOrId(prescriptionNumero);
+      // Nettoyer le numéro - enlever les préfixes
+      const cleanedNumero = prescriptionNumero
+        .replace(/^PRES-/, '')
+        .replace(/^pres-/, '')
+        .trim();
       
-      if (response.success && response.prescription) {
-        const prescription = response.prescription;
-        console.log('✅ Prescription trouvée:', prescription);
-        
-        setSelectedPrescription(prescription);
-        setPrescriptionDetails(prescription);
-        
-        const details = prescription.details || [];
-        const initialActes = details.map((detail, index) => ({
-          ...detail,
-          execute: false,
-          quantite_executee: detail.QUANTITE || 1,
-          prix_execute: detail.PRIX_UNITAIRE || 0,
-          key: detail.id || `${detail.COD_ELEMENT}_${index}_${Math.random()}`
-        }));
-        
-        setActesExecutes(initialActes);
-        calculerTotalExecution();
-        
-        message.success(`Prescription trouvée - Patient: ${prescription.NOM_BEN || 'Inconnu'} - ${details.length} actes`);
-      } else {
-        message.error(response.message || 'Prescription non trouvée');
-        setSelectedPrescription(null);
-        setPrescriptionDetails(null);
-        setActesExecutes([]);
+      // Essayer d'abord avec le numéro nettoyé
+      response = await prescriptionsAPI.getByNumeroOrId(cleanedNumero);
+      
+      // Si toujours pas trouvé, essayer avec le numéro original
+      if (!response || !response.success || !response.prescription) {
+        response = await prescriptionsAPI.getByNumeroOrId(prescriptionNumero);
       }
-    } catch (error) {
-      console.error('❌ Erreur recherche prescription:', error);
-      message.error('Erreur lors de la recherche de la prescription');
+    }
+    
+    if (response.success && response.prescription) {
+      const prescription = response.prescription;
+      console.log('✅ Prescription trouvée:', prescription);
+      
+      // Extraire les détails de différentes manières
+      let details = [];
+      
+      // Méthode 1: Détails directement dans la réponse
+      if (prescription.details && Array.isArray(prescription.details)) {
+        details = prescription.details;
+      }
+      // Méthode 2: Détails dans un champ différent
+      else if (prescription.actes && Array.isArray(prescription.actes)) {
+        details = prescription.actes;
+      }
+      // Méthode 3: Charger via une autre API
+      else {
+        try {
+          const detailsResponse = await prescriptionsAPI.getDetails(prescription.id || prescription.COD_PRES);
+          if (detailsResponse.success && detailsResponse.details) {
+            details = detailsResponse.details;
+          }
+        } catch (error) {
+          console.warn('⚠️ Impossible de charger les détails:', error);
+        }
+      }
+      
+      setSelectedPrescription({
+        ...prescription,
+        details: details,
+        nombreActes: details.length,
+        total: details.reduce((sum, detail) => {
+          const prix = parseFloat(detail.PRIX_UNITAIRE || detail.prix || 0);
+          const quantite = parseInt(detail.QUANTITE || detail.quantite || 1);
+          return sum + (prix * quantite);
+        }, 0)
+      });
+      
+      setPrescriptionDetails(prescription);
+      
+      const initialActes = details.map((detail, index) => ({
+        ...detail,
+        execute: false,
+        quantite_executee: detail.QUANTITE || detail.quantite || 1,
+        prix_execute: detail.PRIX_UNITAIRE || detail.prix || 0,
+        LIBELLE: detail.LIBELLE || detail.libelle || detail.nom || 'Acte non spécifié',
+        QUANTITE: detail.QUANTITE || detail.quantite || 1,
+        key: detail.id || `${detail.COD_ELEMENT || detail.code}_${index}_${Math.random()}`,
+        COD_ELEMENT: detail.COD_ELEMENT || detail.code || detail.id
+      }));
+      
+      setActesExecutes(initialActes);
+      calculerTotalExecution();
+      
+      message.success(`Prescription trouvée - ${prescription.NOM_BEN || prescription.patient_nom} - ${details.length} actes`);
+    } else {
+      message.error(response.message || 'Prescription non trouvée');
       setSelectedPrescription(null);
       setPrescriptionDetails(null);
       setActesExecutes([]);
-    } finally {
-      setLoading(prev => ({ ...prev, execution: false }));
     }
-  };
+  } catch (error) {
+    console.error('❌ Erreur recherche prescription:', error);
+    
+    // Essayer une recherche alternative
+    try {
+      const searchResponse = await prescriptionsAPI.getAll({
+        search: prescriptionNumero,
+        limit: 5,
+        include_details: true
+      });
+      
+      if (searchResponse.success && searchResponse.prescriptions.length > 0) {
+        const prescription = searchResponse.prescriptions[0];
+        message.success(`Prescription trouvée via recherche: ${prescription.NUMERO_PRESCRIPTION || prescription.id}`);
+        // Traiter la prescription comme ci-dessus...
+      } else {
+        message.error('Aucune prescription trouvée avec ce numéro');
+      }
+    } catch (searchError) {
+      message.error('Erreur lors de la recherche de la prescription');
+    }
+    
+    setSelectedPrescription(null);
+    setPrescriptionDetails(null);
+    setActesExecutes([]);
+  } finally {
+    setLoading(prev => ({ ...prev, execution: false }));
+  }
+};
 
   // Gérer l'exécution d'un acte
   const toggleActeExecution = (key, execute) => {
@@ -3206,73 +3526,84 @@ const Prescriptions = () => {
                           </Button>
                         ]}
                       >
-                        <List.Item.Meta
-                          avatar={
-                            <Avatar
-                              style={{
-                                backgroundColor: prescription.STATUT === 'Exécutée' ? '#52c41a' :
-                                  prescription.STATUT === 'Validée' ? '#1890ff' :
-                                  prescription.STATUT === 'En attente' ? '#faad14' : '#f5222d'
-                              }}
-                            >
-                              {(prescription.TYPE_PRESTATION || 'P').charAt(0)}
-                            </Avatar>
-                          }
-                          title={
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <div>
-                                <strong>{prescription.NUMERO_PRESCRIPTION || `PRES-${prescription.COD_PRES || prescription.id}`}</strong>
-                                <Tag color="blue" style={{ marginLeft: 8 }}>
-                                  {prescription.TYPE_PRESTATION || 'Non spécifié'}
-                                </Tag>
-                              </div>
-                              <div>
-                                <Tag color={
-                                  prescription.STATUT === 'Exécutée' ? 'success' :
-                                    prescription.STATUT === 'Validée' ? 'processing' :
-                                    prescription.STATUT === 'En attente' ? 'warning' : 'error'
-                                }>
-                                  {prescription.STATUT || 'Inconnu'}
-                                </Tag>
-                              </div>
-                            </div>
-                          }
-                          description={
-                            <div>
-                              <div>
-                                <strong>Patient:</strong> {prescription.NOM_BEN || 'Inconnu'}
-                              </div>
-                              <div>
-                                <strong>Date:</strong> {prescription.DATE_PRESCRIPTION ? 
-                                  moment(prescription.DATE_PRESCRIPTION).format('DD/MM/YYYY HH:mm') : 
-                                  'Non spécifiée'}
-                              </div>
-                              <div>
-                                <strong>Actes:</strong> 
-                                <Tag color="blue" style={{ marginLeft: 8 }}>
-                                  {prescription.nombreActes || prescription.details?.length || 0} actes
-                                </Tag>
-                                {prescription.total && prescription.total > 0 ? (
-                                  <span style={{ marginLeft: 8, color: '#52c41a', fontWeight: 'bold' }}>
-                                    • Total: {prescription.total.toLocaleString('fr-FR')} XAF
-                                  </span>
-                                ) : (
-                                  <span style={{ marginLeft: 8, color: '#999', fontWeight: 'bold' }}>
-                                    • Total: 0 XAF
-                                  </span>
-                                )}
-                              </div>
-                              <div>
-                                <strong>Prescripteur:</strong> {prescription.NOM_MEDECIN || selectedPrestataire.nom_complet}
-                              </div>
-                              {prescription.COD_AFF && (
-                                <div>
-                                  <strong>Affection:</strong> {prescription.COD_AFF}
-                                </div>
-                              )}
-                            </div>
-                          }
-                        />
+                        // Dans le rendu de l'historique, modifiez la section du titre
+<List.Item.Meta
+  avatar={
+    <Avatar
+      style={{
+        backgroundColor: prescription.STATUT === 'Exécutée' ? '#52c41a' :
+          prescription.STATUT === 'Validée' ? '#1890ff' :
+          prescription.STATUT === 'En attente' ? '#faad14' : '#f5222d'
+      }}
+    >
+      {(prescription.TYPE_PRESTATION || 'P').charAt(0)}
+    </Avatar>
+  }
+  title={
+    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+      <div>
+        <strong>{prescription.NUMERO_PRESCRIPTION}</strong>
+        <Tag color="blue" style={{ marginLeft: 8 }}>
+          {prescription.TYPE_PRESTATION || 'Non spécifié'}
+        </Tag>
+        {prescription.URGENT && (
+          <Tag color="red" style={{ marginLeft: 8 }}>
+            URGENT
+          </Tag>
+        )}
+      </div>
+      <div>
+        <Tag color={
+          prescription.STATUT === 'Exécutée' ? 'success' :
+            prescription.STATUT === 'Validée' ? 'processing' :
+            prescription.STATUT === 'En attente' ? 'warning' : 'error'
+        }>
+          {prescription.STATUT || 'Inconnu'}
+        </Tag>
+      </div>
+    </div>
+  }
+  description={
+    <div>
+      <div>
+        <strong>Patient:</strong> {prescription.PRE_BEN ? `${prescription.PRE_BEN} ${prescription.NOM_BEN}` : prescription.NOM_BEN}
+      </div>
+      <div>
+        <strong>Date:</strong> {prescription.DATE_PRESCRIPTION ? 
+          moment(prescription.DATE_PRESCRIPTION).format('DD/MM/YYYY HH:mm') : 
+          'Non spécifiée'}
+      </div>
+      <div>
+        <strong>Actes:</strong> 
+        <Tag color="blue" style={{ marginLeft: 8 }}>
+          {prescription.nombreActes || prescription.details?.length || 0} actes
+        </Tag>
+        {prescription.total && prescription.total > 0 ? (
+          <span style={{ marginLeft: 8, color: '#52c41a', fontWeight: 'bold' }}>
+            • Total: {prescription.total.toLocaleString('fr-FR')} XAF
+          </span>
+        ) : (
+          <span style={{ marginLeft: 8, color: '#999', fontWeight: 'bold' }}>
+            • Total: 0 XAF
+          </span>
+        )}
+      </div>
+      <div>
+        <strong>Prescripteur:</strong> {prescription.NOM_MEDECIN || selectedPrestataire.nom_complet}
+      </div>
+      {prescription.COD_AFF && (
+        <div>
+          <strong>Affection:</strong> {prescription.COD_AFF}
+        </div>
+      )}
+      {prescription.IDENTIFIANT_NATIONAL && (
+        <div>
+          <strong>Identifiant:</strong> {prescription.IDENTIFIANT_NATIONAL}
+        </div>
+      )}
+    </div>
+  }
+/>
                       </List.Item>
                     )}
                   />
@@ -3876,5 +4207,53 @@ function calculateAge(dateNaissance) {
   const birthDate = moment(dateNaissance);
   return today.diff(birthDate, 'years');
 }
+
+const loadDetailsForPrescription = async (prescription) => {
+  try {
+    const prescriptionId = prescription.COD_PRES || prescription.id;
+    
+    // Essayer plusieurs méthodes
+    let details = [];
+    
+    // Méthode 1: Détails déjà inclus
+    if (prescription.details && Array.isArray(prescription.details)) {
+      details = prescription.details;
+    }
+    
+    // Méthode 2: API getDetails si elle existe
+    if (details.length === 0 && prescriptionsAPI.getDetails) {
+      try {
+        const response = await prescriptionsAPI.getDetails(prescriptionId);
+        if (response.success && response.details) {
+          details = response.details;
+        }
+      } catch (error) {
+        console.warn('⚠️ getDetails API échouée:', error);
+      }
+    }
+    
+    // Méthode 3: Recherche via getAll avec include_details
+    if (details.length === 0) {
+      try {
+        const response = await prescriptionsAPI.getAll({
+          id: prescriptionId,
+          limit: 1,
+          include_details: true
+        });
+        
+        if (response.success && response.prescriptions.length > 0) {
+          details = response.prescriptions[0].details || [];
+        }
+      } catch (error) {
+        console.warn('⚠️ Recherche via getAll échouée:', error);
+      }
+    }
+    
+    return details;
+  } catch (error) {
+    console.error('❌ Erreur chargement détails:', error);
+    return [];
+  }
+};
 
 export default Prescriptions;
