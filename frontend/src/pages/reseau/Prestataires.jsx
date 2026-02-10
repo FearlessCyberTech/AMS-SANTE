@@ -1,3484 +1,744 @@
+// GestionPrestataires.jsx - Version Ant Design avec correction des centres
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  Box,
-  Typography,
-  Grid,
-  Paper,
-  Card,
-  CardContent,
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Chip,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Alert,
-  Snackbar,
-  Stack,
-  useTheme,
-  alpha,
-  CircularProgress,
-  Tooltip,
-  LinearProgress,
-  InputAdornment,
-  TablePagination,
-  Menu,
-  Divider,
-  FormHelperText,
-  FormControlLabel,
-  Switch,
-  Tabs,
-  Tab,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent,
-  Collapse,
-  AlertTitle,
-} from '@mui/material';
+  Table, Card, Row, Col, Statistic, Button, Modal, Form,
+  Select, Input, DatePicker, Tag, Space, message, Tabs,
+  Descriptions, Tooltip, Popconfirm, Spin, Alert,
+  Divider, Badge, Typography,
+  Drawer, Avatar, Switch, InputNumber, Steps, Radio, Upload, Progress
+} from 'antd';
 import {
-  Search as SearchIcon,
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Visibility as VisibilityIcon,
-  Download as DownloadIcon,
-  Refresh as RefreshIcon,
-  Person as PersonIcon,
-  MoreVert as MoreVertIcon,
-  CheckCircle as CheckCircleIcon,
-  Block as BlockIcon,
-  BeachAccess as BeachAccessIcon,
-  School as SchoolIcon,
-  Email as EmailIcon,
-  Phone as PhoneIcon,
-  LocationOn as LocationOnIcon,
-  SortByAlpha as SortByAlphaIcon,
-  LocalHospital as HospitalIcon,
-  Warning as WarningIcon,
-  Public as PublicIcon,
-  Sync as SyncIcon,
-  Business as BusinessIcon,
-  EventAvailable as EventAvailableIcon,
-  ChevronRight as ChevronRightIcon,
-  ChevronLeft as ChevronLeftIcon,
-  FirstPage as FirstPageIcon,
-  LastPage as LastPageIcon,
-  ExpandLess as ExpandLessIcon,
-  ExpandMore as ExpandMoreIcon,
-  FilterAlt as FilterAltIcon,
-  FilterAltOff as FilterAltOffIcon,
-  Info as InfoIcon,
-  CloudUpload as CloudUploadIcon,
-  CloudDownload as CloudDownloadIcon,
-  SyncProblem as SyncProblemIcon
-} from '@mui/icons-material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { fr } from 'date-fns/locale';
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip as RechartsTooltip,
-  Legend,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid
-} from 'recharts';
-
+  PlusOutlined, EditOutlined, DeleteOutlined,
+  EyeOutlined, SearchOutlined, FilterOutlined,
+  DownloadOutlined, SyncOutlined, UploadOutlined,
+  UserOutlined, TeamOutlined, 
+  PhoneOutlined, MailOutlined, LinkOutlined,
+  StarOutlined, CloudServerOutlined, ApartmentOutlined,
+  UsergroupAddOutlined, GlobalOutlined, EnvironmentOutlined,
+  CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined,
+  InfoCircleOutlined, ArrowUpOutlined, SaveOutlined,
+  MinusCircleOutlined, DatabaseOutlined, ExclamationCircleOutlined,
+  IdcardOutlined, BankOutlined, CalendarOutlined,
+  BookOutlined, TrophyOutlined, DollarOutlined,
+  FileTextOutlined, FlagOutlined, TranslationOutlined
+} from '@ant-design/icons';
 import { prestatairesAPI, centresAPI, paysAPI, syncAPI } from '../../services/api';
+import moment from 'moment';
+import 'moment/locale/fr';
+
+const { Option } = Select;
+const { TextArea } = Input;
+const { Text } = Typography;
+const { Step } = Steps;
+const { Dragger } = Upload;
 
-// ==============================================
-// CONSTANTES ET CONFIGURATION
-// ==============================================
-const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
-const DEFAULT_ROWS_PER_PAGE = 25;
-const DEFAULT_SORT_FIELD = 'nom';
-const DEFAULT_SORT_DIRECTION = 'asc';
-
-// Types de prestataires basés sur la table PRESTATAIRE
-const TYPES_PRESTATAIRE = [
-  'Médecin',
-  'Infirmier',
-  'Kinésithérapeute',
-  'Sage-femme',
-  'Pharmacien',
-  'Technicien de laboratoire',
-  'Aide-soignant',
-  'Radiologue',
-  'Chirurgien',
-  'Pédiatre',
-  'Gynécologue',
-  'Cardiologue',
-  'Neurologue',
-  'Dermatologue',
-  'Ophtalmologue',
-  'ORL',
-  'Dentiste',
-  'Psychologue',
-  'Psychiatre',
-  'Nutritionniste',
-  'Diététicien',
-  'Ergothérapeute',
-  'Orthophoniste',
-  'Podologue',
-  'Ostéopathe',
-  'Ambulancier',
-  'Manipulateur en électroradiologie',
-  'Biologiste',
-  'Pharmacien assistant',
-  'Autre'
-];
-
-// Statuts de disponibilité basés sur la table PRESTATAIRE
-const STATUTS_DISPONIBILITE = [
-  'Disponible',
-  'En congé',
-  'Indisponible',
-  'En formation',
-  'En mission',
-  'En arrêt maladie',
-  'En consultation',
-  'En intervention',
-  'En réunion',
-  'En déplacement',
-  'En standby',
-  'En repos'
-];
-
-// Langues parlées
-const LANGUES = [
-  'Français',
-  'Anglais',
-  'Espagnol',
-  'Arabe',
-  'Portugais',
-  'Allemand',
-  'Italien',
-  'Russe',
-  'Chinois',
-  'Japonais',
-  'Coréen',
-  'Turc',
-  'Persan',
-  'Swahili',
-  'Lingala',
-  'Wolof',
-  'Autre'
-];
-
-// Titres professionnels
-const TITRES_PROFESSIONNELS = [
-  'Docteur',
-  'Professeur',
-  'Chargé de cours',
-  'Maître de conférences',
-  'Interne',
-  'Externe',
-  'Chef de service',
-  'Chef de clinique',
-  'Assistant',
-  'Spécialiste',
-  'Généraliste',
-  'Praticien hospitalier',
-  'Directeur',
-  'Coordinateur',
-  'Superviseur',
-  'Formateur',
-  'Expert',
-  'Consultant',
-  'Autre'
-];
-
-// Spécialités médicales
-const SPECIALITES_MEDICALES = [
-  'Médecine générale',
-  'Cardiologie',
-  'Dermatologie',
-  'Endocrinologie',
-  'Gastro-entérologie',
-  'Gynécologie',
-  'Hématologie',
-  'Néphrologie',
-  'Neurologie',
-  'Ophtalmologie',
-  'ORL',
-  'Pédiatrie',
-  'Pneumologie',
-  'Psychiatrie',
-  'Radiologie',
-  'Rhumatologie',
-  'Urologie',
-  'Chirurgie générale',
-  'Chirurgie orthopédique',
-  'Chirurgie plastique',
-  'Anesthésiologie',
-  'Médecine d\'urgence',
-  'Médecine du travail',
-  'Médecine légale',
-  'Médecine nucléaire',
-  'Oncologie',
-  'Pédopsychiatrie',
-  'Réanimation',
-  'Soins intensifs',
-  'Traumatologie'
-];
-
-// ==============================================
-// UTILS - FONCTIONS UTILITAIRES
-// ==============================================
-/**
- * Normalise les données de pays pour un usage cohérent dans l'application
- */
-const normalizePaysData = (paysList) => {
-  if (!Array.isArray(paysList)) return [];
-  
-  return paysList.map(p => ({
-    COD_PAY: p.COD_PAY || p.code || p.id || p.value,
-    LIB_PAY: p.LIB_PAY || p.nom || p.label || p.name,
-    CODE_TELEPHONE: p.CODE_TELEPHONE || p.code_telephone,
-    // Conserver toutes les propriétés originales
-    ...p
-  }));
-};
-
-// Utilisez-la dans chargerPays
-const chargerPays = async () => {
-  try {
-    const response = await paysAPI.getAll();
-    
-    if (response.success) {
-      const paysList = response.data || response.pays || [];
-      const normalizedPays = normalizePaysData(paysList);
-      setPays(normalizedPays);
-      
-      if (normalizedPays.length === 0) {
-        showNotification(
-          'Aucun pays configuré. Veuillez configurer les pays avant d\'ajouter des prestataires.',
-          'warning'
-        );
-      }
-    } else {
-      setPays([]);
-      showNotification('Erreur lors du chargement des pays', 'error');
-    }
-  } catch (error) {
-    console.error('Erreur chargement pays:', error);
-    setPays([]);
-    showNotification('Impossible de charger la liste des pays', 'error');
-  }
-};
-
-/**
- * Normalise le statut selon la BD (1/0 ou Actif/Inactif)
- */
-const normalizeStatus = (status) => {
-  if (status === undefined || status === null) return 'Actif';
-  
-  if (status === 1 || status === '1' || status === true || 
-      status.toString().toLowerCase() === 'actif') {
-    return 'Actif';
-  }
-  
-  if (status === 0 || status === '0' || status === false || 
-      status.toString().toLowerCase() === 'inactif') {
-    return 'Inactif';
-  }
-  
-  return 'Actif';
-};
-
-/**
- * Vérifie si un prestataire est actif selon la BD
- */
-const isPrestataireActif = (prestataire) => {
-  if (!prestataire) return false;
-  
-  const actif = prestataire.actif ?? prestataire.ACTIF;
-  const status = prestataire.status ?? prestataire.STATUS;
-  
-  if (actif !== undefined && actif !== null) {
-    if (typeof actif === 'number') return actif === 1;
-    if (typeof actif === 'string') return actif === '1' || actif.toLowerCase() === 'actif';
-    if (typeof actif === 'boolean') return actif;
-  }
-  
-  if (status !== undefined && status !== null) {
-    return normalizeStatus(status) === 'Actif';
-  }
-  
-  return true;
-};
-
-/**
- * Formatage des dates
- */
-const formatDate = (dateString) => {
-  if (!dateString) return '-';
-  try {
-    const date = new Date(dateString);
-    return isNaN(date.getTime()) ? dateString : date.toLocaleDateString('fr-FR');
-  } catch (error) {
-    return dateString;
-  }
-};
-
-/**
- * Formatage des dates avec heure
- */
-const formatDateTime = (dateString) => {
-  if (!dateString) return '-';
-  try {
-    const date = new Date(dateString);
-    return isNaN(date.getTime()) ? dateString : date.toLocaleString('fr-FR');
-  } catch (error) {
-    return dateString;
-  }
-};
-
-/**
- * Validation d'email
- */
-const isValidEmail = (email) => {
-  if (!email || email.trim() === '') return true;
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-};
-
-/**
- * Validation de téléphone
- */
-const isValidPhone = (phone) => {
-  if (!phone || phone.trim() === '') return true;
-  const phoneRegex = /^[\d\s+\-().]{6,20}$/;
-  return phoneRegex.test(phone);
-};
-
-/**
- * Validation de numéro de licence
- */
-const isValidNumLicence = (numLicence) => {
-  if (!numLicence || numLicence.trim() === '') return true;
-  const licenceRegex = /^[A-Za-z0-9\-]{5,20}$/;
-  return licenceRegex.test(numLicence);
-};
-
-/**
- * Validation de numéro d'ordre
- */
-const isValidNumOrdre = (numOrdre) => {
-  if (!numOrdre || numOrdre.trim() === '') return true;
-  const ordreRegex = /^[0-9]{1,10}$/;
-  return ordreRegex.test(numOrdre);
-};
-
-/**
- * Obtient le libellé du pays à partir du code
- */
-/**
- * Obtient le libellé du pays à partir du code
- */
-const getPaysLabel = (codPay, paysList) => {
-  if (!codPay || !paysList || !Array.isArray(paysList)) return codPay || '';
-  
-  const pays = paysList.find(p => 
-    p.COD_PAY === codPay || 
-    p.code === codPay || 
-    p.value === codPay ||
-    p.id === codPay ||
-    (p.CODE_TELEPHONE && p.CODE_TELEPHONE === codPay)
-  );
-  
-  return pays ? (pays.LIB_PAY || pays.nom || pays.label || pays.name || pays.COD_PAY || codPay) : codPay;
-};
-
-/**
- * Obtient le nom du centre à partir du code
- */
-const getCentreLabel = (codCen, centresList) => {
-  if (!codCen || !centresList) return codCen || '';
-  const centre = centresList.find(c => c.COD_CEN === codCen || c.id === codCen);
-  return centre ? (centre.NOM_CENTRE || centre.nom || centre.label || centre.name || codCen) : codCen;
-};
-
-// ==============================================
-// COMPOSANTS RÉUTILISABLES
-// ==============================================
-
-/**
- * Carte de statistiques
- */
-const StatCard = React.memo(({ title, value, icon: Icon, color, subtitle, onClick, loading = false }) => {
-  const theme = useTheme();
-  
-  return (
-    <Card 
-      sx={{ 
-        borderRadius: 3,
-        height: '100%',
-        background: `linear-gradient(135deg, ${alpha(theme.palette[color].main, 0.1)} 0%, ${alpha(theme.palette[color].main, 0.05)} 100%)`,
-        border: `1px solid ${alpha(theme.palette[color].main, 0.2)}`,
-        transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-        '&:hover': {
-          transform: 'translateY(-4px)',
-          boxShadow: theme.shadows[8],
-          cursor: onClick ? 'pointer' : 'default'
-        }
-      }}
-      onClick={onClick}
-    >
-      <CardContent>
-        <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-          <Box flex={1}>
-            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-              {title}
-            </Typography>
-            {loading ? (
-              <CircularProgress size={40} sx={{ my: 1 }} />
-            ) : (
-              <>
-                <Typography variant="h4" component="div" sx={{ fontWeight: 800, mb: 1 }}>
-                  {typeof value === 'number' ? value.toLocaleString('fr-FR') : value}
-                </Typography>
-                {subtitle && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    {subtitle}
-                  </Typography>
-                )}
-              </>
-            )}
-          </Box>
-          <Box
-            sx={{
-              p: 1.5,
-              borderRadius: 2,
-              bgcolor: alpha(theme.palette[color].main, 0.1),
-              color: theme.palette[color].main,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              ml: 2
-            }}
-          >
-            <Icon />
-          </Box>
-        </Box>
-      </CardContent>
-    </Card>
-  );
-});
-
-StatCard.displayName = 'StatCard';
-
-/**
- * Chip de statut
- */
-const StatusChip = React.memo(({ prestataire }) => {
-  if (!prestataire) return null;
-  
-  const isActif = isPrestataireActif(prestataire);
-  
-  return isActif ? (
-    <Chip
-      icon={<CheckCircleIcon fontSize="small" />}
-      label="Actif"
-      color="success"
-      size="small"
-      sx={{ fontWeight: 600, borderRadius: 1.5 }}
-    />
-  ) : (
-    <Chip
-      icon={<BlockIcon fontSize="small" />}
-      label="Inactif"
-      color="error"
-      size="small"
-      sx={{ fontWeight: 600, borderRadius: 1.5 }}
-    />
-  );
-});
-
-StatusChip.displayName = 'StatusChip';
-
-/**
- * Chip de disponibilité
- */
-const DisponibiliteChip = React.memo(({ disponibilite }) => {
-  if (!disponibilite) return null;
-  
-  const getChipProps = () => {
-    switch (disponibilite) {
-      case 'Disponible':
-        return { color: 'success', icon: <CheckCircleIcon /> };
-      case 'En congé':
-        return { color: 'warning', icon: <BeachAccessIcon /> };
-      case 'En formation':
-        return { color: 'info', icon: <SchoolIcon /> };
-      case 'En arrêt maladie':
-        return { color: 'error', icon: <HospitalIcon /> };
-      case 'En mission':
-        return { color: 'primary', icon: <BusinessIcon /> };
-      case 'Indisponible':
-        return { color: 'default', icon: <BlockIcon /> };
-      default:
-        return { color: 'default', icon: <InfoIcon /> };
-    }
-  };
-  
-  const { color, icon } = getChipProps();
-  
-  return (
-    <Chip
-      icon={icon}
-      label={disponibilite}
-      color={color}
-      size="small"
-      sx={{ fontWeight: 500, borderRadius: 1.5 }}
-    />
-  );
-});
-
-DisponibiliteChip.displayName = 'DisponibiliteChip';
-
-/**
- * Section de formulaire pliable
- */
-const CollapsibleSection = ({ title, children, defaultExpanded = true }) => {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-  
-  return (
-    <Paper sx={{ mb: 3, overflow: 'hidden' }}>
-      <Box
-        sx={{
-          p: 2,
-          bgcolor: 'primary.main',
-          color: 'white',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          cursor: 'pointer'
-        }}
-        onClick={() => setExpanded(!expanded)}
-      >
-        <Typography variant="subtitle1" fontWeight="bold">
-          {title}
-        </Typography>
-        {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-      </Box>
-      <Collapse in={expanded}>
-        <Box p={3}>
-          {children}
-        </Box>
-      </Collapse>
-    </Paper>
-  );
-};
-
-// ==============================================
-// MODALES AMÉLIORÉES
-// ==============================================
-
-/**
- * Modale d'ajout de prestataire - COMPLÈTE
- */
-const AjouterPrestataireModal = ({ 
-  open, 
-  onClose, 
-  onSave, 
-  centres, 
-  specialites, 
-  pays, 
-  loading 
-}) => {
-  const theme = useTheme();
-  const [activeStep, setActiveStep] = useState(0);
-  const [formData, setFormData] = useState({
-    // Informations personnelles
-    type_prestataire: 'Médecin',
-    nom: '',
-    prenom: '',
-    specialite: '',
-    titre: '',
-    
-    // Informations professionnelles
-    num_licence: '',
-    num_ordre: '',
-    date_obtention_licence: null,
-    date_expiration_licence: null,
-    universite_formation: '',
-    annee_diplome: '',
-    experience_annee: 0,
-    
-    // Informations de contact
-    telephone: '',
-    email: '',
-    
-    // Localisation
-    cod_cen: '',
-    centre_pratique: '',
-    cod_pay: '',
-    num_adr: '',
-    
-    // Tarification
-    honoraires: '',
-    
-    // Autres
-    langue_parlee: 'Français',
-    disponibilite: 'Disponible',
-    actif: 1
-  });
-
-  const [errors, setErrors] = useState({});
-  const [touched, setTouched] = useState({});
-
- // Calcul des options de pays à partir de la prop pays
-const paysOptions = useMemo(() => {
-  if (!pays || !Array.isArray(pays) || pays.length === 0) return [];
-  
-  return pays.map(p => ({
-    value: p.COD_PAY || p.code || p.id || p.value,
-    label: p.LIB_PAY || p.nom || p.label || p.name || p.COD_PAY,
-    code_telephone: p.CODE_TELEPHONE || p.code_telephone || ''
-  })).filter(p => p.value && p.label); // Filtrer les entrées invalides
-}, [pays]);
-
-  // Effet pour initialiser le formulaire
- useEffect(() => {
-  if (open) {
-    // Initialiser le formulaire avec les valeurs par défaut
-    const firstPaysValue = paysOptions.length > 0 ? paysOptions[0].value : '';
-    
-    const newFormData = {
-      type_prestataire: 'Médecin',
-      nom: '',
-      prenom: '',
-      specialite: '',
-      titre: '',
-      num_licence: '',
-      num_ordre: '',
-      date_obtention_licence: null,
-      date_expiration_licence: null,
-      universite_formation: '',
-      annee_diplome: '',
-      experience_annee: 0,
-      telephone: '',
-      email: '',
-      cod_cen: '',
-      centre_pratique: '',
-      cod_pay: firstPaysValue, // Utiliser la valeur du premier pays
-      num_adr: '',
-      honoraires: '',
-      langue_parlee: 'Français',
-      disponibilite: 'Disponible',
-      actif: 1
-    };
-    setFormData(newFormData);
-    setErrors({});
-    setTouched({});
-    setActiveStep(0);
-  }
-}, [open, paysOptions]); // Note: nous dépendons de paysOptions pour l'initialisation
-
-  const steps = [
-    'Informations personnelles',
-    'Informations professionnelles',
-    'Contact et localisation',
-    'Validation'
-  ];
-
-  const handleNext = () => {
-    if (activeStep === steps.length - 1) {
-      handleSubmit();
-    } else {
-      setActiveStep((prevStep) => prevStep + 1);
-    }
-  };
-
-  const handleBack = () => {
-    setActiveStep((prevStep) => prevStep - 1);
-  };
-
-  const handleBlur = (field) => {
-    setTouched(prev => ({ ...prev, [field]: true }));
-    validateField(field, formData[field]);
-  };
-
-  const validateField = (field, value) => {
-    let error = '';
-    
-    switch (field) {
-      case 'nom':
-        if (!value?.trim()) {
-          error = 'Le nom est obligatoire';
-        } else if (value.trim().length < 2) {
-          error = 'Le nom doit contenir au moins 2 caractères';
-        }
-        break;
-        
-      case 'prenom':
-        if (!value?.trim()) {
-          error = 'Le prénom est obligatoire';
-        } else if (value.trim().length < 2) {
-          error = 'Le prénom doit contenir au moins 2 caractères';
-        }
-        break;
-        
-      case 'specialite':
-        if (!value?.trim()) {
-          error = 'La spécialité est obligatoire';
-        }
-        break;
-        
-      case 'cod_pay':
-        if (!value || value.trim() === '') {
-          error = 'Le pays est obligatoire';
-        }
-        break;
-        
-      case 'email':
-        if (value && value.trim() !== '' && !isValidEmail(value)) {
-          error = 'Format d\'email invalide';
-        }
-        break;
-        
-      case 'telephone':
-        if (value && value.trim() !== '' && !isValidPhone(value)) {
-          error = 'Format de téléphone invalide';
-        }
-        break;
-        
-      case 'num_licence':
-        if (value && value.trim() !== '' && !isValidNumLicence(value)) {
-          error = 'Format de numéro de licence invalide';
-        }
-        break;
-        
-      case 'num_ordre':
-        if (value && value.trim() !== '' && !isValidNumOrdre(value)) {
-          error = 'Format de numéro d\'ordre invalide';
-        }
-        break;
-        
-      case 'experience_annee':
-        if (value && (isNaN(parseInt(value)) || parseInt(value) < 0 || parseInt(value) > 60)) {
-          error = 'Doit être un nombre entre 0 et 60';
-        }
-        break;
-        
-      case 'honoraires':
-        if (value && (isNaN(parseFloat(value)) || parseFloat(value) < 0)) {
-          error = 'Doit être un nombre positif';
-        }
-        break;
-        
-      default:
-        break;
-    }
-    
-    setErrors(prev => ({ ...prev, [field]: error }));
-    return !error;
-  };
-
-  const validateStep = (step) => {
-    let isValid = true;
-    const newErrors = {};
-    
-    switch (step) {
-      case 0: // Informations personnelles
-        ['nom', 'prenom', 'specialite'].forEach(field => {
-          if (!validateField(field, formData[field])) {
-            newErrors[field] = errors[field] || 'Ce champ est obligatoire';
-            isValid = false;
-          }
-        });
-        break;
-        
-      case 1: // Informations professionnelles
-        if (formData.num_licence && !isValidNumLicence(formData.num_licence)) {
-          newErrors.num_licence = 'Format de licence invalide';
-          isValid = false;
-        }
-        if (formData.num_ordre && !isValidNumOrdre(formData.num_ordre)) {
-          newErrors.num_ordre = 'Format de numéro d\'ordre invalide';
-          isValid = false;
-        }
-        break;
-        
-      case 2: // Contact et localisation
-        if (!formData.cod_pay || formData.cod_pay.trim() === '') {
-          newErrors.cod_pay = 'Le pays est obligatoire';
-          isValid = false;
-        }
-        if (formData.email && !isValidEmail(formData.email)) {
-          newErrors.email = 'Format d\'email invalide';
-          isValid = false;
-        }
-        if (formData.telephone && !isValidPhone(formData.telephone)) {
-          newErrors.telephone = 'Format de téléphone invalide';
-          isValid = false;
-        }
-        break;
-        
-      case 3: // Validation - pas de validation spécifique
-        break;
-    }
-    
-    setErrors(prev => ({ ...prev, ...newErrors }));
-    return isValid;
-  };
-
-  const handleChange = (e) => {
-    const { name, value, type } = e.target;
-    
-    const newValue = type === 'number' 
-      ? value === '' ? '' : parseFloat(value)
-      : value;
-    
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'actif' ? (value === '1' ? 1 : 0) : newValue
-    }));
-    
-    if (touched[name]) {
-      validateField(name, newValue);
-    }
-  };
-
-  const handleDateChange = (name, date) => {
-    setFormData(prev => ({
-      ...prev,
-      [name]: date
-    }));
-    
-    if (touched[name]) {
-      validateField(name, date);
-    }
-  };
-
-  const handleSubmit = async () => {
-    const allTouched = Object.keys(formData).reduce((acc, key) => {
-      acc[key] = true;
-      return acc;
-    }, {});
-    setTouched(allTouched);
-    
-    if (!validateStep(0) || !validateStep(1) || !validateStep(2)) {
-      setActiveStep(0);
-      return;
-    }
-
-    try {
-      if (!formData.cod_pay || formData.cod_pay.trim() === '') {
-        setErrors(prev => ({ ...prev, cod_pay: 'Le pays est obligatoire' }));
-        return;
-      }
-
-      const dataToSend = {
-        type_prestataire: formData.type_prestataire,
-        nom: formData.nom.trim(),
-        prenom: formData.prenom.trim(),
-        specialite: formData.specialite.trim(),
-        titre: formData.titre?.trim() || null,
-        num_licence: formData.num_licence?.trim() || null,
-        num_ordre: formData.num_ordre?.trim() || null,
-        date_obtention_licence: formData.date_obtention_licence || null,
-        date_expiration_licence: formData.date_expiration_licence || null,
-        universite_formation: formData.universite_formation?.trim() || null,
-        annee_diplome: formData.annee_diplome?.trim() || null,
-        experience_annee: formData.experience_annee ? parseInt(formData.experience_annee) : 0,
-        telephone: formData.telephone?.trim() || null,
-        email: formData.email?.trim() || null,
-        cod_cen: formData.cod_cen || null,
-        centre_pratique: formData.centre_pratique?.trim() || null,
-        cod_pay: formData.cod_pay.trim(),
-        num_adr: formData.num_adr?.trim() || null,
-        honoraires: formData.honoraires ? parseFloat(formData.honoraires) : null,
-        langue_parlee: formData.langue_parlee,
-        disponibilite: formData.disponibilite,
-        actif: formData.actif
-      };
-
-      await onSave(dataToSend);
-      onClose();
-    } catch (error) {
-      console.error('Erreur lors de l\'ajout:', error);
-      throw error;
-    }
-  };
-
-  const getError = (field) => {
-    return touched[field] ? errors[field] : '';
-  };
-
-  const getStepContent = (step) => {
-    switch (step) {
-      case 0:
-        return (
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Nom *"
-                name="nom"
-                value={formData.nom}
-                onChange={handleChange}
-                onBlur={() => handleBlur('nom')}
-                error={!!getError('nom')}
-                helperText={getError('nom')}
-                disabled={loading}
-                required
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Prénom *"
-                name="prenom"
-                value={formData.prenom}
-                onChange={handleChange}
-                onBlur={() => handleBlur('prenom')}
-                error={!!getError('prenom')}
-                helperText={getError('prenom')}
-                disabled={loading}
-                required
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth error={!!getError('specialite')} required>
-                <InputLabel>Spécialité *</InputLabel>
-                <Select
-                  name="specialite"
-                  value={formData.specialite}
-                  onChange={handleChange}
-                  onBlur={() => handleBlur('specialite')}
-                  disabled={loading}
-                >
-                  <MenuItem value="">
-                    <em>Sélectionner une spécialité</em>
-                  </MenuItem>
-                  {specialites.map((spec, index) => (
-                    <MenuItem key={`spec-${index}`} value={spec}>
-                      {spec}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {getError('specialite') && (
-                  <FormHelperText>{getError('specialite')}</FormHelperText>
-                )}
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Type de prestataire</InputLabel>
-                <Select
-                  name="type_prestataire"
-                  value={formData.type_prestataire}
-                  onChange={handleChange}
-                  disabled={loading}
-                >
-                  {TYPES_PRESTATAIRE.map(type => (
-                    <MenuItem key={type} value={type}>
-                      {type}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Titre professionnel</InputLabel>
-                <Select
-                  name="titre"
-                  value={formData.titre}
-                  onChange={handleChange}
-                  disabled={loading}
-                >
-                  <MenuItem value="">
-                    <em>Sélectionner un titre</em>
-                  </MenuItem>
-                  {TITRES_PROFESSIONNELS.map(titre => (
-                    <MenuItem key={titre} value={titre}>
-                      {titre}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
-        );
-        
-      case 1:
-        return (
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Numéro de licence"
-                name="num_licence"
-                value={formData.num_licence}
-                onChange={handleChange}
-                onBlur={() => handleBlur('num_licence')}
-                error={!!getError('num_licence')}
-                helperText={getError('num_licence')}
-                disabled={loading}
-                placeholder="Ex: MED12345"
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Numéro d'ordre"
-                name="num_ordre"
-                value={formData.num_ordre}
-                onChange={handleChange}
-                onBlur={() => handleBlur('num_ordre')}
-                error={!!getError('num_ordre')}
-                helperText={getError('num_ordre')}
-                disabled={loading}
-                placeholder="Ex: 123456"
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-                <DatePicker
-                  label="Date d'obtention de licence"
-                  value={formData.date_obtention_licence}
-                  onChange={(date) => handleDateChange('date_obtention_licence', date)}
-                  disabled={loading}
-                  renderInput={(params) => <TextField {...params} fullWidth />}
-                />
-              </LocalizationProvider>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-                <DatePicker
-                  label="Date d'expiration de licence"
-                  value={formData.date_expiration_licence}
-                  onChange={(date) => handleDateChange('date_expiration_licence', date)}
-                  disabled={loading}
-                  renderInput={(params) => <TextField {...params} fullWidth />}
-                  minDate={formData.date_obtention_licence || new Date()}
-                />
-              </LocalizationProvider>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Université de formation"
-                name="universite_formation"
-                value={formData.universite_formation}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Année de diplôme"
-                name="annee_diplome"
-                value={formData.annee_diplome}
-                onChange={handleChange}
-                disabled={loading}
-                placeholder="Ex: 2015"
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Expérience (années)"
-                name="experience_annee"
-                type="number"
-                value={formData.experience_annee}
-                onChange={handleChange}
-                onBlur={() => handleBlur('experience_annee')}
-                error={!!getError('experience_annee')}
-                helperText={getError('experience_annee')}
-                disabled={loading}
-                inputProps={{ min: 0, max: 60 }}
-              />
-            </Grid>
-          </Grid>
-        );
-        
-      case 2:
-        return (
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Téléphone"
-                name="telephone"
-                value={formData.telephone}
-                onChange={handleChange}
-                onBlur={() => handleBlur('telephone')}
-                error={!!getError('telephone')}
-                helperText={getError('telephone')}
-                disabled={loading}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <PhoneIcon fontSize="small" />
-                    </InputAdornment>
-                  )
-                }}
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Email"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                onBlur={() => handleBlur('email')}
-                error={!!getError('email')}
-                helperText={getError('email')}
-                disabled={loading}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <EmailIcon fontSize="small" />
-                    </InputAdornment>
-                  )
-                }}
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Centre de pratique</InputLabel>
-                <Select
-                  name="cod_cen"
-                  value={formData.cod_cen}
-                  onChange={handleChange}
-                  disabled={loading}
-                >
-                  <MenuItem value="">
-                    <em>Sélectionner un centre</em>
-                  </MenuItem>
-                  {centres.map(centre => (
-                    <MenuItem key={centre.COD_CEN || centre.id} value={centre.COD_CEN || centre.id}>
-                      {centre.NOM_CENTRE || centre.nom}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Lieu de pratique"
-                name="centre_pratique"
-                value={formData.centre_pratique}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth error={!!getError('cod_pay')} required>
-                <InputLabel>Pays *</InputLabel>
-                <Select
-                  name="cod_pay"
-                  value={formData.cod_pay || ''}
-                  onChange={handleChange}
-                  onBlur={() => handleBlur('cod_pay')}
-                  disabled={loading || paysOptions.length === 0}
-                >
-                  {paysOptions.length === 0 ? (
-                    <MenuItem disabled value="">
-                      <em>Chargement des pays...</em>
-                    </MenuItem>
-                  ) : (
-                    <>
-                      <MenuItem value="">
-                        <em>Sélectionner un pays</em>
-                      </MenuItem>
-                      {paysOptions.map(p => (
-                        <MenuItem key={p.value} value={p.value}>
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <PublicIcon fontSize="small" />
-                            <span>{p.label}</span>
-                          </Box>
-                        </MenuItem>
-                      ))}
-                    </>
-                  )}
-                </Select>
-                {getError('cod_pay') && (
-                  <FormHelperText error>{getError('cod_pay')}</FormHelperText>
-                )}
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Numéro d'adresse"
-                name="num_adr"
-                value={formData.num_adr}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Honoraires (FCFA)"
-                name="honoraires"
-                type="number"
-                value={formData.honoraires}
-                onChange={handleChange}
-                onBlur={() => handleBlur('honoraires')}
-                error={!!getError('honoraires')}
-                helperText={getError('honoraires')}
-                disabled={loading}
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <Typography variant="caption">FCFA</Typography>
-                    </InputAdornment>
-                  )
-                }}
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Langue parlée</InputLabel>
-                <Select
-                  name="langue_parlee"
-                  value={formData.langue_parlee}
-                  onChange={handleChange}
-                  disabled={loading}
-                >
-                  {LANGUES.map(langue => (
-                    <MenuItem key={langue} value={langue}>
-                      {langue}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Disponibilité</InputLabel>
-                <Select
-                  name="disponibilite"
-                  value={formData.disponibilite}
-                  onChange={handleChange}
-                  disabled={loading}
-                >
-                  {STATUTS_DISPONIBILITE.map(statut => (
-                    <MenuItem key={statut} value={statut}>
-                      {statut}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
-        );
-        
-      case 3:
-        return (
-          <Box>
-            <Typography variant="h6" gutterBottom color="primary">
-              Récapitulatif
-            </Typography>
-            
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Informations personnelles
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Nom:</strong> {formData.nom}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Prénom:</strong> {formData.prenom}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Spécialité:</strong> {formData.specialite}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Type:</strong> {formData.type_prestataire}
-                  </Typography>
-                </Paper>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Informations professionnelles
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Licence:</strong> {formData.num_licence || 'Non renseigné'}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Expérience:</strong> {formData.experience_annee} ans
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Disponibilité:</strong> {formData.disponibilite}
-                  </Typography>
-                </Paper>
-              </Grid>
-              
-              <Grid item xs={12}>
-                <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Contact et localisation
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Téléphone:</strong> {formData.telephone || 'Non renseigné'}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Email:</strong> {formData.email || 'Non renseigné'}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Pays:</strong> {getPaysLabel(formData.cod_pay, paysOptions)}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Centre:</strong> {formData.cod_cen ? getCentreLabel(formData.cod_cen, centres) : 'Non renseigné'}
-                  </Typography>
-                </Paper>
-              </Grid>
-            </Grid>
-            
-            <Box mt={3}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.actif === 1}
-                    onChange={(e) => setFormData(prev => ({ 
-                      ...prev, 
-                      actif: e.target.checked ? 1 : 0 
-                    }))}
-                    disabled={loading}
-                  />
-                }
-                label={
-                  <Box display="flex" alignItems="center" gap={1}>
-                    {formData.actif === 1 ? (
-                      <>
-                        <CheckCircleIcon color="success" fontSize="small" />
-                        <Typography>Actif</Typography>
-                      </>
-                    ) : (
-                      <>
-                        <BlockIcon color="error" fontSize="small" />
-                        <Typography>Inactif</Typography>
-                      </>
-                    )}
-                  </Box>
-                }
-              />
-            </Box>
-          </Box>
-        );
-        
-      default:
-        return 'Étape inconnue';
-    }
-  };
-
-  return (
-    <Dialog 
-      open={open} 
-      onClose={onClose} 
-      maxWidth="md" 
-      fullWidth
-      PaperProps={{
-        sx: { borderRadius: 3, minHeight: '70vh' }
-      }}
-    >
-      <DialogTitle sx={{ 
-        borderBottom: 1, 
-        borderColor: 'divider',
-        bgcolor: theme.palette.primary.main,
-        color: 'white',
-        py: 2
-      }}>
-        <Box display="flex" alignItems="center" gap={1}>
-          <AddIcon />
-          <Typography variant="h6" fontWeight="bold">
-            Ajouter un nouveau prestataire
-          </Typography>
-        </Box>
-      </DialogTitle>
-      
-      <DialogContent dividers sx={{ py: 3 }}>
-        <Stepper activeStep={activeStep} orientation="vertical">
-          {steps.map((label, index) => (
-            <Step key={label}>
-              <StepLabel>{label}</StepLabel>
-              <StepContent>
-                {getStepContent(index)}
-              </StepContent>
-            </Step>
-          ))}
-        </Stepper>
-      </DialogContent>
-      
-      <DialogActions sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-          <Box>
-            {activeStep > 0 && (
-              <Button 
-                onClick={handleBack} 
-                disabled={loading}
-                sx={{ mr: 1 }}
-              >
-                Retour
-              </Button>
-            )}
-          </Box>
-          
-          <Box>
-            <Button 
-              onClick={onClose} 
-              disabled={loading}
-              sx={{ mr: 1 }}
-            >
-              Annuler
-            </Button>
-            <Button 
-              onClick={handleNext} 
-              variant="contained" 
-              color="primary"
-              disabled={loading || paysOptions.length === 0}
-              startIcon={activeStep === steps.length - 1 ? <AddIcon /> : <ChevronRightIcon />}
-            >
-              {activeStep === steps.length - 1 
-                ? (loading ? 'Enregistrement...' : 'Enregistrer') 
-                : 'Suivant'}
-            </Button>
-          </Box>
-        </Box>
-      </DialogActions>
-    </Dialog>
-  );
-};
-
-/**
- * Modale de modification de prestataire - COMPLÈTE
- */
-const ModifierPrestataireModal = ({ 
-  open, 
-  onClose, 
-  onSave, 
-  prestataire, 
-  centres, 
-  specialites, 
-  pays, 
-  loading 
-}) => {
-  const theme = useTheme();
-  const [formData, setFormData] = useState({});
-  const [errors, setErrors] = useState({});
-  const [touched, setTouched] = useState({});
-  const [initialized, setInitialized] = useState(false);
-  
-  // Calcul des options de pays à partir de la prop pays
-  const paysOptions = useMemo(() => {
-    if (!pays || pays.length === 0) return [];
-    return pays.map(p => ({
-      value: p.COD_PAY || p.code || p.id,
-      label: p.LIB_PAY || p.nom || p.label || p.COD_PAY || p.name
-    }));
-  }, [pays]);
-
-  // Effet pour initialiser le formulaire
-useEffect(() => {
-  if (open && prestataire && paysOptions.length > 0) {
-    const codPayValue = prestataire.cod_pay || prestataire.COD_PAY || '';
-    
-    // Vérifier si le cod_pay du prestataire existe dans paysOptions
-    const paysExiste = paysOptions.some(p => p.value === codPayValue);
-    
-    setFormData({
-      type_prestataire: prestataire.type_prestataire || 'Médecin',
-      nom: prestataire.nom || '',
-      prenom: prestataire.prenom || '',
-      specialite: prestataire.specialite || '',
-      titre: prestataire.titre || '',
-      num_licence: prestataire.num_licence || '',
-      num_ordre: prestataire.num_ordre || '',
-      date_obtention_licence: prestataire.date_obtention_licence || null,
-      date_expiration_licence: prestataire.date_expiration_licence || null,
-      universite_formation: prestataire.universite_formation || '',
-      annee_diplome: prestataire.annee_diplome || '',
-      experience_annee: prestataire.experience_annee || 0,
-      telephone: prestataire.telephone || '',
-      email: prestataire.email || '',
-      cod_cen: prestataire.cod_cen || '',
-      centre_pratique: prestataire.centre_pratique || '',
-      // Si le pays existe, on l'utilise, sinon premier de la liste
-      cod_pay: paysExiste ? codPayValue : (paysOptions[0]?.value || ''),
-      num_adr: prestataire.num_adr || '',
-      honoraires: prestataire.honoraires || '',
-      langue_parlee: prestataire.langue_parlee || 'Français',
-      disponibilite: prestataire.disponibilite || 'Disponible',
-      actif: isPrestataireActif(prestataire) ? 1 : 0
-    });
-    
-    setErrors({});
-    setTouched({});
-    setInitialized(true);
-  }
-}, [open, prestataire, paysOptions]);
-
-  const handleBlur = (field) => {
-    setTouched(prev => ({ ...prev, [field]: true }));
-    validateField(field, formData[field]);
-  };
-
-  const validateField = (field, value) => {
-    let error = '';
-    
-    switch (field) {
-      case 'nom':
-        if (!value?.trim()) {
-          error = 'Le nom est obligatoire';
-        } else if (value.trim().length < 2) {
-          error = 'Le nom doit contenir au moins 2 caractères';
-        }
-        break;
-        
-      case 'prenom':
-        if (!value?.trim()) {
-          error = 'Le prénom est obligatoire';
-        } else if (value.trim().length < 2) {
-          error = 'Le prénom doit contenir au moins 2 caractères';
-        }
-        break;
-        
-      case 'specialite':
-        if (!value?.trim()) {
-          error = 'La spécialité est obligatoire';
-        }
-        break;
-        
-      case 'cod_pay':
-        if (!value || value.trim() === '') {
-          error = 'Le pays est obligatoire';
-        }
-        break;
-        
-      case 'email':
-        if (value && value.trim() !== '' && !isValidEmail(value)) {
-          error = 'Format d\'email invalide';
-        }
-        break;
-        
-      case 'telephone':
-        if (value && value.trim() !== '' && !isValidPhone(value)) {
-          error = 'Format de téléphone invalide';
-        }
-        break;
-        
-      case 'num_licence':
-        if (value && value.trim() !== '' && !isValidNumLicence(value)) {
-          error = 'Format de numéro de licence invalide';
-        }
-        break;
-        
-      case 'num_ordre':
-        if (value && value.trim() !== '' && !isValidNumOrdre(value)) {
-          error = 'Format de numéro d\'ordre invalide';
-        }
-        break;
-        
-      default:
-        break;
-    }
-    
-    setErrors(prev => ({ ...prev, [field]: error }));
-    return !error;
-  };
-
-  const validateForm = () => {
-    const requiredFields = ['nom', 'prenom', 'specialite', 'cod_pay'];
-    let isValid = true;
-    const newErrors = {};
-    
-    requiredFields.forEach(field => {
-      if (!validateField(field, formData[field])) {
-        newErrors[field] = errors[field] || 'Ce champ est obligatoire';
-        isValid = false;
-      }
-    });
-    
-    setErrors(newErrors);
-    return isValid;
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'actif' ? (value === '1' ? 1 : 0) : value
-    }));
-    
-    if (touched[name]) {
-      validateField(name, value);
-    }
-  };
-
-  const handleDateChange = (name, date) => {
-    setFormData(prev => ({
-      ...prev,
-      [name]: date
-    }));
-  };
-
-  const handleSubmit = async () => {
-    const allTouched = Object.keys(formData).reduce((acc, key) => {
-      acc[key] = true;
-      return acc;
-    }, {});
-    setTouched(allTouched);
-    
-    if (!validateForm()) return;
-
-    try {
-      if (!formData.cod_pay || formData.cod_pay.trim() === '') {
-        setErrors(prev => ({ ...prev, cod_pay: 'Le pays est obligatoire' }));
-        return;
-      }
-
-      const dataToSend = {
-        type_prestataire: formData.type_prestataire,
-        nom: formData.nom.trim(),
-        prenom: formData.prenom.trim(),
-        specialite: formData.specialite.trim(),
-        titre: formData.titre?.trim() || null,
-        num_licence: formData.num_licence?.trim() || null,
-        num_ordre: formData.num_ordre?.trim() || null,
-        date_obtention_licence: formData.date_obtention_licence || null,
-        date_expiration_licence: formData.date_expiration_licence || null,
-        universite_formation: formData.universite_formation?.trim() || null,
-        annee_diplome: formData.annee_diplome?.trim() || null,
-        experience_annee: formData.experience_annee ? parseInt(formData.experience_annee) : 0,
-        telephone: formData.telephone?.trim() || null,
-        email: formData.email?.trim() || null,
-        cod_cen: formData.cod_cen || null,
-        centre_pratique: formData.centre_pratique?.trim() || null,
-        cod_pay: formData.cod_pay.trim(),
-        num_adr: formData.num_adr?.trim() || null,
-        honoraires: formData.honoraires ? parseFloat(formData.honoraires) : null,
-        langue_parlee: formData.langue_parlee,
-        disponibilite: formData.disponibilite,
-        actif: formData.actif
-      };
-
-      await onSave(dataToSend);
-      onClose();
-    } catch (error) {
-      console.error('Erreur lors de la modification:', error);
-      throw error;
-    }
-  };
-
-  const getError = (field) => {
-    return touched[field] ? errors[field] : '';
-  };
-
-  if (!prestataire || !initialized) return null;
-
-  return (
-    <Dialog 
-      open={open} 
-      onClose={onClose} 
-      maxWidth="md" 
-      fullWidth
-      PaperProps={{
-        sx: { borderRadius: 3 }
-      }}
-    >
-      <DialogTitle sx={{ 
-        borderBottom: 1, 
-        borderColor: 'divider',
-        bgcolor: theme.palette.warning.main,
-        color: 'white',
-        py: 2
-      }}>
-        <Box display="flex" alignItems="center" gap={1}>
-          <EditIcon />
-          <Typography variant="h6" fontWeight="bold">
-            Modifier le prestataire
-          </Typography>
-        </Box>
-      </DialogTitle>
-      
-      <DialogContent dividers sx={{ py: 3 }}>
-        <Grid container spacing={3}>
-          {/* Informations personnelles */}
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom color="primary">
-              Informations personnelles
-            </Typography>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Nom *"
-              name="nom"
-              value={formData.nom || ''}
-              onChange={handleChange}
-              onBlur={() => handleBlur('nom')}
-              error={!!getError('nom')}
-              helperText={getError('nom')}
-              disabled={loading}
-              margin="normal"
-              required
-            />
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Prénom *"
-              name="prenom"
-              value={formData.prenom || ''}
-              onChange={handleChange}
-              onBlur={() => handleBlur('prenom')}
-              error={!!getError('prenom')}
-              helperText={getError('prenom')}
-              disabled={loading}
-              margin="normal"
-              required
-            />
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth margin="normal" error={!!getError('specialite')} required>
-              <InputLabel>Spécialité *</InputLabel>
-              <Select
-                name="specialite"
-                value={formData.specialite || ''}
-                onChange={handleChange}
-                onBlur={() => handleBlur('specialite')}
-                disabled={loading}
-              >
-                <MenuItem value="">
-                  <em>Sélectionner une spécialité</em>
-                </MenuItem>
-                {specialites.map((spec, index) => (
-                  <MenuItem key={`spec-${index}`} value={spec}>
-                    {spec}
-                  </MenuItem>
-                ))}
-              </Select>
-              {getError('specialite') && (
-                <FormHelperText>{getError('specialite')}</FormHelperText>
-              )}
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Type de prestataire</InputLabel>
-              <Select
-                name="type_prestataire"
-                value={formData.type_prestataire || 'Médecin'}
-                onChange={handleChange}
-                disabled={loading}
-              >
-                {TYPES_PRESTATAIRE.map(type => (
-                  <MenuItem key={type} value={type}>
-                    {type}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Titre professionnel</InputLabel>
-              <Select
-                name="titre"
-                value={formData.titre || ''}
-                onChange={handleChange}
-                disabled={loading}
-              >
-                <MenuItem value="">
-                  <em>Sélectionner un titre</em>
-                </MenuItem>
-                {TITRES_PROFESSIONNELS.map(titre => (
-                  <MenuItem key={titre} value={titre}>
-                    {titre}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          {/* Informations professionnelles */}
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom color="primary" sx={{ mt: 2 }}>
-              Informations professionnelles
-            </Typography>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Numéro de licence"
-              name="num_licence"
-              value={formData.num_licence || ''}
-              onChange={handleChange}
-              onBlur={() => handleBlur('num_licence')}
-              error={!!getError('num_licence')}
-              helperText={getError('num_licence')}
-              disabled={loading}
-              margin="normal"
-            />
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Numéro d'ordre"
-              name="num_ordre"
-              value={formData.num_ordre || ''}
-              onChange={handleChange}
-              onBlur={() => handleBlur('num_ordre')}
-              error={!!getError('num_ordre')}
-              helperText={getError('num_ordre')}
-              disabled={loading}
-              margin="normal"
-            />
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-              <DatePicker
-                label="Date d'obtention de licence"
-                value={formData.date_obtention_licence}
-                onChange={(date) => handleDateChange('date_obtention_licence', date)}
-                disabled={loading}
-                renderInput={(params) => <TextField {...params} fullWidth margin="normal" />}
-              />
-            </LocalizationProvider>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-              <DatePicker
-                label="Date d'expiration de licence"
-                value={formData.date_expiration_licence}
-                onChange={(date) => handleDateChange('date_expiration_licence', date)}
-                disabled={loading}
-                renderInput={(params) => <TextField {...params} fullWidth margin="normal" />}
-                minDate={formData.date_obtention_licence || new Date()}
-              />
-            </LocalizationProvider>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Université de formation"
-              name="universite_formation"
-              value={formData.universite_formation || ''}
-              onChange={handleChange}
-              disabled={loading}
-              margin="normal"
-            />
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Année de diplôme"
-              name="annee_diplome"
-              value={formData.annee_diplome || ''}
-              onChange={handleChange}
-              disabled={loading}
-              margin="normal"
-            />
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Expérience (années)"
-              name="experience_annee"
-              type="number"
-              value={formData.experience_annee || 0}
-              onChange={handleChange}
-              disabled={loading}
-              margin="normal"
-              inputProps={{ min: 0, max: 60 }}
-            />
-          </Grid>
-          
-          {/* Informations de contact */}
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom color="primary" sx={{ mt: 2 }}>
-              Informations de contact
-            </Typography>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Téléphone"
-              name="telephone"
-              value={formData.telephone || ''}
-              onChange={handleChange}
-              onBlur={() => handleBlur('telephone')}
-              error={!!getError('telephone')}
-              helperText={getError('telephone')}
-              disabled={loading}
-              margin="normal"
-            />
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Email"
-              name="email"
-              type="email"
-              value={formData.email || ''}
-              onChange={handleChange}
-              onBlur={() => handleBlur('email')}
-              error={!!getError('email')}
-              helperText={getError('email')}
-              disabled={loading}
-              margin="normal"
-            />
-          </Grid>
-          
-          {/* Localisation */}
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom color="primary" sx={{ mt: 2 }}>
-              Localisation
-            </Typography>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Centre de pratique</InputLabel>
-              <Select
-                name="cod_cen"
-                value={formData.cod_cen || ''}
-                onChange={handleChange}
-                disabled={loading}
-              >
-                <MenuItem value="">
-                  <em>Sélectionner un centre</em>
-                </MenuItem>
-                {centres.map(centre => (
-                  <MenuItem key={centre.COD_CEN || centre.id} value={centre.COD_CEN || centre.id}>
-                    {centre.NOM_CENTRE || centre.nom}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Lieu de pratique"
-              name="centre_pratique"
-              value={formData.centre_pratique || ''}
-              onChange={handleChange}
-              disabled={loading}
-              margin="normal"
-            />
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth margin="normal" error={!!getError('cod_pay')} required>
-              <InputLabel>Pays *</InputLabel>
-              <Select
-                name="cod_pay"
-                value={formData.cod_pay || ''}
-                onChange={handleChange}
-                onBlur={() => handleBlur('cod_pay')}
-                disabled={loading || paysOptions.length === 0}
-              >
-                {paysOptions.length === 0 ? (
-                  <MenuItem disabled value="">
-                    <em>Chargement des pays...</em>
-                  </MenuItem>
-                ) : (
-                  <>
-                    <MenuItem value="">
-                      <em>Sélectionner un pays</em>
-                    </MenuItem>
-                    {paysOptions.map(p => (
-                      <MenuItem key={p.value} value={p.value}>
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <PublicIcon fontSize="small" />
-                          <span>{p.label}</span>
-                        </Box>
-                      </MenuItem>
-                    ))}
-                  </>
-                )}
-              </Select>
-              {getError('cod_pay') && (
-                <FormHelperText error>{getError('cod_pay')}</FormHelperText>
-              )}
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Numéro d'adresse"
-              name="num_adr"
-              value={formData.num_adr || ''}
-              onChange={handleChange}
-              disabled={loading}
-              margin="normal"
-            />
-          </Grid>
-          
-          {/* Tarification et autres */}
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Honoraires (FCFA)"
-              name="honoraires"
-              type="number"
-              value={formData.honoraires || ''}
-              onChange={handleChange}
-              disabled={loading}
-              margin="normal"
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <Typography variant="caption">FCFA</Typography>
-                  </InputAdornment>
-                )
-              }}
-            />
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Langue parlée</InputLabel>
-              <Select
-                name="langue_parlee"
-                value={formData.langue_parlee || 'Français'}
-                onChange={handleChange}
-                disabled={loading}
-              >
-                {LANGUES.map(langue => (
-                  <MenuItem key={langue} value={langue}>
-                    {langue}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Disponibilité</InputLabel>
-              <Select
-                name="disponibilite"
-                value={formData.disponibilite || 'Disponible'}
-                onChange={handleChange}
-                disabled={loading}
-              >
-                {STATUTS_DISPONIBILITE.map(statut => (
-                  <MenuItem key={statut} value={statut}>
-                    {statut}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          {/* Statut */}
-          <Grid item xs={12}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.actif === 1}
-                  onChange={(e) => setFormData(prev => ({ 
-                    ...prev, 
-                    actif: e.target.checked ? 1 : 0 
-                  }))}
-                  disabled={loading}
-                />
-              }
-              label={
-                <Box display="flex" alignItems="center" gap={1}>
-                  {formData.actif === 1 ? (
-                    <>
-                      <CheckCircleIcon color="success" fontSize="small" />
-                      <Typography>Actif</Typography>
-                    </>
-                  ) : (
-                    <>
-                      <BlockIcon color="error" fontSize="small" />
-                      <Typography>Inactif</Typography>
-                    </>
-                  )}
-                </Box>
-              }
-            />
-          </Grid>
-        </Grid>
-      </DialogContent>
-      
-      <DialogActions sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-        <Button 
-          onClick={onClose} 
-          disabled={loading}
-          sx={{ mr: 1 }}
-        >
-          Annuler
-        </Button>
-        <Button 
-          onClick={handleSubmit} 
-          variant="contained" 
-          color="warning"
-          disabled={loading || paysOptions.length === 0}
-          startIcon={<EditIcon />}
-        >
-          {loading ? 'Enregistrement...' : 'Mettre à jour'}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
-
-/**
- * Modale de synchronisation avancée avec syncAPI
- */
-const SyncPrestataireModal = ({ 
-  open, 
-  onClose, 
-  prestataire,
-  centres,
-  loading,
-  onSync 
-}) => {
-  const theme = useTheme();
-  const [selectedCentre, setSelectedCentre] = useState('');
-  const [dateDebut, setDateDebut] = useState(null);
-  const [dateFin, setDateFin] = useState(null);
-  const [observations, setObservations] = useState('');
-  const [tarif1, setTarif1] = useState('');
-  const [tarif2, setTarif2] = useState('');
-  const [tarif3, setTarif3] = useState('');
-  const [tps, setTps] = useState('');
-  const [tva, setTva] = useState('');
-  const [typeOperation, setTypeOperation] = useState('synccentre');
-  const [syncOptions, setSyncOptions] = useState({
-    updateExisting: true,
-    createMissing: true,
-    validateData: true,
-    sendNotifications: false
-  });
-
-  useEffect(() => {
-    if (open && prestataire && centres.length > 0) {
-      // Initialiser avec le centre actuel du prestataire
-      setSelectedCentre(prestataire.cod_cen || '');
-      setDateDebut(new Date());
-      setDateFin(null);
-      setObservations('');
-      setTarif1(prestataire.honoraires || '');
-      setTarif2('');
-      setTarif3('');
-      setTps('');
-      setTva('');
-      setTypeOperation('synccentre');
-    }
-  }, [open, prestataire, centres]);
-
-  const handleSync = async () => {
-    if (!selectedCentre && typeOperation === 'synccentre') {
-      alert('Veuillez sélectionner un centre');
-      return;
-    }
-
-    // Vérifier la présence du token
-    if (typeof window === 'undefined') {
-      console.error('❌ Exécution côté serveur - localStorage indisponible');
-      return;
-    }
-    
-    const token = localStorage.getItem('token');
-    if (!token) {
-      console.error('❌ Token manquant - Redirection vers la connexion');
-      window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
-      return;
-    }
-
-    // Préparation des données selon le type d'opération
-    const syncData = {
-      typeOperation,
-      options: syncOptions,
-      prestataireId: prestataire.id || prestataire.COD_PRE,
-      prestataireData: prestataire
-    };
-
-    // Ajout des données spécifiques selon l'opération
-    if (typeOperation === 'synccentre') {
-      syncData.centreData = {
-        COD_PRE: prestataire.id || prestataire.COD_PRE,
-        COD_CEN: selectedCentre,
-        DEB_AGRP: dateDebut || null,
-        FIN_AGRP: dateFin || null,
-        OBS_AGRP: observations || null,
-        TR1_AGRP: tarif1 ? parseFloat(tarif1) : null,
-        TR2_AGRP: tarif2 ? parseFloat(tarif2) : null,
-        TR3_AGRP: tarif3 ? parseFloat(tarif3) : null,
-        TPS_AGRP: tps ? parseFloat(tps) : null,
-        TVA_AGRP: tva ? parseFloat(tva) : null
-      };
-    } else if (typeOperation === 'fullsync') {
-      syncData.syncScope = 'all';
-    } else if (typeOperation === 'validate') {
-      syncData.validationRules = {
-        checkLicence: true,
-        checkExpiration: true,
-        checkAvailability: true
-      };
-    }
-
-    // Appeler la fonction de synchronisation avec les données préparées
-    await onSync(syncData);
-  };
-
-  if (!prestataire) return null;
-
-  return (
-    <Dialog 
-      open={open} 
-      onClose={onClose} 
-      maxWidth="md" 
-      fullWidth
-      PaperProps={{
-        sx: { borderRadius: 3 }
-      }}
-    >
-      <DialogTitle sx={{ 
-        borderBottom: 1, 
-        borderColor: 'divider',
-        bgcolor: theme.palette.info.main,
-        color: 'white',
-        py: 2
-      }}>
-        <Box display="flex" alignItems="center" gap={1}>
-          <SyncIcon />
-          <Typography variant="h6" fontWeight="bold">
-            Synchronisation avancée
-          </Typography>
-        </Box>
-      </DialogTitle>
-      
-      <DialogContent dividers sx={{ py: 3 }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" gutterBottom color="primary">
-              Prestataire: <strong>{prestataire.prenom} {prestataire.nom}</strong>
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              ID: {prestataire.id || prestataire.COD_PRE} | Spécialité: {prestataire.specialite}
-            </Typography>
-          </Grid>
-          
-          <Grid item xs={12}>
-            <FormControl fullWidth>
-              <InputLabel>Type d'opération</InputLabel>
-              <Select
-                value={typeOperation}
-                onChange={(e) => setTypeOperation(e.target.value)}
-                disabled={loading}
-              >
-                <MenuItem value="synccentre">Synchroniser avec centre</MenuItem>
-                <MenuItem value="fullsync">Synchronisation complète</MenuItem>
-                <MenuItem value="validate">Valider données</MenuItem>
-                <MenuItem value="backup">Sauvegarde</MenuItem>
-                <MenuItem value="restore">Restauration</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          {typeOperation === 'synccentre' && (
-            <>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Centre *</InputLabel>
-                  <Select
-                    value={selectedCentre}
-                    onChange={(e) => setSelectedCentre(e.target.value)}
-                    disabled={loading}
-                  >
-                    <MenuItem value="">
-                      <em>Sélectionner un centre</em>
-                    </MenuItem>
-                    {centres.map(centre => (
-                      <MenuItem key={centre.COD_CEN || centre.id} value={centre.COD_CEN || centre.id}>
-                        {centre.NOM_CENTRE || centre.nom}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-                  <DatePicker
-                    label="Date début d'agrément"
-                    value={dateDebut}
-                    onChange={setDateDebut}
-                    disabled={loading}
-                    renderInput={(params) => <TextField {...params} fullWidth />}
-                  />
-                </LocalizationProvider>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-                  <DatePicker
-                    label="Date fin d'agrément"
-                    value={dateFin}
-                    onChange={setDateFin}
-                    disabled={loading}
-                    renderInput={(params) => <TextField {...params} fullWidth />}
-                    minDate={dateDebut || new Date()}
-                  />
-                </LocalizationProvider>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Observations"
-                  value={observations}
-                  onChange={(e) => setObservations(e.target.value)}
-                  disabled={loading}
-                  multiline
-                  rows={2}
-                />
-              </Grid>
-              
-              <Grid item xs={12}>
-                <Typography variant="subtitle2" gutterBottom color="primary">
-                  Tarification
-                </Typography>
-              </Grid>
-              
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Tarif 1 (FCFA)"
-                  value={tarif1}
-                  onChange={(e) => setTarif1(e.target.value)}
-                  disabled={loading}
-                  type="number"
-                />
-              </Grid>
-              
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Tarif 2 (FCFA)"
-                  value={tarif2}
-                  onChange={(e) => setTarif2(e.target.value)}
-                  disabled={loading}
-                  type="number"
-                />
-              </Grid>
-              
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Tarif 3 (FCFA)"
-                  value={tarif3}
-                  onChange={(e) => setTarif3(e.target.value)}
-                  disabled={loading}
-                  type="number"
-                />
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="TPS (%)"
-                  value={tps}
-                  onChange={(e) => setTps(e.target.value)}
-                  disabled={loading}
-                  type="number"
-                />
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="TVA (%)"
-                  value={tva}
-                  onChange={(e) => setTva(e.target.value)}
-                  disabled={loading}
-                  type="number"
-                />
-              </Grid>
-            </>
-          )}
-          
-          {(typeOperation === 'fullsync' || typeOperation === 'validate') && (
-            <Grid item xs={12}>
-              <Typography variant="subtitle2" gutterBottom color="primary">
-                Options de synchronisation
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={syncOptions.updateExisting}
-                        onChange={(e) => setSyncOptions(prev => ({ 
-                          ...prev, 
-                          updateExisting: e.target.checked 
-                        }))}
-                        disabled={loading}
-                      />
-                    }
-                    label="Mettre à jour les existants"
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={syncOptions.createMissing}
-                        onChange={(e) => setSyncOptions(prev => ({ 
-                          ...prev, 
-                          createMissing: e.target.checked 
-                        }))}
-                        disabled={loading}
-                      />
-                    }
-                    label="Créer les manquants"
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={syncOptions.validateData}
-                        onChange={(e) => setSyncOptions(prev => ({ 
-                          ...prev, 
-                          validateData: e.target.checked 
-                        }))}
-                        disabled={loading}
-                      />
-                    }
-                    label="Valider les données"
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={syncOptions.sendNotifications}
-                        onChange={(e) => setSyncOptions(prev => ({ 
-                          ...prev, 
-                          sendNotifications: e.target.checked 
-                        }))}
-                        disabled={loading}
-                      />
-                    }
-                    label="Envoyer notifications"
-                  />
-                </Grid>
-              </Grid>
-            </Grid>
-          )}
-          
-          <Grid item xs={12}>
-            <Alert severity="info" sx={{ mt: 2 }}>
-              <AlertTitle>Information</AlertTitle>
-              {typeOperation === 'synccentre' 
-                ? 'Cette opération va créer ou mettre à jour une entrée dans la table CENTRE_PRESTATAIRE pour lier ce prestataire au centre sélectionné.'
-                : typeOperation === 'fullsync'
-                ? 'Cette opération va synchroniser toutes les données du prestataire avec les systèmes externes.'
-                : typeOperation === 'validate'
-                ? 'Cette opération va valider les données du prestataire selon les règles métier.'
-                : 'Cette opération va effectuer une sauvegarde/restauration des données.'}
-            </Alert>
-          </Grid>
-        </Grid>
-      </DialogContent>
-      
-      <DialogActions sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-        <Button 
-          onClick={onClose} 
-          disabled={loading}
-          sx={{ mr: 1 }}
-        >
-          Annuler
-        </Button>
-        <Button 
-          onClick={handleSync} 
-          variant="contained" 
-          color="info"
-          disabled={loading || (typeOperation === 'synccentre' && !selectedCentre)}
-          startIcon={<SyncIcon />}
-        >
-          {loading ? 'Synchronisation...' : 'Exécuter'}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
-
-/**
- * Modale de détails avancés
- */
-const PrestataireDetailsModal = ({ open, onClose, prestataire, pays, centres }) => {
-  if (!prestataire) return null;
-
-  const theme = useTheme();
-  const isActif = isPrestataireActif(prestataire);
-  const [activeTab, setActiveTab] = useState(0);
-
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
-  };
-
-  const detailsSections = [
-    {
-      title: 'Informations personnelles',
-      items: [
-        { label: 'ID', value: prestataire.id || prestataire.COD_PRE },
-        { label: 'Nom complet', value: `${prestataire.prenom || ''} ${prestataire.nom || ''}` },
-        { label: 'Spécialité', value: prestataire.specialite || '-' },
-        { label: 'Titre', value: prestataire.titre || '-' },
-        { label: 'Type', value: prestataire.type_prestataire || '-' },
-      ]
-    },
-    {
-      title: 'Informations professionnelles',
-      items: [
-        { label: 'Numéro de licence', value: prestataire.num_licence || '-' },
-        { label: 'Numéro d\'ordre', value: prestataire.num_ordre || '-' },
-        { label: 'Date obtention licence', value: formatDate(prestataire.date_obtention_licence) },
-        { label: 'Date expiration licence', value: formatDate(prestataire.date_expiration_licence) },
-        { label: 'Université de formation', value: prestataire.universite_formation || '-' },
-        { label: 'Année de diplôme', value: prestataire.annee_diplome || '-' },
-        { label: 'Années d\'expérience', value: prestataire.experience_annee ? `${prestataire.experience_annee} ans` : '-' },
-      ]
-    },
-    {
-      title: 'Contact et localisation',
-      items: [
-        { label: 'Téléphone', value: prestataire.telephone || '-', icon: <PhoneIcon /> },
-        { label: 'Email', value: prestataire.email || '-', icon: <EmailIcon /> },
-        { label: 'Numéro d\'adresse', value: prestataire.num_adr || '-' },
-        { label: 'Centre de pratique', value: getCentreLabel(prestataire.cod_cen, centres) || '-' },
-        { label: 'Lieu de pratique', value: prestataire.centre_pratique || '-' },
-        { label: 'Pays', value: getPaysLabel(prestataire.cod_pay, pays) || '-' },
-      ]
-    },
-    {
-      title: 'Tarification et disponibilité',
-      items: [
-        { label: 'Honoraires', value: prestataire.honoraires ? `${parseFloat(prestataire.honoraires).toLocaleString('fr-FR')} FCFA` : '-' },
-        { label: 'Langue parlée', value: prestataire.langue_parlee || '-' },
-        { label: 'Disponibilité', value: prestataire.disponibilite || '-', icon: <EventAvailableIcon /> },
-        { label: 'Statut BD', value: isActif ? 'Actif (1)' : 'Inactif (0)', icon: isActif ? <CheckCircleIcon color="success" /> : <BlockIcon color="error" /> },
-      ]
-    },
-    {
-      title: 'Dates système',
-      items: [
-        { label: 'Date de création', value: formatDateTime(prestataire.date_creation || prestataire.DAT_CREUTIL) },
-        { label: 'Date de modification', value: formatDateTime(prestataire.date_modification || prestataire.DAT_MODUTIL) },
-        { label: 'Créé par', value: prestataire.COD_CREUTIL || '-' },
-        { label: 'Modifié par', value: prestataire.COD_MODUTIL || '-' },
-      ]
-    }
-  ];
-
-  return (
-    <Dialog 
-      open={open} 
-      onClose={onClose} 
-      maxWidth="lg" 
-      fullWidth
-      PaperProps={{
-        sx: { borderRadius: 3, minHeight: '70vh' }
-      }}
-    >
-      <DialogTitle sx={{ 
-        borderBottom: 1, 
-        borderColor: 'divider',
-        bgcolor: theme.palette.info.main,
-        color: 'white',
-        py: 2
-      }}>
-        <Box display="flex" alignItems="center" gap={1}>
-          <VisibilityIcon />
-          <Typography variant="h6" fontWeight="bold">
-            Détails du prestataire
-          </Typography>
-        </Box>
-      </DialogTitle>
-      
-      <DialogContent dividers sx={{ py: 3 }}>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-          <Tabs value={activeTab} onChange={handleTabChange}>
-            <Tab label="Informations générales" />
-            <Tab label="Informations professionnelles" />
-            <Tab label="Contact et localisation" />
-            <Tab label="Dates système" />
-          </Tabs>
-        </Box>
-        
-        {activeTab === 0 && (
-          <Grid container spacing={3}>
-            {detailsSections.slice(0, 2).map((section, sectionIndex) => (
-              <Grid item xs={12} md={6} key={`section-${sectionIndex}`}>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom color="primary">
-                  {section.title}
-                </Typography>
-                <Grid container spacing={2}>
-                  {section.items.map((item, itemIndex) => (
-                    <Grid item xs={12} key={`item-${sectionIndex}-${itemIndex}`}>
-                      <Paper 
-                        sx={{ 
-                          p: 2, 
-                          borderLeft: 4,
-                          borderColor: theme.palette.primary.main,
-                          bgcolor: 'background.default'
-                        }}
-                      >
-                        <Box display="flex" alignItems="center" gap={1} mb={1}>
-                          {item.icon && (
-                            <Box sx={{ color: 'text.secondary' }}>
-                              {item.icon}
-                            </Box>
-                          )}
-                          <Typography variant="caption" color="text.secondary">
-                            {item.label}
-                          </Typography>
-                        </Box>
-                        <Typography variant="body1" fontWeight="medium">
-                          {item.value}
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Grid>
-            ))}
-          </Grid>
-        )}
-        
-        {activeTab === 1 && (
-          <Grid container spacing={3}>
-            {detailsSections.slice(1, 3).map((section, sectionIndex) => (
-              <Grid item xs={12} md={6} key={`section-prof-${sectionIndex}`}>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom color="primary">
-                  {section.title}
-                </Typography>
-                <Grid container spacing={2}>
-                  {section.items.map((item, itemIndex) => (
-                    <Grid item xs={12} key={`item-prof-${sectionIndex}-${itemIndex}`}>
-                      <Paper 
-                        sx={{ 
-                          p: 2, 
-                          borderLeft: 4,
-                          borderColor: theme.palette.secondary.main,
-                          bgcolor: 'background.default'
-                        }}
-                      >
-                        <Box display="flex" alignItems="center" gap={1} mb={1}>
-                          {item.icon && (
-                            <Box sx={{ color: 'text.secondary' }}>
-                              {item.icon}
-                            </Box>
-                          )}
-                          <Typography variant="caption" color="text.secondary">
-                            {item.label}
-                          </Typography>
-                        </Box>
-                        <Typography variant="body1" fontWeight="medium">
-                          {item.value}
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Grid>
-            ))}
-          </Grid>
-        )}
-        
-        {activeTab === 2 && (
-          <Grid container spacing={3}>
-            {detailsSections.slice(2, 4).map((section, sectionIndex) => (
-              <Grid item xs={12} md={6} key={`section-contact-${sectionIndex}`}>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom color="primary">
-                  {section.title}
-                </Typography>
-                <Grid container spacing={2}>
-                  {section.items.map((item, itemIndex) => (
-                    <Grid item xs={12} key={`item-contact-${sectionIndex}-${itemIndex}`}>
-                      <Paper 
-                        sx={{ 
-                          p: 2, 
-                          borderLeft: 4,
-                          borderColor: theme.palette.success.main,
-                          bgcolor: 'background.default'
-                        }}
-                      >
-                        <Box display="flex" alignItems="center" gap={1} mb={1}>
-                          {item.icon && (
-                            <Box sx={{ color: 'text.secondary' }}>
-                              {item.icon}
-                            </Box>
-                          )}
-                          <Typography variant="caption" color="text.secondary">
-                            {item.label}
-                          </Typography>
-                        </Box>
-                        <Typography variant="body1" fontWeight="medium">
-                          {item.value}
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Grid>
-            ))}
-          </Grid>
-        )}
-        
-        {activeTab === 3 && (
-          <Grid container spacing={3}>
-            {detailsSections.slice(4).map((section, sectionIndex) => (
-              <Grid item xs={12} key={`section-system-${sectionIndex}`}>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom color="primary">
-                  {section.title}
-                </Typography>
-                <Grid container spacing={2}>
-                  {section.items.map((item, itemIndex) => (
-                    <Grid item xs={12} md={6} key={`item-system-${sectionIndex}-${itemIndex}`}>
-                      <Paper 
-                        sx={{ 
-                          p: 2, 
-                          borderLeft: 4,
-                          borderColor: theme.palette.warning.main,
-                          bgcolor: 'background.default'
-                        }}
-                      >
-                        <Box display="flex" alignItems="center" gap={1} mb={1}>
-                          {item.icon && (
-                            <Box sx={{ color: 'text.secondary' }}>
-                              {item.icon}
-                            </Box>
-                          )}
-                          <Typography variant="caption" color="text.secondary">
-                            {item.label}
-                          </Typography>
-                        </Box>
-                        <Typography variant="body1" fontWeight="medium">
-                          {item.value}
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Grid>
-            ))}
-          </Grid>
-        )}
-      </DialogContent>
-      
-      <DialogActions sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-        <Button 
-          onClick={onClose} 
-          variant="contained"
-          color="primary"
-        >
-          Fermer
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
-
-/**
- * Modale de synchronisation globale
- */
-const GlobalSyncModal = ({ 
-  open, 
-  onClose, 
-  loading,
-  onGlobalSync 
-}) => {
-  const theme = useTheme();
-  const [syncScope, setSyncScope] = useState('all');
-  const [syncDirection, setSyncDirection] = useState('bidirectional');
-  const [syncOptions, setSyncOptions] = useState({
-    validateBeforeSync: true,
-    createBackup: true,
-    notifyUsers: false,
-    forceUpdate: false
-  });
-
-  const handleGlobalSync = async () => {
-    const syncConfig = {
-      scope: syncScope,
-      direction: syncDirection,
-      options: syncOptions,
-      timestamp: new Date().toISOString()
-    };
-
-    await onGlobalSync(syncConfig);
-  };
-
-  return (
-    <Dialog 
-      open={open} 
-      onClose={onClose} 
-      maxWidth="sm" 
-      fullWidth
-      PaperProps={{
-        sx: { borderRadius: 3 }
-      }}
-    >
-      <DialogTitle sx={{ 
-        borderBottom: 1, 
-        borderColor: 'divider',
-        bgcolor: theme.palette.primary.main,
-        color: 'white',
-        py: 2
-      }}>
-        <Box display="flex" alignItems="center" gap={1}>
-          <SyncIcon />
-          <Typography variant="h6" fontWeight="bold">
-            Synchronisation globale
-          </Typography>
-        </Box>
-      </DialogTitle>
-      
-      <DialogContent dividers sx={{ py: 3 }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <FormControl fullWidth>
-              <InputLabel>Portée de synchronisation</InputLabel>
-              <Select
-                value={syncScope}
-                onChange={(e) => setSyncScope(e.target.value)}
-                disabled={loading}
-              >
-                <MenuItem value="all">Tous les prestataires</MenuItem>
-                <MenuItem value="active">Prestataires actifs seulement</MenuItem>
-                <MenuItem value="recent">Modifications récentes</MenuItem>
-                <MenuItem value="selected">Sélection spécifique</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12}>
-            <FormControl fullWidth>
-              <InputLabel>Direction de synchronisation</InputLabel>
-              <Select
-                value={syncDirection}
-                onChange={(e) => setSyncDirection(e.target.value)}
-                disabled={loading}
-              >
-                <MenuItem value="upload">Upload (local → serveur)</MenuItem>
-                <MenuItem value="download">Download (serveur → local)</MenuItem>
-                <MenuItem value="bidirectional">Bidirectionnel</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12}>
-            <Typography variant="subtitle2" gutterBottom color="primary">
-              Options de synchronisation
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={syncOptions.validateBeforeSync}
-                      onChange={(e) => setSyncOptions(prev => ({ 
-                        ...prev, 
-                        validateBeforeSync: e.target.checked 
-                      }))}
-                      disabled={loading}
-                    />
-                  }
-                  label="Valider avant synchronisation"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={syncOptions.createBackup}
-                      onChange={(e) => setSyncOptions(prev => ({ 
-                        ...prev, 
-                        createBackup: e.target.checked 
-                      }))}
-                      disabled={loading}
-                    />
-                  }
-                  label="Créer une sauvegarde"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={syncOptions.notifyUsers}
-                      onChange={(e) => setSyncOptions(prev => ({ 
-                        ...prev, 
-                        notifyUsers: e.target.checked 
-                      }))}
-                      disabled={loading}
-                    />
-                  }
-                  label="Notifier les utilisateurs"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={syncOptions.forceUpdate}
-                      onChange={(e) => setSyncOptions(prev => ({ 
-                        ...prev, 
-                        forceUpdate: e.target.checked 
-                      }))}
-                      disabled={loading}
-                    />
-                  }
-                  label="Forcer la mise à jour"
-                />
-              </Grid>
-            </Grid>
-          </Grid>
-          
-          <Grid item xs={12}>
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              <AlertTitle>Attention</AlertTitle>
-              Cette opération va synchroniser {syncScope === 'all' ? 'tous les prestataires' : 
-              syncScope === 'active' ? 'les prestataires actifs' : 
-              'les modifications récentes'} avec le serveur. 
-              Cette opération peut prendre plusieurs minutes.
-            </Alert>
-          </Grid>
-        </Grid>
-      </DialogContent>
-      
-      <DialogActions sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-        <Button 
-          onClick={onClose} 
-          disabled={loading}
-          sx={{ mr: 1 }}
-        >
-          Annuler
-        </Button>
-        <Button 
-          onClick={handleGlobalSync} 
-          variant="contained" 
-          color="primary"
-          disabled={loading}
-          startIcon={<SyncIcon />}
-        >
-          {loading ? 'Synchronisation en cours...' : 'Démarrer la synchronisation'}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
-
-// ==============================================
-// COMPOSANT PRINCIPAL - COMPLET
-// ==============================================
 const GestionPrestataires = () => {
-  const theme = useTheme();
-  
   // États principaux
   const [prestataires, setPrestataires] = useState([]);
   const [loading, setLoading] = useState({
     prestataires: false,
-    donnees: false,
+    details: false,
     action: false,
     sync: false,
-    globalSync: false
+    export: false
   });
   
-  // États pour les filtres avancés
+  // États de recherche et filtres
   const [filters, setFilters] = useState({
+    status: 'all',
+    type: 'all',
     search: '',
-    actif: '',
-    specialite: '',
-    cod_cen: '',
-    type_prestataire: '',
-    cod_pay: '',
-    disponibilite: '',
+    specialite: 'all',
+    centre: 'all',
+    pays: 'all',
     experience_min: '',
     experience_max: ''
   });
-  
-  // États pour la pagination et tri
   const [pagination, setPagination] = useState({
-    page: 0,
-    rowsPerPage: DEFAULT_ROWS_PER_PAGE,
+    current: 1,
+    pageSize: 10,
+    total: 0
+  });
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // États pour les statistiques
+  const [statistiques, setStatistiques] = useState({
     total: 0,
-    totalPages: 0
+    actifs: 0,
+    inactifs: 0,
+    totalCentres: 0,
+    totalPays: 0,
+    derniers_30_jours: 0,
+    par_specialite: [],
+    par_type: [],
+    par_pays: []
   });
-  
-  const [sortConfig, setSortConfig] = useState({
-    field: DEFAULT_SORT_FIELD,
-    direction: DEFAULT_SORT_DIRECTION
-  });
-  
-  // États pour les modales
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [showSyncModal, setShowSyncModal] = useState(false);
-  const [showGlobalSyncModal, setShowGlobalSyncModal] = useState(false);
-  const [selectedPrestataire, setSelectedPrestataire] = useState(null);
   
   // États pour les données
   const [centres, setCentres] = useState([]);
-  const [specialites, setSpecialites] = useState([]);
+  const [allCentres, setAllCentres] = useState([]);
   const [pays, setPays] = useState([]);
-  const [statistiques, setStatistiques] = useState({
-    generales: {
-      total: 0,
-      actifs: 0,
-      inactifs: 0,
-      pourcentage_actifs: 0,
-      pourcentage_inactifs: 0,
-      nombre_specialites: 0,
-      nombre_types: 0,
-      experience_moyenne: 0,
-      honoraires_moyens: 0,
-      nombre_pays: 0,
-      nombre_centres: 0
-    },
-    par_specialite: [],
-    par_type: [],
-    par_pays: [],
-    par_centre: []
+  const [specialites, setSpecialites] = useState([]);
+  
+  // États pour les modales et drawer
+  const [addModal, setAddModal] = useState({
+    visible: false,
+    loading: false,
+    currentStep: 0
   });
   
-  // États pour les notifications
-  const [notification, setNotification] = useState({
-    open: false,
-    message: '',
-    severity: 'success'
+  const [editModal, setEditModal] = useState({
+    visible: false,
+    loading: false,
+    prestataire: null
   });
   
-  // Menu contextuel
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [selectedMenuId, setSelectedMenuId] = useState(null);
-  
-  // États pour les filtres avancés
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  
-  // États pour la synchronisation
-  const [syncStatus, setSyncStatus] = useState({
-    lastSync: null,
-    syncInProgress: false,
-    syncErrors: [],
-    syncStats: {
-      success: 0,
-      failed: 0,
-      skipped: 0
-    }
+  const [detailsDrawer, setDetailsDrawer] = useState({
+    visible: false,
+    prestataire: null,
+    informations: {}
   });
   
-  // Référence pour la recherche avec debounce
-  const searchTimeoutRef = useRef(null);
+  const [syncModal, setSyncModal] = useState({
+    visible: false,
+    loading: false,
+    prestataire: null
+  });
   
-  // Chargement initial
-  useEffect(() => {
-    chargerDonneesInitiales();
-  }, []);
+  // États pour les formulaires
+  const [addForm] = Form.useForm();
+  const [editForm] = Form.useForm();
+  const [syncForm] = Form.useForm();
   
-  // Charger les prestataires quand les filtres, pagination ou tri changent
-  useEffect(() => {
-    chargerPrestataires();
-  }, [pagination.page, pagination.rowsPerPage, filters, sortConfig]);
+  // Données pour les formulaires
+  const typesPrestataire = [
+    { value: 'Médecin', label: 'Médecin' },
+    { value: 'Infirmier', label: 'Infirmier' },
+    { value: 'Kinésithérapeute', label: 'Kinésithérapeute' },
+    { value: 'Sage-femme', label: 'Sage-femme' },
+    { value: 'Pharmacien', label: 'Pharmacien' },
+    { value: 'Technicien de laboratoire', label: 'Technicien de laboratoire' },
+    { value: 'Aide-soignant', label: 'Aide-soignant' },
+    { value: 'Radiologue', label: 'Radiologue' },
+    { value: 'Chirurgien', label: 'Chirurgien' }
+  ];
   
-  // Débounce pour la recherche
-  useEffect(() => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    
-    searchTimeoutRef.current = setTimeout(() => {
-      if (pagination.page === 0) {
-        chargerPrestataires();
-      } else {
-        setPagination(prev => ({ ...prev, page: 0 }));
-      }
-    }, 500);
-    
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
+  const statusOptions = [
+    { value: 'Actif', label: 'Actif', color: 'success' },
+    { value: 'Inactif', label: 'Inactif', color: 'error' }
+  ];
+  
+  const disponibiliteOptions = [
+    { value: 'Disponible', label: 'Disponible', color: 'success' },
+    { value: 'En congé', label: 'En congé', color: 'warning' },
+    { value: 'Indisponible', label: 'Indisponible', color: 'error' },
+    { value: 'En formation', label: 'En formation', color: 'blue' },
+    { value: 'En mission', label: 'En mission', color: 'purple' }
+  ];
+  
+  const languesOptions = [
+    { value: 'Français', label: 'Français' },
+    { value: 'Anglais', label: 'Anglais' },
+    { value: 'Espagnol', label: 'Espagnol' },
+    { value: 'Arabe', label: 'Arabe' },
+    { value: 'Portugais', label: 'Portugais' }
+  ];
+  
+  const titresOptions = [
+    { value: 'Docteur', label: 'Docteur' },
+    { value: 'Professeur', label: 'Professeur' },
+    { value: 'Chargé de cours', label: 'Chargé de cours' },
+    { value: 'Maître de conférences', label: 'Maître de conférences' },
+    { value: 'Interne', label: 'Interne' },
+    { value: 'Externe', label: 'Externe' }
+  ];
+
+  // ==================== FONCTIONS UTILITAIRES ====================
+
+  const getStatusConfig = (status) => {
+    const configs = {
+      'Actif': { color: 'success', icon: <CheckCircleOutlined />, label: 'Actif' },
+      'Inactif': { color: 'error', icon: <CloseCircleOutlined />, label: 'Inactif' },
+      'En attente': { color: 'warning', icon: <ClockCircleOutlined />, label: 'En attente' }
     };
-  }, [filters.search]);
-  
-  const chargerDonneesInitiales = async () => {
-    setLoading(prev => ({ ...prev, donnees: true }));
+    return configs[status] || { color: 'default', icon: <InfoCircleOutlined />, label: status };
+  };
+
+  const getDisponibiliteConfig = (disponibilite) => {
+    const configs = {
+      'Disponible': { color: 'success', icon: <CheckCircleOutlined />, label: 'Disponible' },
+      'En congé': { color: 'warning', icon: <ClockCircleOutlined />, label: 'En congé' },
+      'Indisponible': { color: 'error', icon: <CloseCircleOutlined />, label: 'Indisponible' },
+      'En formation': { color: 'blue', icon: <BookOutlined />, label: 'En formation' },
+      'En mission': { color: 'purple', icon: <EnvironmentOutlined />, label: 'En mission' }
+    };
+    return configs[disponibilite] || { color: 'default', icon: <InfoCircleOutlined />, label: disponibilite };
+  };
+
+  const getTypeConfig = (type) => {
+    const configs = {
+      'Médecin': { color: 'blue', icon: <MedicineBoxOutlined/>, label: 'Médecin' },
+      'Infirmier': { color: 'green', icon: <TeamOutlined />, label: 'Infirmier' },
+      'Kinésithérapeute': { color: 'purple', icon: <UserOutlined />, label: 'Kinésithérapeute' },
+      'Sage-femme': { color: 'pink', icon: <UserOutlined />, label: 'Sage-femme' },
+      'Pharmacien': { color: 'orange', icon: <MedicineBoxOutlined />, label: 'Pharmacien' }
+    };
+    return configs[type] || { color: 'default', icon: <UserOutlined />, label: type };
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
     try {
-      await Promise.all([
-        chargerPays(),
-        chargerPrestataires(),
-        chargerCentres(),
-        chargerSpecialites(),
-        chargerStatistiques(),
-        checkSyncStatus()
-      ]);
+      return moment(dateString).format('DD/MM/YYYY');
     } catch (error) {
-      console.error('Erreur lors du chargement initial:', error);
-      showNotification('Erreur lors du chargement des données', 'error');
-    } finally {
-      setLoading(prev => ({ ...prev, donnees: false }));
+      return dateString;
     }
   };
-  
-  const chargerPrestataires = async () => {
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return '-';
+    try {
+      return moment(dateString).format('DD/MM/YYYY HH:mm');
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  // ==================== FONCTIONS DE CHARGEMENT ====================
+
+  const loadPrestataires = useCallback(async () => {
     setLoading(prev => ({ ...prev, prestataires: true }));
     try {
       const params = {
-        page: pagination.page + 1,
-        limit: pagination.rowsPerPage,
-        sortBy: sortConfig.field,
-        sortOrder: sortConfig.direction.toUpperCase()
+        page: pagination.current,
+        limit: pagination.pageSize,
+        ...(filters.status !== 'all' && filters.status ? { actif: filters.status === 'Actif' ? 1 : 0 } : {}),
+        ...(filters.type !== 'all' && filters.type ? { type_prestataire: filters.type } : {}),
+        ...(filters.search && { search: filters.search }),
+        ...(filters.specialite !== 'all' && filters.specialite ? { specialite: filters.specialite } : {}),
+        ...(filters.centre !== 'all' && filters.centre ? { cod_cen: filters.centre } : {}),
+        ...(filters.pays !== 'all' && filters.pays ? { cod_pay: filters.pays } : {}),
+        ...(filters.experience_min && { experience_min: filters.experience_min }),
+        ...(filters.experience_max && { experience_max: filters.experience_max })
       };
-      
-      // Ajouter les filtres
-      Object.keys(filters).forEach(key => {
-        if (filters[key] !== '' && filters[key] !== null && filters[key] !== undefined) {
-          params[key] = filters[key];
-        }
-      });
       
       const response = await prestatairesAPI.getAll(params);
       
       if (response.success) {
-        setPrestataires(response.data || response.prestataires || []);
+        const prestatairesData = response.data || response.prestataires || [];
+        
+        const formattedPrestataires = prestatairesData.map(prestataire => ({
+          ...prestataire,
+          key: prestataire.id || prestataire.COD_PRE || `prest_${Math.random().toString(36).substr(2, 9)}`,
+          nom_complet: `${prestataire.prenom || ''} ${prestataire.nom || ''}`.trim(),
+          isActif: prestataire.actif === 1 || prestataire.status === 'Actif'
+        }));
+        
+        setPrestataires(formattedPrestataires);
         setPagination(prev => ({
           ...prev,
-          total: response.total || response.pagination?.total || 0,
-          totalPages: response.totalPages || response.pagination?.totalPages || 0
+          total: response.total || response.pagination?.total || formattedPrestataires.length
         }));
+        
+        // Calcul des statistiques
+        const actifs = formattedPrestataires.filter(p => p.isActif).length;
+        const inactifs = formattedPrestataires.filter(p => !p.isActif).length;
+        
+        const trenteJours = moment().subtract(30, 'days');
+        const derniers_30_jours = formattedPrestataires.filter(p => 
+          moment(p.date_creation || p.DAT_CREUTIL).isAfter(trenteJours)
+        ).length;
+        
+        const specialitesUniques = [...new Set(
+          formattedPrestataires
+            .filter(p => p.specialite)
+            .map(p => p.specialite)
+        )];
+        
+        const typesUniques = [...new Set(
+          formattedPrestataires
+            .filter(p => p.type_prestataire)
+            .map(p => p.type_prestataire)
+        )];
+        
+        const paysUniques = [...new Set(
+          formattedPrestataires
+            .filter(p => p.cod_pay)
+            .map(p => p.cod_pay)
+        )];
+        
+        setStatistiques(prev => ({
+          ...prev,
+          total: response.total || response.pagination?.total || formattedPrestataires.length,
+          actifs,
+          inactifs,
+          derniers_30_jours,
+          par_specialite: specialitesUniques.map(s => ({ 
+            specialite: s, 
+            nombre: formattedPrestataires.filter(p => p.specialite === s).length 
+          })),
+          par_type: typesUniques.map(t => ({ 
+            type: t, 
+            nombre: formattedPrestataires.filter(p => p.type_prestataire === t).length 
+          })),
+          par_pays: paysUniques.map(p => ({ 
+            pays: p, 
+            nombre: formattedPrestataires.filter(prest => prest.cod_pay === p).length 
+          }))
+        }));
+        
+        message.success(`${formattedPrestataires.length} prestataire(s) chargé(s)`);
       } else {
-        throw new Error(response.message || 'Erreur lors du chargement des prestataires');
+        message.error(response.message || 'Erreur lors du chargement des prestataires');
+        setPrestataires([]);
       }
     } catch (error) {
       console.error('Erreur chargement prestataires:', error);
-      showNotification(error.message || 'Erreur lors du chargement des prestataires', 'error');
+      message.error('Erreur de connexion au serveur');
+      setPrestataires([]);
     } finally {
       setLoading(prev => ({ ...prev, prestataires: false }));
     }
-  };
-  
-  const chargerCentres = async () => {
-    try {
-      const response = await centresAPI.getAll();
-      if (response.success) {
-        setCentres(response.data || response.centres || []);
-      } else {
-        setCentres([]);
-      }
-    } catch (error) {
-      console.error('Erreur chargement centres:', error);
-      setCentres([]);
-    }
-  };
-  
-  const chargerSpecialites = async () => {
-    try {
-      const response = await prestatairesAPI.getSpecialites();
-      if (response.success) {
-        const specList = response.data || response.specialites || [];
-        const labels = specList.map(s => s.label || s.value || s.nom || s);
-        setSpecialites([...new Set(labels)].filter(Boolean));
-      } else {
-        setSpecialites([]);
-      }
-    } catch (error) {
-      console.error('Erreur chargement spécialités:', error);
-      setSpecialites([]);
-    }
-  };
-  
-  const chargerPays = async () => {
+  }, [filters, pagination.current, pagination.pageSize]);
+const loadCentres = useCallback(async () => {
+  setLoading(prev => ({ ...prev, centres: true }));
   try {
-    const response = await paysAPI.getAll();
+    // Charger les centres — si l'utilisateur est lié à un centre, ne charger que celui-ci
+    const user = (window && window.localStorage && localStorage.getItem('user')) ? JSON.parse(localStorage.getItem('user')) : null;
+    const userCentreId = user?.centre_id || user?.COD_CEN || user?.prestataire?.centre_id || null;
     
-    console.log('📊 Données pays reçues:', response); // Debug
+    let response;
+    if (user && !user.super_admin && userCentreId) {
+      const centreResult = await centresAPI.getById(userCentreId);
+      response = { success: centreResult.success, centres: centreResult.centre ? [centreResult.centre] : (centreResult.centres || []) };
+    } else {
+      response = await centresAPI.getAll({ limit: 1000 });
+    }
+    
+    console.log('✅ Centers loaded for Prestataires:', response);
     
     if (response.success) {
-      const paysList = response.data || response.pays || [];
-      console.log('📊 Structure du premier pays:', paysList[0]); // Debug
-      setPays(paysList);
+      const centresData = response.data || response.centres || [];
       
-      if (paysList.length === 0) {
-        showNotification(
-          'Aucun pays n\'est configuré. Veuillez configurer les pays avant d\'ajouter des prestataires.',
-          'warning'
-        );
-      }
+      const formattedCentres = centresData.map(centre => {
+        // Conversion FORCÉE en nombre
+        const centreId = centre.id || centre.COD_CEN || centre.code;
+        const codCen = parseInt(centreId, 10);
+        
+        if (isNaN(codCen)) {
+          console.warn(`⚠️ Centre ID invalide: ${centreId}`);
+        }
+        
+        return {
+          id: centreId,
+          key: centreId,
+          cod_cen: codCen, // FORCER en nombre
+          name: centre.nom || centre.LIB_CEN || centre.NOM_CENTRE || centre.name || `Centre ${centreId}`,
+          code: centre.code || centre.COD_CEN || centreId,
+          region: centre.region || centre.REGION || centre.COD_REG || 'Non spécifiée',
+          type: centre.type || centre.TYP_CEN || centre.TYPE_CENTRE || 'Centre de Santé',
+          telephone: centre.telephone || centre.TELEPHONE || centre.TR1_CEN || '',
+          adresse: centre.adresse || centre.ADRESSE || centre.NUM_ADR || '',
+          status: centre.status || centre.STATUT || centre.actif || 'Actif'
+        };
+      });
+      
+      setCentres(formattedCentres);
+      setAllCentres(formattedCentres);
+      
+      console.log(`✅ ${formattedCentres.length} centres chargés`, formattedCentres);
     } else {
-      console.error('❌ Erreur API pays:', response);
-      setPays([]);
-      showNotification('Erreur lors du chargement des pays', 'error');
+      // Fallback avec des nombres
+      const fallbackCentres = [
+        {
+          id: '42',
+          key: '42',
+          cod_cen: 42, // NOMBRE
+          name: "Hôpital Central de Bangui",
+          code: "1006",
+          region: "Centre",
+          type: "Centre Hospitalier",
+          telephone: "+236 21 61 00 00",
+          adresse: "Bangui, République Centrafricaine",
+          status: "Actif"
+        }
+      ];
+      
+      setCentres(fallbackCentres);
+      setAllCentres(fallbackCentres);
     }
   } catch (error) {
-    console.error('❌ Erreur chargement pays:', error);
-    setPays([]);
-    showNotification('Impossible de charger la liste des pays', 'error');
+    console.error('❌ Erreur chargement centres:', error);
+    message.error('Erreur lors du chargement des centres');
+    
+    // Fallback minimal avec nombre
+    const fallbackCentres = [
+      {
+        id: '42',
+        key: '42',
+        cod_cen: 42, // NOMBRE
+        name: "Hôpital Central de Bangui",
+        code: "1006",
+        region: "Centre",
+        type: "Centre Hospitalier",
+        telephone: "+236 21 61 00 00",
+        adresse: "Bangui, République Centrafricaine",
+        status: "Actif"
+      }
+    ];
+    
+    setCentres(fallbackCentres);
+    setAllCentres(fallbackCentres);
+  } finally {
+    setLoading(prev => ({ ...prev, centres: false }));
   }
-};
-  
-  const chargerStatistiques = async () => {
+}, []);
+
+  const loadPays = useCallback(async () => {
     try {
-      const response = await prestatairesAPI.getStatistiques();
-      if (response.success && response.statistiques) {
-        setStatistiques({
-          ...statistiques,
-          ...response.statistiques
-        });
-      }
-    } catch (error) {
-      console.error('Erreur chargement statistiques:', error);
-    }
-  };
-  
-  const checkSyncStatus = async () => {
-    try {
-      const response = await syncAPI.getStatus();
+      const response = await paysAPI.getAll();
+      
       if (response.success) {
-        setSyncStatus(prev => ({
-          ...prev,
-          lastSync: response.lastSync,
-          syncInProgress: response.inProgress,
-          syncStats: response.stats || prev.syncStats
+        const paysData = response.data || response.pays || [];
+        
+        const formattedPays = paysData.map(p => ({
+          value: p.COD_PAY || p.code || p.id || p.value,
+          label: p.LIB_PAY || p.nom || p.label || p.name || p.COD_PAY,
+          code_telephone: p.CODE_TELEPHONE || p.code_telephone || ''
         }));
+        
+        setPays(formattedPays);
+        
+        // Mettre à jour les statistiques
+        setStatistiques(prev => ({
+          ...prev,
+          totalPays: formattedPays.length
+        }));
+        
+        console.log(`✅ ${formattedPays.length} pays chargés`);
+      } else {
+        // Fallback
+        const fallbackPays = [
+          { value: 'CF', label: 'République Centrafricaine', code_telephone: '+236' },
+          { value: 'FR', label: 'France', code_telephone: '+33' },
+          { value: 'BE', label: 'Belgique', code_telephone: '+32' },
+          { value: 'CH', label: 'Suisse', code_telephone: '+41' }
+        ];
+        
+        setPays(fallbackPays);
+        setStatistiques(prev => ({
+          ...prev,
+          totalPays: fallbackPays.length
+        }));
+        
+        console.warn('⚠️ Utilisation des pays de fallback');
       }
     } catch (error) {
-      console.error('Erreur vérification statut sync:', error);
+      console.error('❌ Erreur chargement pays:', error);
+      message.error('Erreur lors du chargement des pays');
+      
+      // Fallback minimal
+      const fallbackPays = [
+        { value: 'CF', label: 'République Centrafricaine', code_telephone: '+236' }
+      ];
+      
+      setPays(fallbackPays);
+      setStatistiques(prev => ({
+        ...prev,
+        totalPays: fallbackPays.length
+      }));
     }
-  };
-  
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setPagination(prev => ({ ...prev, page: 0 }));
-  };
-  
-  const resetFilters = () => {
-    setFilters({
-      search: '',
-      actif: '',
-      specialite: '',
-      cod_cen: '',
-      type_prestataire: '',
-      cod_pay: '',
-      disponibilite: '',
-      experience_min: '',
-      experience_max: ''
-    });
-    setPagination(prev => ({ ...prev, page: 0 }));
-  };
-  
-  const handleSort = (field) => {
-    setSortConfig(prev => ({
-      field,
-      direction: prev.field === field && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
-  };
-  
-  const handleChangePage = (event, newPage) => {
-    setPagination(prev => ({ ...prev, page: newPage }));
-  };
-  
-  const handleChangeRowsPerPage = (event) => {
-    setPagination(prev => ({
-      ...prev,
-      rowsPerPage: parseInt(event.target.value, 10),
-      page: 0
-    }));
-  };
-  
-  const handleAddPrestataire = async (prestataireData) => {
-    setLoading(prev => ({ ...prev, action: true }));
+  }, []);
+
+  const loadSpecialites = useCallback(async () => {
     try {
-      const response = await prestatairesAPI.create(prestataireData);
+      const response = await prestatairesAPI.getSpecialites();
       
       if (response.success) {
-        showNotification('Prestataire ajouté avec succès', 'success');
-        setShowAddModal(false);
-        chargerPrestataires();
-        chargerStatistiques();
+        const specData = response.data || response.specialites || [];
         
-        // Synchroniser automatiquement le nouveau prestataire
+        // Formater les spécialités
+        const formattedSpecs = specData.map(spec => ({
+          value: spec.value || spec.code || spec.id || spec,
+          label: spec.label || spec.nom || spec.name || spec
+        }));
+        
+        setSpecialites(formattedSpecs);
+        
+        console.log(`✅ ${formattedSpecs.length} spécialités chargées`);
+      } else {
+        // Fallback
+        const fallbackSpecs = [
+          'Médecine générale',
+          'Cardiologie',
+          'Dermatologie',
+          'Pédiatrie',
+          'Gynécologie',
+          'Chirurgie',
+          'Radiologie',
+          'Anesthésiologie',
+          'Urgences'
+        ].map(spec => ({ value: spec, label: spec }));
+        
+        setSpecialites(fallbackSpecs);
+        console.warn('⚠️ Utilisation des spécialités de fallback');
+      }
+    } catch (error) {
+      console.error('❌ Erreur chargement spécialités:', error);
+      
+      // Fallback minimal
+      const fallbackSpecs = [
+        'Médecine générale',
+        'Cardiologie',
+        'Pédiatrie'
+      ].map(spec => ({ value: spec, label: spec }));
+      
+      setSpecialites(fallbackSpecs);
+    }
+  }, []);
+
+  const loadPrestataireDetails = useCallback(async (prestataireId) => {
+    setLoading(prev => ({ ...prev, details: true }));
+    try {
+      const response = await prestatairesAPI.getById(prestataireId);
+      
+      if (response.success && response.prestataire) {
+        const prestataire = response.prestataire;
+        
+        setDetailsDrawer({
+          visible: true,
+          prestataire: prestataire,
+          informations: {
+            personnelles: [
+              { label: 'ID', value: prestataire.id || prestataire.COD_PRE },
+              { label: 'Nom complet', value: `${prestataire.prenom || ''} ${prestataire.nom || ''}` },
+              { label: 'Spécialité', value: prestataire.specialite || '-' },
+              { label: 'Titre', value: prestataire.titre || '-' },
+              { label: 'Type', value: prestataire.type_prestataire || '-' },
+              { label: 'Numéro Licence', value: prestataire.num_licence || '-' },
+              { label: 'Numéro Ordre', value: prestataire.num_ordre || '-' }
+            ],
+            professionnelles: [
+              { label: 'Date obtention licence', value: formatDate(prestataire.date_obtention_licence) },
+              { label: 'Date expiration licence', value: formatDate(prestataire.date_expiration_licence) },
+              { label: 'Université formation', value: prestataire.universite_formation || '-' },
+              { label: 'Année diplôme', value: prestataire.annee_diplome || '-' },
+              { label: 'Expérience (années)', value: prestataire.experience_annee ? `${prestataire.experience_annee} ans` : '-' }
+            ],
+            contact: [
+              { label: 'Téléphone', value: prestataire.telephone || '-', icon: <PhoneOutlined /> },
+              { label: 'Email', value: prestataire.email || '-', icon: <MailOutlined /> },
+              { label: 'Numéro adresse', value: prestataire.num_adr || '-' },
+              { label: 'Centre de pratique', value: getCentreLabel(prestataire.cod_cen) || '-' },
+              { label: 'Lieu de pratique', value: prestataire.centre_pratique || '-' },
+              { label: 'Pays', value: getPaysLabel(prestataire.cod_pay) || '-' }
+            ],
+            tarification: [
+              { label: 'Honoraires', value: prestataire.honoraires ? `${parseFloat(prestataire.honoraires).toLocaleString('fr-FR')} FCFA` : '-' },
+              { label: 'Langue parlée', value: prestataire.langue_parlee || '-' },
+              { label: 'Disponibilité', value: prestataire.disponibilite || '-' },
+              { label: 'Statut BD', value: (prestataire.actif === 1 || prestataire.status === 'Actif') ? 'Actif (1)' : 'Inactif (0)' }
+            ],
+            systeme: [
+              { label: 'Date création', value: formatDateTime(prestataire.date_creation || prestataire.DAT_CREUTIL) },
+              { label: 'Date modification', value: formatDateTime(prestataire.date_modification || prestataire.DAT_MODUTIL) },
+              { label: 'Créé par', value: prestataire.COD_CREUTIL || '-' },
+              { label: 'Modifié par', value: prestataire.COD_MODUTIL || '-' }
+            ]
+          }
+        });
+        
+        message.success('Détails du prestataire chargés');
+      } else {
+        message.error(response.message || 'Erreur lors du chargement des détails');
+      }
+    } catch (error) {
+      console.error('❌ Erreur chargement détails:', error);
+      message.error('Erreur lors du chargement des détails');
+    } finally {
+      setLoading(prev => ({ ...prev, details: false }));
+    }
+  }, [centres, pays]);
+
+  const getCentreLabel = (codCen) => {
+    if (!codCen) return '';
+    const centre = centres.find(c => c.cod_cen == codCen || c.id == codCen);
+    return centre ? centre.name : codCen;
+  };
+
+  const getPaysLabel = (codPay) => {
+    if (!codPay) return '';
+    const pay = pays.find(p => p.value == codPay);
+    return pay ? pay.label : codPay;
+  };
+
+  // ==================== FONCTIONS DE GESTION ====================
+
+  const handleAddPrestataire = async (values) => {
+    setAddModal(prev => ({ ...prev, loading: true }));
+    
+    try {
+      const prestataireData = {
+        type_prestataire: values.type_prestataire,
+        nom: values.nom,
+        prenom: values.prenom,
+        specialite: values.specialite,
+        titre: values.titre || null,
+        num_licence: values.num_licence || null,
+        num_ordre: values.num_ordre || null,
+        date_obtention_licence: values.date_obtention_licence ? values.date_obtention_licence.format('YYYY-MM-DD') : null,
+        date_expiration_licence: values.date_expiration_licence ? values.date_expiration_licence.format('YYYY-MM-DD') : null,
+        universite_formation: values.universite_formation || null,
+        annee_diplome: values.annee_diplome || null,
+        experience_annee: values.experience_annee || 0,
+        telephone: values.telephone || null,
+        email: values.email || null,
+        cod_cen: values.cod_cen || null,
+        centre_pratique: values.centre_pratique || null,
+        cod_pay: values.cod_pay,
+        num_adr: values.num_adr || null,
+        honoraires: values.honoraires || null,
+        langue_parlee: values.langue_parlee || 'Français',
+        disponibilite: values.disponibilite || 'Disponible',
+        actif: values.actif ? 1 : 0
+      };
+      
+      const result = await prestatairesAPI.create(prestataireData);
+      
+      if (result.success) {
+        message.success('Prestataire créé avec succès');
+        setAddModal({ visible: false, loading: false, currentStep: 0 });
+        addForm.resetFields();
+        loadPrestataires();
+        
+        // Synchronisation automatique
         try {
           await syncAPI.syncPrestataire({
-            prestataireId: response.data.id || response.data.COD_PRE,
+            prestataireId: result.data.id || result.data.COD_PRE,
             operation: 'create',
-            data: response.data
+            data: result.data
           });
+          message.info('Synchronisation automatique effectuée');
         } catch (syncError) {
           console.warn('Synchronisation automatique échouée:', syncError);
         }
       } else {
-        throw new Error(response.message || 'Erreur lors de l\'ajout du prestataire');
+        throw new Error(result.message || 'Erreur lors de la création');
       }
     } catch (error) {
-      console.error('Erreur ajout prestataire:', error);
-      showNotification(error.message || 'Erreur lors de l\'ajout du prestataire', 'error');
-      throw error;
-    } finally {
-      setLoading(prev => ({ ...prev, action: false }));
+      console.error('❌ Erreur création prestataire:', error);
+      message.error(error.message || 'Erreur lors de la création du prestataire');
+      setAddModal(prev => ({ ...prev, loading: false }));
     }
   };
-  
-  const handleEditPrestataire = async (prestataireData) => {
-    setLoading(prev => ({ ...prev, action: true }));
-    try {
-      if (!selectedPrestataire?.id) {
-        throw new Error('Aucun prestataire sélectionné');
-      }
-      
-      const response = await prestatairesAPI.update(selectedPrestataire.id, prestataireData);
-      
-      if (response.success) {
-        showNotification('Prestataire modifié avec succès', 'success');
-        setShowEditModal(false);
-        chargerPrestataires();
-        chargerStatistiques();
-        
-        // Synchroniser automatiquement les modifications
-        try {
-          await syncAPI.syncPrestataire({
-            prestataireId: selectedPrestataire.id,
-            operation: 'update',
-            data: { ...selectedPrestataire, ...prestataireData }
-          });
-        } catch (syncError) {
-          console.warn('Synchronisation automatique échouée:', syncError);
-        }
-      } else {
-        throw new Error(response.message || 'Erreur lors de la modification');
-      }
-    } catch (error) {
-      console.error('Erreur modification prestataire:', error);
-      showNotification(error.message || 'Erreur lors de la modification du prestataire', 'error');
-      throw error;
-    } finally {
-      setLoading(prev => ({ ...prev, action: false }));
-    }
-  };
-  
-  const handleDeletePrestataire = async (id) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir désactiver ce prestataire ?')) {
+
+  const handleUpdatePrestataire = async (values) => {
+    if (!editModal.prestataire?.id) {
+      message.error('Aucun prestataire sélectionné');
       return;
     }
     
-    setLoading(prev => ({ ...prev, action: true }));
+    setEditModal(prev => ({ ...prev, loading: true }));
+    
     try {
-      const response = await prestatairesAPI.delete(id);
+      const prestataireData = {
+        type_prestataire: values.type_prestataire,
+        nom: values.nom,
+        prenom: values.prenom,
+        specialite: values.specialite,
+        titre: values.titre || null,
+        num_licence: values.num_licence || null,
+        num_ordre: values.num_ordre || null,
+        date_obtention_licence: values.date_obtention_licence ? values.date_obtention_licence.format('YYYY-MM-DD') : null,
+        date_expiration_licence: values.date_expiration_licence ? values.date_expiration_licence.format('YYYY-MM-DD') : null,
+        universite_formation: values.universite_formation || null,
+        annee_diplome: values.annee_diplome || null,
+        experience_annee: values.experience_annee || 0,
+        telephone: values.telephone || null,
+        email: values.email || null,
+        cod_cen: values.cod_cen || null,
+        centre_pratique: values.centre_pratique || null,
+        cod_pay: values.cod_pay,
+        num_adr: values.num_adr || null,
+        honoraires: values.honoraires || null,
+        langue_parlee: values.langue_parlee || 'Français',
+        disponibilite: values.disponibilite || 'Disponible',
+        actif: values.actif ? 1 : 0
+      };
       
-      if (response.success) {
-        showNotification('Prestataire désactivé avec succès', 'success');
-        chargerPrestataires();
-        chargerStatistiques();
+      const result = await prestatairesAPI.update(editModal.prestataire.id, prestataireData);
+      
+      if (result.success) {
+        message.success('Prestataire mis à jour avec succès');
+        setEditModal({ visible: false, loading: false, prestataire: null });
+        editForm.resetFields();
+        loadPrestataires();
         
-        // Synchroniser la désactivation
+        // Synchronisation automatique
         try {
           await syncAPI.syncPrestataire({
-            prestataireId: id,
-            operation: 'delete',
-            data: { actif: 0 }
+            prestataireId: editModal.prestataire.id,
+            operation: 'update',
+            data: { ...editModal.prestataire, ...prestataireData }
           });
+          message.info('Synchronisation automatique effectuée');
         } catch (syncError) {
           console.warn('Synchronisation automatique échouée:', syncError);
         }
       } else {
-        throw new Error(response.message || 'Erreur lors de la désactivation');
+        throw new Error(result.message || 'Erreur lors de la mise à jour');
       }
     } catch (error) {
-      console.error('Erreur suppression prestataire:', error);
-      showNotification(error.message || 'Erreur lors de la désactivation du prestataire', 'error');
-    } finally {
-      setLoading(prev => ({ ...prev, action: false }));
+      console.error('❌ Erreur mise à jour prestataire:', error);
+      message.error(error.message || 'Erreur lors de la mise à jour du prestataire');
+      setEditModal(prev => ({ ...prev, loading: false }));
     }
   };
-  
-  const handleChangeStatus = async (id, newStatus) => {
-    setLoading(prev => ({ ...prev, action: true }));
+
+  const handleDeletePrestataire = async (prestataireId) => {
+    try {
+      const result = await prestatairesAPI.update(prestataireId, { actif: 0 });
+      
+      if (result.success) {
+        message.success('Prestataire désactivé avec succès');
+        loadPrestataires();
+        
+        // Synchronisation automatique
+        try {
+          await syncAPI.syncPrestataire({
+            prestataireId: prestataireId,
+            operation: 'delete',
+            data: { actif: 0 }
+          });
+          message.info('Synchronisation automatique effectuée');
+        } catch (syncError) {
+          console.warn('Synchronisation automatique échouée:', syncError);
+        }
+      } else {
+        message.error(result.message || 'Erreur lors de la désactivation');
+      }
+    } catch (error) {
+      console.error('❌ Erreur suppression prestataire:', error);
+      message.error('Erreur lors de la désactivation du prestataire');
+    }
+  };
+
+  const handleChangeStatus = async (prestataireId, newStatus) => {
     try {
       const updateData = {
         actif: newStatus === 'Actif' ? 1 : 0
       };
       
-      const response = await prestatairesAPI.update(id, updateData);
+      const result = await prestatairesAPI.update(prestataireId, updateData);
       
-      if (response.success) {
-        showNotification(`Statut modifié en "${newStatus}" avec succès`, 'success');
-        chargerPrestataires();
-        chargerStatistiques();
+      if (result.success) {
+        message.success(`Statut modifié en "${newStatus}" avec succès`);
+        loadPrestataires();
         
-        // Synchroniser le changement de statut
+        // Synchronisation automatique
         try {
           await syncAPI.syncPrestataire({
-            prestataireId: id,
+            prestataireId: prestataireId,
             operation: 'status',
             data: updateData
           });
@@ -3486,1161 +746,1768 @@ const GestionPrestataires = () => {
           console.warn('Synchronisation automatique échouée:', syncError);
         }
       } else {
-        throw new Error(response.message || 'Erreur lors du changement de statut');
+        throw new Error(result.message || 'Erreur lors du changement de statut');
       }
     } catch (error) {
-      console.error('Erreur changement statut:', error);
-      showNotification(error.message || 'Erreur lors du changement de statut', 'error');
-    } finally {
-      setLoading(prev => ({ ...prev, action: false }));
+      console.error('❌ Erreur changement statut:', error);
+      message.error(error.message || 'Erreur lors du changement de statut');
     }
   };
+
+ const handleSyncPrestataire = async (values) => {
+  if (!syncModal.prestataire?.id) {
+    message.error('Aucun prestataire sélectionné');
+    return;
+  }
   
-  const handleSyncWithCentrePrestataire = async (syncData) => {
-    // Vérifier la présence du token
-    if (typeof window === 'undefined') {
-      console.error('❌ Exécution côté serveur - localStorage indisponible');
-      return;
+  setSyncModal(prev => ({ ...prev, loading: true }));
+  
+  try {
+    // Conversion EXPLICITE en nombres entiers
+    const codPre = parseInt(syncModal.prestataire.id || syncModal.prestataire.COD_PRE);
+    const codCen = parseInt(values.cod_cen);
+    
+    // Validation avant envoi
+    if (isNaN(codPre) || isNaN(codCen)) {
+      throw new Error('COD_PRE et COD_CEN doivent être des nombres valides');
     }
     
-    const token = localStorage.getItem('token');
-    if (!token) {
-      console.error('❌ Token manquant - Redirection vers la connexion');
-      window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
-      return;
-    }
+    const syncData = {
+      COD_PRE: codPre,
+      COD_CEN: codCen,
+      DEB_AGRP: values.date_debut ? values.date_debut.format('YYYY-MM-DD') : null,
+      FIN_AGRP: values.date_fin ? values.date_fin.format('YYYY-MM-DD') : null,
+      OBS_AGRP: values.observations || null,
+      TR1_AGRP: values.tarif1 ? parseFloat(values.tarif1) : null,
+      TR2_AGRP: values.tarif2 ? parseFloat(values.tarif2) : null,
+      TR3_AGRP: values.tarif3 ? parseFloat(values.tarif3) : null,
+      TPS_AGRP: values.tps ? parseFloat(values.tps) : null,
+      TVA_AGRP: values.tva ? parseFloat(values.tva) : null
+    };
     
-    // Vérifier la validité du token (optionnel)
-    const userStr = localStorage.getItem('user');
-    if (!userStr) {
-      console.error('❌ Informations utilisateur manquantes');
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-      return;
-    }
+    console.log('📤 Données de synchronisation AVANT envoi:', syncData);
+    console.log('Type COD_PRE:', typeof syncData.COD_PRE, 'Type COD_CEN:', typeof syncData.COD_CEN);
     
-    setLoading(prev => ({ ...prev, sync: true }));
+    const response = await syncAPI.syncCentrePrestataire(syncData);
     
-    try {
-      let response;
-      
-      // Selon le type d'opération, appeler l'API appropriée
-      switch (syncData.typeOperation) {
-        case 'synccentre':
-          // Pour la synchronisation centre-prestataire
-          if (!syncData.centreData) {
-            throw new Error('Données de centre manquantes');
-          }
-          
-          response = await syncAPI.syncCentrePrestataire(syncData.centreData);
-          break;
-          
-        case 'fullsync':
-          // Synchronisation complète
-          response = await syncAPI.fullSync(syncData);
-          break;
-          
-        case 'validate':
-          // Validation des données
-          response = await syncAPI.validatePrestataire(syncData);
-          break;
-          
-        case 'backup':
-          // Sauvegarde
-          response = await syncAPI.backupPrestataires(syncData);
-          break;
-          
-        case 'restore':
-          // Restauration
-          response = await syncAPI.restorePrestataires(syncData);
-          break;
-          
-        default:
-          throw new Error(`Type d'opération non supporté : ${syncData.typeOperation}`);
-      }
-      
-      if (response.success) {
-        showNotification('Opération de synchronisation réussie', 'success');
-        setShowSyncModal(false);
-        
-        // Recharger les données si nécessaire
-        if (syncData.typeOperation === 'synccentre') {
-          chargerPrestataires();
-        }
-      } else {
-        throw new Error(response.message || 'Erreur lors de la synchronisation');
-      }
-    } catch (error) {
-      console.error('❌ Erreur synchronisation:', error);
-      
-      let errorMessage = error.message || 'Erreur lors de la synchronisation';
-      
-      // Messages d'erreur plus spécifiques
-      if (error.message.includes('network') || error.message.includes('fetch')) {
-        errorMessage = 'Problème de connexion réseau. Vérifiez votre connexion internet.';
-      } else if (error.message.includes('401') || error.message.includes('403')) {
-        errorMessage = 'Session expirée. Veuillez vous reconnecter.';
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-      } else if (error.message.includes('timeout')) {
-        errorMessage = 'La synchronisation a pris trop de temps et a été interrompue.';
-      }
-      
-      showNotification(errorMessage, 'error');
-    } finally {
-      setLoading(prev => ({ ...prev, sync: false }));
-    }
-  };
-  
-  const handleGlobalSync = async (syncConfig) => {
-    setLoading(prev => ({ ...prev, globalSync: true }));
-    try {
-      console.log('🌐 Lancement de la synchronisation globale:', syncConfig);
-      
-      // Mettre à jour le statut
-      setSyncStatus(prev => ({
-        ...prev,
-        syncInProgress: true,
-        lastSync: null
-      }));
-      
-      // Appeler l'API de synchronisation globale
-      const response = await syncAPI.globalSync(syncConfig);
-      
-      if (response.success) {
-        showNotification('Synchronisation globale terminée avec succès', 'success');
-        setShowGlobalSyncModal(false);
-        
-        // Mettre à jour le statut
-        setSyncStatus(prev => ({
-          ...prev,
-          lastSync: new Date().toISOString(),
-          syncInProgress: false,
-          syncStats: response.stats || prev.syncStats,
-          syncErrors: response.errors || []
-        }));
-        
-        // Rafraîchir les données
-        chargerPrestataires();
-        chargerStatistiques();
-        
-        // Afficher le rapport de synchronisation
-        if (response.report) {
-          showNotification(
-            `Synchronisation terminée: ${response.report.success} réussis, ${response.report.failed} échoués`,
-            response.report.failed > 0 ? 'warning' : 'success'
-          );
-        }
-      } else {
-        throw new Error(response.message || 'Erreur lors de la synchronisation globale');
-      }
-    } catch (error) {
-      console.error('❌ Erreur synchronisation globale:', error);
-      
-      let errorMessage = error.message || 'Erreur lors de la synchronisation globale';
-      
-      if (error.message.includes('timeout')) {
-        errorMessage = 'La synchronisation a pris trop de temps et a été interrompue.';
-      } else if (error.message.includes('network')) {
-        errorMessage = 'Problème de réseau. Vérifiez votre connexion.';
-      }
-      
-      showNotification(errorMessage, 'error');
-      
-      // Mettre à jour le statut
-      setSyncStatus(prev => ({
-        ...prev,
-        syncInProgress: false,
-        syncErrors: [...prev.syncErrors, {
-          timestamp: new Date().toISOString(),
-          operation: 'global',
-          error: errorMessage
-        }]
-      }));
-    } finally {
-      setLoading(prev => ({ ...prev, globalSync: false }));
-    }
-  };
-  
-  const handleExport = () => {
-    try {
-      const headers = [
-        'ID', 'Nom', 'Prénom', 'Spécialité', 'Type', 'Titre',
-        'Numéro Licence', 'Numéro Ordre', 'Date Obtention Licence', 'Date Expiration Licence',
-        'Université Formation', 'Année Diplôme', 'Expérience (années)',
-        'Téléphone', 'Email', 'Numéro Adresse',
-        'Code Centre', 'Centre Pratique', 'Code Pays',
-        'Honoraires (FCFA)', 'Langue Parlée', 'Disponibilité',
-        'Statut BD', 'Date Création', 'Date Modification'
-      ];
-      
-      const rows = prestataires.map(p => [
-        p.id || p.COD_PRE,
-        p.nom,
-        p.prenom,
-        p.specialite,
-        p.type_prestataire,
-        p.titre,
-        p.num_licence || '',
-        p.num_ordre || '',
-        formatDate(p.date_obtention_licence),
-        formatDate(p.date_expiration_licence),
-        p.universite_formation || '',
-        p.annee_diplome || '',
-        p.experience_annee || 0,
-        p.telephone || '',
-        p.email || '',
-        p.num_adr || '',
-        p.cod_cen || '',
-        p.centre_pratique || '',
-        p.cod_pay || '',
-        p.honoraires || '',
-        p.langue_parlee || '',
-        p.disponibilite || '',
-        isPrestataireActif(p) ? 'Actif (1)' : 'Inactif (0)',
-        formatDateTime(p.date_creation),
-        formatDateTime(p.date_modification)
-      ]);
-      
-      const csvContent = [
-        headers.join(';'),
-        ...rows.map(row => row.map(cell => `"${cell}"`).join(';'))
-      ].join('\n');
-      
-      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `prestataires_${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
-      showNotification('Export CSV généré avec succès', 'success');
-    } catch (error) {
-      console.error('Erreur export:', error);
-      showNotification('Erreur lors de l\'export', 'error');
-    }
-  };
-  
-  const handleMenuOpen = (event, id) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedMenuId(id);
-  };
-  
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setSelectedMenuId(null);
-  };
-  
-  const showNotification = useCallback((message, severity = 'success') => {
-    setNotification({
-      open: true,
-      message,
-      severity
-    });
-  }, []);
-  
-  // Données pour les graphiques
-  const chartData = useMemo(() => {
-    const generales = statistiques?.generales || {};
-    const actifs = generales.actifs || 0;
-    const inactifs = generales.inactifs || 0;
-    
-    return [
-      { name: 'Actifs', value: actifs, color: theme.palette.success.main },
-      { name: 'Inactifs', value: inactifs, color: theme.palette.error.main }
-    ].filter(item => item.value > 0);
-  }, [statistiques, theme]);
-  
-  const specialiteChartData = useMemo(() => {
-    return (statistiques?.par_specialite || []).slice(0, 5).map(item => ({
-      name: item.specialite?.substring(0, 20) || 'Non spécifié',
-      value: item.nombre || 0
-    }));
-  }, [statistiques?.par_specialite]);
-  
-  // Calcul des options de pays pour les filtres
-  const paysOptions = useMemo(() => {
-    if (!pays || pays.length === 0) return [];
-    return pays.map(p => ({
-      value: p.COD_PAY || p.code || p.id,
-      label: p.LIB_PAY || p.nom || p.label || p.COD_PAY || p.name
-    }));
-  }, [pays]);
-  
-  const statsCards = useMemo(() => {
-    const generales = statistiques?.generales || {};
-    
-    return [
-      {
-        title: 'Total',
-        value: generales.total || 0,
-        icon: PersonIcon,
-        color: 'primary',
-        subtitle: 'Prestataires enregistrés',
-        onClick: () => resetFilters()
-      },
-      {
-        title: 'Actifs',
-        value: generales.actifs || 0,
-        icon: CheckCircleIcon,
-        color: 'success',
-        subtitle: `${generales.pourcentage_actifs || 0}% du total`,
-        onClick: () => setFilters(prev => ({ ...prev, actif: '1' }))
-      },
-      {
-        title: 'Spécialités',
-        value: generales.nombre_specialites || 0,
-        icon: HospitalIcon,
-        color: 'info',
-        subtitle: 'Différentes spécialités'
-      },
-      {
-        title: 'Centres',
-        value: centres.length || 0,
-        icon: BusinessIcon,
-        color: 'warning',
-        subtitle: 'Centres disponibles'
-      }
-    ];
-  }, [statistiques, centres]);
-  
-  const syncStatusCard = useMemo(() => ({
-    title: 'Dernière sync',
-    value: syncStatus.lastSync ? formatDateTime(syncStatus.lastSync) : 'Jamais',
-    icon: syncStatus.syncInProgress ? SyncIcon : 
-          syncStatus.lastSync ? SyncIcon : SyncProblemIcon,
-    color: syncStatus.syncInProgress ? 'warning' : 
-           syncStatus.lastSync ? 'success' : 'error',
-    subtitle: syncStatus.syncInProgress ? 'Synchronisation en cours...' : 
-              syncStatus.lastSync ? 'Synchronisé' : 'Non synchronisé',
-    onClick: () => setShowGlobalSyncModal(true)
-  }), [syncStatus]);
-  
-  return (
-    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-      <Box sx={{ flexGrow: 1, p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
-        {/* En-tête */}
-        <Box sx={{ mb: 4 }}>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-            <Box>
-              <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                <PersonIcon sx={{ mr: 2, verticalAlign: 'middle' }} />
-                Gestion des Prestataires
-              </Typography>
-              <Typography variant="body1" color="text.secondary">
-                {pagination.total} prestataire(s) • Page {pagination.page + 1} sur {Math.max(1, pagination.totalPages)}
-                {pays.length > 0 && ` • ${pays.length} pays disponible(s)`}
-                {centres.length > 0 && ` • ${centres.length} centres disponible(s)`}
-                {syncStatus.lastSync && ` • Dernière sync: ${formatDateTime(syncStatus.lastSync)}`}
-              </Typography>
-            </Box>
-            <Stack direction="row" spacing={2}>
-              <Button
-                variant="outlined"
-                startIcon={<RefreshIcon />}
-                onClick={chargerDonneesInitiales}
-                disabled={loading.donnees}
-              >
-                Actualiser
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<SyncIcon />}
-                onClick={() => setShowGlobalSyncModal(true)}
-                disabled={loading.globalSync}
-                color={syncStatus.lastSync ? "success" : "warning"}
-              >
-                Synchroniser
-              </Button>
-            
-<Button
-  variant="contained"
-  startIcon={<AddIcon />}
-  onClick={() => {
-    if (pays.length === 0) {
-      showNotification(
-        'Impossible d\'ajouter un prestataire : aucun pays disponible. Veuillez configurer les pays d\'abord.',
-        'error'
-      );
-      chargerPays(); // Recharger les pays
+    if (response.success) {
+      message.success('Synchronisation réussie !');
+      setSyncModal({ visible: false, loading: false, prestataire: null });
+      syncForm.resetFields();
     } else {
-      setShowAddModal(true);
+      throw new Error(response.message || 'Erreur lors de la synchronisation');
     }
-  }}
-  disabled={loading.donnees || pays.length === 0}
-  sx={{
-    position: 'relative',
-    '&::after': pays.length === 0 ? {
-      content: '"!"',
-      position: 'absolute',
-      top: -5,
-      right: -5,
-      backgroundColor: 'error.main',
-      color: 'white',
-      borderRadius: '50%',
-      width: 20,
-      height: 20,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '12px',
-      fontWeight: 'bold'
-    } : {}
-  }}
->
-  Nouveau Prestataire
-  {pays.length === 0 && (
-    <Tooltip title="Aucun pays disponible. Configurez les pays d'abord.">
-      <WarningIcon sx={{ ml: 1, fontSize: 16 }} />
-    </Tooltip>
-  )}
-</Button>
-            </Stack>
-          </Box>
-          <LinearProgress 
-            sx={{ 
-              opacity: loading.donnees ? 1 : 0,
-              transition: 'opacity 0.3s',
-              mb: 2 
-            }} 
+  } catch (error) {
+    console.error('❌ Erreur synchronisation:', error);
+    
+    let errorMessage = error.message || 'Erreur lors de la synchronisation';
+    
+    if (error.message.includes('COD_PRE') && error.message.includes('n\'existe pas')) {
+      errorMessage = `Le prestataire avec l'ID ${syncModal.prestataire.id} n'existe pas dans la base de données.`;
+    } else if (error.message.includes('COD_CEN') && error.message.includes('n\'existe pas')) {
+      errorMessage = `Le centre avec l'ID ${syncForm.getFieldValue('cod_cen')} n'existe pas dans la base de données.`;
+    } else if (error.message.includes('400')) {
+      errorMessage = 'Données invalides. Vérifiez que les champs COD_PRE et COD_CEN sont des nombres valides.';
+    } else if (error.message.includes('500')) {
+      errorMessage = 'Erreur serveur. Contactez l\'administrateur.';
+    }
+    
+    message.error(errorMessage);
+  } finally {
+    setSyncModal(prev => ({ ...prev, loading: false }));
+  }
+};
+
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setPagination(prev => ({ ...prev, current: 1 }));
+  };
+
+  const handleResetFilters = () => {
+    setFilters({
+      status: 'all',
+      type: 'all',
+      search: '',
+      specialite: 'all',
+      centre: 'all',
+      pays: 'all',
+      experience_min: '',
+      experience_max: ''
+    });
+    setPagination(prev => ({ ...prev, current: 1 }));
+  };
+
+  const handleExportCSV = async () => {
+    setLoading(prev => ({ ...prev, export: true }));
+    try {
+      const response = await prestatairesAPI.getAll({ limit: 10000 });
+      
+      if (response.success) {
+        const prestatairesData = response.data || response.prestataires || [];
+        
+        const headers = [
+          'ID', 'Nom', 'Prénom', 'Spécialité', 'Type', 'Titre',
+          'Numéro Licence', 'Numéro Ordre', 'Date Obtention Licence', 'Date Expiration Licence',
+          'Université Formation', 'Année Diplôme', 'Expérience (années)',
+          'Téléphone', 'Email', 'Numéro Adresse',
+          'Code Centre', 'Centre Pratique', 'Code Pays',
+          'Honoraires (FCFA)', 'Langue Parlée', 'Disponibilité',
+          'Statut BD', 'Date Création', 'Date Modification'
+        ];
+        
+        const rows = prestatairesData.map(p => [
+          p.id || p.COD_PRE,
+          p.nom,
+          p.prenom,
+          p.specialite,
+          p.type_prestataire,
+          p.titre,
+          p.num_licence || '',
+          p.num_ordre || '',
+          formatDate(p.date_obtention_licence),
+          formatDate(p.date_expiration_licence),
+          p.universite_formation || '',
+          p.annee_diplome || '',
+          p.experience_annee || 0,
+          p.telephone || '',
+          p.email || '',
+          p.num_adr || '',
+          p.cod_cen || '',
+          p.centre_pratique || '',
+          p.cod_pay || '',
+          p.honoraires || '',
+          p.langue_parlee || '',
+          p.disponibilite || '',
+          (p.actif === 1 || p.status === 'Actif') ? 'Actif (1)' : 'Inactif (0)',
+          formatDateTime(p.date_creation),
+          formatDateTime(p.date_modification)
+        ]);
+        
+        const csvContent = [
+          headers.join(';'),
+          ...rows.map(row => row.map(cell => `"${cell}"`).join(';'))
+        ].join('\n');
+        
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `prestataires_${moment().format('YYYY-MM-DD')}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        message.success('Export CSV généré avec succès');
+      } else {
+        message.error(response.message || 'Erreur lors de l\'export');
+      }
+    } catch (error) {
+      console.error('❌ Erreur export:', error);
+      message.error('Erreur lors de l\'export des données');
+    } finally {
+      setLoading(prev => ({ ...prev, export: false }));
+    }
+  };
+
+  const handleSearchCenters = useCallback((value) => {
+    if (value && value.trim() !== '') {
+      const searchLower = value.toLowerCase();
+      const filtered = allCentres.filter(centre => {
+        const name = centre.name ? String(centre.name).toLowerCase() : '';
+        const code = centre.code ? String(centre.code).toLowerCase() : '';
+        const region = centre.region ? String(centre.region).toLowerCase() : '';
+        const type = centre.type ? String(centre.type).toLowerCase() : '';
+        return name.includes(searchLower) || code.includes(searchLower) || 
+               region.includes(searchLower) || type.includes(searchLower);
+      });
+      setCentres(filtered);
+    } else {
+      setCentres(allCentres);
+    }
+  }, [allCentres]);
+
+  // ==================== CONFIGURATION DES COLONNES DU TABLEAU ====================
+
+  const prestatairesColumns = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 80,
+      render: (text) => <Text type="secondary">#{text}</Text>
+    },
+    {
+      title: 'Nom & Prénom',
+      dataIndex: 'nom_complet',
+      key: 'nom_complet',
+      width: 200,
+      render: (text, record) => (
+        <Space>
+          <Avatar 
+            size="large" 
+            icon={<UserOutlined />}
+            style={{ 
+              backgroundColor: record.isActif ? '#1890ff' : '#d9d9d9',
+              color: '#fff'
+            }}
           />
-        </Box>
-
-        {/* Statistiques */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          {statsCards.map((stat, index) => (
-            <Grid item xs={12} sm={6} md={3} key={index}>
-              <StatCard {...stat} loading={loading.donnees} />
-            </Grid>
-          ))}
-          
-          {/* Carte de statut de synchronisation */}
-          <Grid item xs={12} sm={6} md={3}>
-            <StatCard {...syncStatusCard} loading={loading.globalSync} />
-          </Grid>
-        </Grid>
-
-        {/* Graphiques */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3, borderRadius: 3, height: '100%' }}>
-              <Typography variant="h6" fontWeight="bold" gutterBottom>
-                Répartition par statut (BD)
-              </Typography>
-              <Box sx={{ height: 300 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={chartData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {chartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip 
-                      formatter={(value) => [value, 'Nombre']}
-                    />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Box>
-            </Paper>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3, borderRadius: 3, height: '100%' }}>
-              <Typography variant="h6" fontWeight="bold" gutterBottom>
-                Top 5 des spécialités
-              </Typography>
-              <Box sx={{ height: 300 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={specialiteChartData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="name" 
-                      angle={-45}
-                      textAnchor="end"
-                      height={60}
-                    />
-                    <YAxis />
-                    <RechartsTooltip />
-                    <Bar 
-                      dataKey="value" 
-                      fill={theme.palette.primary.main}
-                      name="Nombre"
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-            </Paper>
-          </Grid>
-        </Grid>
-
-        {/* Filtres et recherche */}
-        <Paper sx={{ p: 3, borderRadius: 3, mb: 4 }}>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-            <Typography variant="h6" fontWeight="bold">
-              Filtres et recherche
-            </Typography>
-            <Button
-              startIcon={showAdvancedFilters ? <FilterAltOffIcon /> : <FilterAltIcon />}
-              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              size="small"
+          <div>
+            <Text strong>{text}</Text>
+            <br />
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              {record.type_prestataire}
+              {record.titre && ` • ${record.titre}`}
+            </Text>
+          </div>
+        </Space>
+      )
+    },
+    {
+      title: 'Spécialité',
+      dataIndex: 'specialite',
+      key: 'specialite',
+      width: 150,
+      render: (specialite) => (
+        <Tag color="blue">{specialite || 'Non spécifiée'}</Tag>
+      )
+    },
+    {
+      title: 'Contact',
+      key: 'contact',
+      width: 180,
+      render: (_, record) => (
+        <div>
+          {record.telephone && (
+            <div style={{ fontSize: '12px' }}>
+              <PhoneOutlined style={{ marginRight: '4px' }} />
+              {record.telephone}
+            </div>
+          )}
+          {record.email && (
+            <div style={{ fontSize: '12px' }}>
+              <MailOutlined style={{ marginRight: '4px' }} />
+              {record.email}
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      title: 'Localisation',
+      key: 'localisation',
+      width: 150,
+      render: (_, record) => (
+        <div>
+          <div style={{ fontSize: '12px' }}>
+            <GlobalOutlined style={{ marginRight: '4px' }} />
+            {getPaysLabel(record.cod_pay)}
+          </div>
+          {record.cod_cen && (
+            <div style={{ fontSize: '12px' }}>
+              <BankOutlined style={{ marginRight: '4px' }} />
+              {getCentreLabel(record.cod_cen)}
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      title: 'Statut',
+      key: 'status',
+      width: 120,
+      render: (_, record) => {
+        const statusConfig = getStatusConfig(record.isActif ? 'Actif' : 'Inactif');
+        const disponibiliteConfig = getDisponibiliteConfig(record.disponibilite);
+        return (
+          <Space direction="vertical" size={2}>
+            <Tag 
+              color={statusConfig.color} 
+              icon={statusConfig.icon}
+              style={{ marginRight: 0 }}
             >
-              {showAdvancedFilters ? 'Masquer les filtres avancés' : 'Filtres avancés'}
+              {statusConfig.label}
+            </Tag>
+            {record.disponibilite && (
+              <Tag 
+                color={disponibiliteConfig.color} 
+                icon={disponibiliteConfig.icon}
+                style={{ fontSize: '10px', marginRight: 0 }}
+              >
+                {disponibiliteConfig.label}
+              </Tag>
+            )}
+          </Space>
+        );
+      }
+    },
+    {
+      title: 'Dates',
+      key: 'dates',
+      width: 120,
+      render: (_, record) => (
+        <div>
+          <Text type="secondary" style={{ fontSize: '11px' }}>
+            Créé: {formatDate(record.date_creation)}
+          </Text>
+          <br />
+          <Text type="secondary" style={{ fontSize: '11px' }}>
+            Modifié: {formatDate(record.date_modification)}
+          </Text>
+        </div>
+      )
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 150,
+      render: (_, record) => (
+        <Space size="small">
+          <Tooltip title="Voir détails">
+            <Button
+              icon={<EyeOutlined />}
+              onClick={() => loadPrestataireDetails(record.id)}
+              size="small"
+            />
+          </Tooltip>
+          <Tooltip title="Modifier">
+            <Button
+              icon={<EditOutlined />}
+              onClick={() => {
+                setEditModal({
+                  visible: true,
+                  loading: false,
+                  prestataire: record
+                });
+                editForm.setFieldsValue({
+                  type_prestataire: record.type_prestataire || 'Médecin',
+                  nom: record.nom || '',
+                  prenom: record.prenom || '',
+                  specialite: record.specialite || '',
+                  titre: record.titre || '',
+                  num_licence: record.num_licence || '',
+                  num_ordre: record.num_ordre || '',
+                  date_obtention_licence: record.date_obtention_licence ? moment(record.date_obtention_licence) : null,
+                  date_expiration_licence: record.date_expiration_licence ? moment(record.date_expiration_licence) : null,
+                  universite_formation: record.universite_formation || '',
+                  annee_diplome: record.annee_diplome || '',
+                  experience_annee: record.experience_annee || 0,
+                  telephone: record.telephone || '',
+                  email: record.email || '',
+                  cod_cen: record.cod_cen || undefined,
+                  centre_pratique: record.centre_pratique || '',
+                  cod_pay: record.cod_pay || undefined,
+                  num_adr: record.num_adr || '',
+                  honoraires: record.honoraires || '',
+                  langue_parlee: record.langue_parlee || 'Français',
+                  disponibilite: record.disponibilite || 'Disponible',
+                  actif: record.isActif
+                });
+              }}
+              size="small"
+            />
+          </Tooltip>
+          <Tooltip title="Synchroniser">
+            <Button
+              icon={<SyncOutlined />}
+              onClick={() => {
+                setSyncModal({
+                  visible: true,
+                  loading: false,
+                  prestataire: record
+                });
+                syncForm.setFieldsValue({
+                  cod_cen: record.cod_cen || undefined,
+                  date_debut: moment(),
+                  tarif1: record.honoraires || ''
+                });
+              }}
+              size="small"
+            />
+          </Tooltip>
+          <Tooltip title="Supprimer">
+            <Popconfirm
+              title="Êtes-vous sûr de vouloir désactiver ce prestataire ?"
+              description="Le prestataire sera marqué comme inactif."
+              onConfirm={() => handleDeletePrestataire(record.id)}
+              okText="Oui"
+              cancelText="Non"
+            >
+              <Button
+                icon={<DeleteOutlined />}
+                danger
+                size="small"
+              />
+            </Popconfirm>
+          </Tooltip>
+        </Space>
+      )
+    }
+  ];
+
+  // ==================== EFFETS ====================
+
+  useEffect(() => {
+    loadCentres();
+    loadPays();
+    loadSpecialites();
+    loadPrestataires();
+  }, []);
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (filters.search) {
+        loadPrestataires();
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [filters.search]);
+
+  // ==================== RENDU PRINCIPAL ====================
+
+  return (
+    <div style={{ padding: '24px' }}>
+      {/* En-tête */}
+      <Card 
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <TeamOutlined style={{ marginRight: '12px', fontSize: '24px', color: '#1890ff' }} />
+            <span style={{ fontSize: '20px', fontWeight: 'bold' }}>
+              Gestion des Prestataires de Santé
+            </span>
+          </div>
+        }
+        extra={
+          <Space>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleExportCSV}
+              loading={loading.export}
+            >
+              Exporter
             </Button>
-          </Box>
-          
-          <form onSubmit={handleSearch}>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  placeholder="Rechercher par nom, prénom, email, téléphone..."
-                  value={filters.search}
-                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon fontSize="small" />
-                      </InputAdornment>
-                    )
-                  }}
-                  disabled={loading.prestataires}
-                />
-              </Grid>
-              
-              <Grid item xs={12} md={2}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Statut</InputLabel>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                if (pays.length === 0) {
+                  message.error('Impossible d\'ajouter un prestataire : aucun pays disponible. Veuillez configurer les pays d\'abord.');
+                  loadPays();
+                } else {
+                  setAddModal({ visible: true, loading: false, currentStep: 0 });
+                  addForm.resetFields();
+                  addForm.setFieldsValue({ 
+                    actif: true,
+                    type_prestataire: 'Médecin',
+                    langue_parlee: 'Français',
+                    disponibilite: 'Disponible'
+                  });
+                }
+              }}
+              disabled={pays.length === 0}
+            >
+              Nouveau Prestataire
+            </Button>
+          </Space>
+        }
+        style={{ marginBottom: '24px' }}
+      >
+        {/* Filtres */}
+        <div style={{ marginBottom: '24px' }}>
+          <Row gutter={[16, 16]} align="middle">
+            <Col>
+              <Button
+                icon={<FilterOutlined />}
+                onClick={() => setShowFilters(!showFilters)}
+                type={showFilters ? 'primary' : 'default'}
+              >
+                Filtres
+              </Button>
+            </Col>
+            
+            {showFilters && (
+              <>
+                <Col>
+                  <Input
+                    placeholder="Rechercher par nom, prénom, email..."
+                    value={filters.search}
+                    onChange={(e) => handleFilterChange('search', e.target.value)}
+                    style={{ width: '250px' }}
+                    prefix={<SearchOutlined />}
+                  />
+                </Col>
+                <Col>
                   <Select
-                    value={filters.actif}
-                    label="Statut"
-                    onChange={(e) => setFilters(prev => ({ ...prev, actif: e.target.value }))}
-                    disabled={loading.prestataires}
+                    value={filters.status}
+                    onChange={(value) => handleFilterChange('status', value)}
+                    style={{ width: '150px' }}
+                    placeholder="Statut"
                   >
-                    <MenuItem value="">Tous</MenuItem>
-                    <MenuItem value="1">Actif</MenuItem>
-                    <MenuItem value="0">Inactif</MenuItem>
+                    <Option value="all">Tous les statuts</Option>
+                    {statusOptions.map(option => (
+                      <Option key={option.value} value={option.value}>
+                        {option.label}
+                      </Option>
+                    ))}
                   </Select>
-                </FormControl>
-              </Grid>
-              
-              <Grid item xs={12} md={2}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Spécialité</InputLabel>
+                </Col>
+                <Col>
+                  <Select
+                    value={filters.type}
+                    onChange={(value) => handleFilterChange('type', value)}
+                    style={{ width: '180px' }}
+                    placeholder="Type"
+                  >
+                    <Option value="all">Tous les types</Option>
+                    {typesPrestataire.map(type => (
+                      <Option key={type.value} value={type.value}>
+                        {type.label}
+                      </Option>
+                    ))}
+                  </Select>
+                </Col>
+                <Col>
                   <Select
                     value={filters.specialite}
-                    label="Spécialité"
-                    onChange={(e) => setFilters(prev => ({ ...prev, specialite: e.target.value }))}
-                    disabled={loading.prestataires}
+                    onChange={(value) => handleFilterChange('specialite', value)}
+                    style={{ width: '180px' }}
+                    placeholder="Spécialité"
                   >
-                    <MenuItem value="">Toutes</MenuItem>
-                    {specialites.map((spec, index) => (
-                      <MenuItem key={index} value={spec}>
-                        {spec}
-                      </MenuItem>
+                    <Option value="all">Toutes les spécialités</Option>
+                    {specialites.map(spec => (
+                      <Option key={spec.value} value={spec.value}>
+                        {spec.label}
+                      </Option>
                     ))}
                   </Select>
-                </FormControl>
-              </Grid>
-              
-              <Grid item xs={12} md={2}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Type</InputLabel>
-                  <Select
-                    value={filters.type_prestataire}
-                    label="Type"
-                    onChange={(e) => setFilters(prev => ({ ...prev, type_prestataire: e.target.value }))}
-                    disabled={loading.prestataires}
-                  >
-                    <MenuItem value="">Tous</MenuItem>
-                    {TYPES_PRESTATAIRE.slice(0, 10).map(type => (
-                      <MenuItem key={type} value={type}>
-                        {type}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              
-              <Grid item xs={12} md={2}>
-                <Stack direction="row" spacing={1}>
+                </Col>
+                <Col>
                   <Button
-                    type="submit"
-                    variant="contained"
-                    fullWidth
-                    disabled={loading.prestataires}
-                  >
-                    Appliquer
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    onClick={resetFilters}
-                    fullWidth
-                    disabled={loading.prestataires}
+                    onClick={handleResetFilters}
+                    style={{ marginRight: '8px' }}
                   >
                     Réinitialiser
                   </Button>
-                </Stack>
-              </Grid>
-            </Grid>
-            
-            {/* Filtres avancés */}
-            <Collapse in={showAdvancedFilters}>
-              <Box mt={3}>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={3}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Centre</InputLabel>
-                      <Select
-                        value={filters.cod_cen}
-                        label="Centre"
-                        onChange={(e) => setFilters(prev => ({ ...prev, cod_cen: e.target.value }))}
-                        disabled={loading.prestataires}
-                      >
-                        <MenuItem value="">Tous</MenuItem>
-                        {centres.map(centre => (
-                          <MenuItem key={centre.COD_CEN || centre.id} value={centre.COD_CEN || centre.id}>
-                            {centre.NOM_CENTRE || centre.nom}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  
-                  <Grid item xs={12} md={3}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Pays</InputLabel>
-                      <Select
-                        value={filters.cod_pay}
-                        label="Pays"
-                        onChange={(e) => setFilters(prev => ({ ...prev, cod_pay: e.target.value }))}
-                        disabled={loading.prestataires}
-                      >
-                        <MenuItem value="">Tous</MenuItem>
-                        {paysOptions.map(p => (
-                          <MenuItem key={p.value} value={p.value}>
-                            {p.label}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  
-                  <Grid item xs={12} md={3}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Disponibilité</InputLabel>
-                      <Select
-                        value={filters.disponibilite}
-                        label="Disponibilité"
-                        onChange={(e) => setFilters(prev => ({ ...prev, disponibilite: e.target.value }))}
-                        disabled={loading.prestataires}
-                      >
-                        <MenuItem value="">Toutes</MenuItem>
-                        {STATUTS_DISPONIBILITE.map(statut => (
-                          <MenuItem key={statut} value={statut}>
-                            {statut}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  
-                  <Grid item xs={12} md={1.5}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Exp. min (ans)"
-                      type="number"
-                      value={filters.experience_min}
-                      onChange={(e) => setFilters(prev => ({ ...prev, experience_min: e.target.value }))}
-                      disabled={loading.prestataires}
-                      inputProps={{ min: 0, max: 60 }}
-                    />
-                  </Grid>
-                  
-                  <Grid item xs={12} md={1.5}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Exp. max (ans)"
-                      type="number"
-                      value={filters.experience_max}
-                      onChange={(e) => setFilters(prev => ({ ...prev, experience_max: e.target.value }))}
-                      disabled={loading.prestataires}
-                      inputProps={{ min: 0, max: 60 }}
-                    />
-                  </Grid>
-                </Grid>
-              </Box>
-            </Collapse>
-          </form>
-        </Paper>
-
-        {/* Table des prestataires */}
-        <Paper sx={{ borderRadius: 3, overflow: 'hidden', mb: 4 }}>
-          <Box sx={{ 
-            p: 2, 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            borderBottom: 1, 
-            borderColor: 'divider',
-            bgcolor: 'background.paper'
-          }}>
-            <Typography variant="h6" fontWeight="bold">
-              Liste des prestataires ({pagination.total})
-            </Typography>
-            <Stack direction="row" spacing={1}>
-              <Tooltip title="Synchronisation globale">
-                <IconButton 
-                  onClick={() => setShowGlobalSyncModal(true)}
-                  disabled={loading.globalSync}
-                  size="small"
-                  color={syncStatus.lastSync ? "success" : "warning"}
-                >
-                  {syncStatus.syncInProgress ? (
-                    <CircularProgress size={20} />
-                  ) : (
-                    <SyncIcon />
-                  )}
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Exporter en CSV">
-                <IconButton 
-                  onClick={handleExport} 
-                  disabled={loading.prestataires || prestataires.length === 0}
-                  size="small"
-                >
-                  <DownloadIcon />
-                </IconButton>
-              </Tooltip>
-            </Stack>
-          </Box>
+                  <Button
+                    type="primary"
+                    onClick={loadPrestataires}
+                    icon={<SyncOutlined />}
+                    loading={loading.prestataires}
+                  >
+                    Actualiser
+                  </Button>
+                </Col>
+              </>
+            )}
+          </Row>
           
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow sx={{ bgcolor: 'action.hover' }}>
-                  <TableCell sx={{ fontWeight: 600, width: '70px' }}>
-                    <Box display="flex" alignItems="center" gap={0.5}>
-                      ID
-                      <IconButton size="small" onClick={() => handleSort('id')}>
-                        <SortByAlphaIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>
-                    <Box display="flex" alignItems="center" gap={0.5}>
-                      Nom & Prénom
-                      <IconButton size="small" onClick={() => handleSort('nom')}>
-                        <SortByAlphaIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Spécialité/Type</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Contact</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Localisation</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Statut/Disponibilité</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Dates</TableCell>
-                  <TableCell sx={{ fontWeight: 600, width: '180px' }} align="center">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading.prestataires ? (
-                  <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
-                      <CircularProgress />
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                        Chargement des prestataires...
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : prestataires.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
-                      <PersonIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
-                      <Typography variant="h6" color="text.secondary" gutterBottom>
-                        Aucun prestataire trouvé
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                        {Object.values(filters).some(f => f !== '' && f !== null && f !== undefined)
-                          ? 'Aucun résultat ne correspond à vos critères de recherche.'
-                          : 'Aucun prestataire n\'est enregistré pour le moment.'}
-                      </Typography>
-                      {Object.values(filters).some(f => f !== '' && f !== null && f !== undefined) ? (
-                        <Button
-                          variant="outlined"
-                          onClick={resetFilters}
-                        >
-                          Afficher tous les prestataires
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="contained"
-                          onClick={() => {
-                            if (paysOptions.length === 0) {
-                              showNotification('Veuillez configurer les pays d\'abord', 'error');
-                            } else {
-                              setShowAddModal(true);
-                            }
-                          }}
-                          startIcon={<AddIcon />}
-                          disabled={paysOptions.length === 0}
-                        >
-                          Ajouter un prestataire
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  prestataires.map((prestataire) => (
-                    <TableRow 
-                      key={prestataire.id} 
-                      hover
-                      sx={{ 
-                        '&:hover': { bgcolor: 'action.hover' },
-                        opacity: isPrestataireActif(prestataire) ? 1 : 0.7
-                      }}
-                    >
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary" fontWeight="medium">
-                          #{prestataire.id || prestataire.COD_PRE}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body2" fontWeight="medium">
-                            {prestataire.prenom} {prestataire.nom}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {prestataire.type_prestataire}
-                            {prestataire.titre && ` • ${prestataire.titre}`}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body2" fontWeight="medium">
-                            {prestataire.specialite}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {prestataire.num_licence && `Licence: ${prestataire.num_licence}`}
-                            {prestataire.num_ordre && ` • Ordre: ${prestataire.num_ordre}`}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box>
-                          {prestataire.telephone && (
-                            <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
-                              <PhoneIcon fontSize="small" color="action" />
-                              <Typography variant="body2">
-                                {prestataire.telephone}
-                              </Typography>
-                            </Box>
-                          )}
-                          {prestataire.email && (
-                            <Box display="flex" alignItems="center" gap={0.5}>
-                              <EmailIcon fontSize="small" color="action" />
-                              <Typography variant="body2" noWrap sx={{ maxWidth: '200px' }}>
-                                {prestataire.email}
-                              </Typography>
-                            </Box>
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box>
-                          <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
-                            <PublicIcon fontSize="small" color="action" />
-                            <Typography variant="body2">
-                              {getPaysLabel(prestataire.cod_pay, pays)}
-                            </Typography>
-                          </Box>
-                          {prestataire.cod_cen && (
-                            <Box display="flex" alignItems="center" gap={0.5}>
-                              <BusinessIcon fontSize="small" color="action" />
-                              <Typography variant="caption">
-                                {getCentreLabel(prestataire.cod_cen, centres)}
-                              </Typography>
-                            </Box>
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box display="flex" flexDirection="column" gap={0.5}>
-                          <StatusChip prestataire={prestataire} />
-                          <DisponibiliteChip disponibilite={prestataire.disponibilite} />
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="caption" display="block" color="text.secondary">
-                            Créé: {formatDate(prestataire.date_creation)}
-                          </Typography>
-                          <Typography variant="caption" display="block" color="text.secondary">
-                            Modifié: {formatDate(prestataire.date_modification)}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell align="center">
-                        <Stack direction="row" spacing={0.5} justifyContent="center">
-                          <Tooltip title="Voir détails">
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                setSelectedPrestataire(prestataire);
-                                setShowDetailsModal(true);
-                              }}
-                              color="info"
-                              disabled={loading.action}
-                            >
-                              <VisibilityIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          
-                          <Tooltip title="Modifier">
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                if (paysOptions.length === 0) {
-                                  showNotification('Impossible de modifier : aucun pays disponible', 'error');
-                                  chargerPays();
-                                } else {
-                                  setSelectedPrestataire(prestataire);
-                                  setShowEditModal(true);
-                                }
-                              }}
-                              color="warning"
-                              disabled={loading.action || paysOptions.length === 0}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          
-                          <Tooltip title="Synchroniser">
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                setSelectedPrestataire(prestataire);
-                                setShowSyncModal(true);
-                              }}
-                              color="primary"
-                              disabled={loading.action}
-                            >
-                              <SyncIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          
-                          <Tooltip title="Options">
-                            <IconButton
-                              size="small"
-                              onClick={(e) => handleMenuOpen(e, prestataire.id)}
-                              color="default"
-                              disabled={loading.action}
-                            >
-                              <MoreVertIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Stack>
-                        
-                        {/* Menu contextuel */}
-                       {/* Menu contextuel */}
-<Menu
-  anchorEl={anchorEl}
-  open={Boolean(anchorEl) && selectedMenuId === prestataire.id}
-  onClose={handleMenuClose}
-  anchorOrigin={{
-    vertical: 'bottom',
-    horizontal: 'right',
-  }}
-  transformOrigin={{
-    vertical: 'top',
-    horizontal: 'right',
-  }}
->
-  <MenuItem 
-    onClick={() => {
-      handleChangeStatus(prestataire.id, 'Actif');
-      handleMenuClose();
-    }}
-    disabled={isPrestataireActif(prestataire) || loading.action}
-  >
-    <CheckCircleIcon fontSize="small" sx={{ mr: 1, color: 'success.main' }} />
-    Activer (1)
-  </MenuItem>
-  <MenuItem 
-    onClick={() => {
-      handleChangeStatus(prestataire.id, 'Inactif');
-      handleMenuClose();
-    }}
-    disabled={!isPrestataireActif(prestataire) || loading.action}
-  >
-    <BlockIcon fontSize="small" sx={{ mr: 1, color: 'error.main' }} />
-    Désactiver (0)
-  </MenuItem>
-  
-  {/* Remplacez le Divider par un MenuItem avec un Divider à l'intérieur */}
-  <MenuItem disabled sx={{ p: 0, my: 0.5 }}>
-    <Divider sx={{ width: '100%' }} />
-  </MenuItem>
-  
-  <MenuItem 
-    onClick={() => {
-      handleDeletePrestataire(prestataire.id);
-      handleMenuClose();
-    }}
-    sx={{ color: 'error.main' }}
-    disabled={loading.action}
-  >
-    <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
-    Supprimer définitivement
-  </MenuItem>
-</Menu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          
-          {/* Pagination */}
-          {!loading.prestataires && prestataires.length > 0 && (
-            <TablePagination
-              rowsPerPageOptions={ROWS_PER_PAGE_OPTIONS}
-              component="div"
-              count={pagination.total}
-              rowsPerPage={pagination.rowsPerPage}
-              page={pagination.page}
-              onPageChange={handleChangePage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-              labelRowsPerPage="Lignes par page :"
-              labelDisplayedRows={({ from, to, count }) => 
-                `${from}-${to} sur ${count}`
-              }
-              ActionsComponent={(props) => (
-                <Box sx={{ flexShrink: 0, ml: 2.5 }}>
-                  <IconButton
-                    onClick={() => props.onPageChange(null, 0)}
-                    disabled={props.page === 0}
-                    aria-label="première page"
-                  >
-                    <FirstPageIcon />
-                  </IconButton>
-                  <IconButton
-                    onClick={() => props.onPageChange(null, props.page - 1)}
-                    disabled={props.page === 0}
-                    aria-label="page précédente"
-                  >
-                    <ChevronLeftIcon />
-                  </IconButton>
-                  <IconButton
-                    onClick={() => props.onPageChange(null, props.page + 1)}
-                    disabled={props.page >= Math.ceil(props.count / props.rowsPerPage) - 1}
-                    aria-label="page suivante"
-                  >
-                    <ChevronRightIcon />
-                  </IconButton>
-                  <IconButton
-                    onClick={() => props.onPageChange(null, Math.max(0, Math.ceil(props.count / props.rowsPerPage) - 1))}
-                    disabled={props.page >= Math.ceil(props.count / props.rowsPerPage) - 1}
-                    aria-label="dernière page"
-                  >
-                    <LastPageIcon />
-                  </IconButton>
-                </Box>
-              )}
-            />
+          {showFilters && (
+            <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
+              <Col>
+                <Select
+                  value={filters.centre}
+                  onChange={(value) => handleFilterChange('centre', value)}
+                  style={{ width: '200px' }}
+                  placeholder="Centre"
+                >
+                  <Option value="all">Tous les centres</Option>
+                  {centres.map(centre => (
+                    <Option key={centre.id} value={centre.id}>
+                      {centre.name}
+                    </Option>
+                  ))}
+                </Select>
+              </Col>
+              <Col>
+                <Select
+                  value={filters.pays}
+                  onChange={(value) => handleFilterChange('pays', value)}
+                  style={{ width: '200px' }}
+                  placeholder="Pays"
+                >
+                  <Option value="all">Tous les pays</Option>
+                  {pays.map(p => (
+                    <Option key={p.value} value={p.value}>
+                      {p.label}
+                    </Option>
+                  ))}
+                </Select>
+              </Col>
+              <Col>
+                <InputNumber
+                  placeholder="Exp. min (ans)"
+                  value={filters.experience_min}
+                  onChange={(value) => handleFilterChange('experience_min', value)}
+                  style={{ width: '120px' }}
+                  min={0}
+                  max={60}
+                />
+              </Col>
+              <Col>
+                <InputNumber
+                  placeholder="Exp. max (ans)"
+                  value={filters.experience_max}
+                  onChange={(value) => handleFilterChange('experience_max', value)}
+                  style={{ width: '120px' }}
+                  min={0}
+                  max={60}
+                />
+              </Col>
+            </Row>
           )}
-        </Paper>
+        </div>
 
-        {/* Modales */}
-        <AjouterPrestataireModal
-          open={showAddModal}
-          onClose={() => setShowAddModal(false)}
-          onSave={handleAddPrestataire}
-          centres={centres}
-          specialites={specialites}
-          pays={pays}
-          loading={loading.action}
-        />
-        
-        {selectedPrestataire && (
-          <>
-            <ModifierPrestataireModal
-              open={showEditModal}
-              onClose={() => setShowEditModal(false)}
-              onSave={handleEditPrestataire}
-              prestataire={selectedPrestataire}
-              centres={centres}
-              specialites={specialites}
-              pays={pays}
-              loading={loading.action}
-            />
-            
-            <SyncPrestataireModal
-              open={showSyncModal}
-              onClose={() => setShowSyncModal(false)}
-              prestataire={selectedPrestataire}
-              centres={centres}
-              loading={loading.sync}
-              onSync={handleSyncWithCentrePrestataire}
-            />
-            
-            <PrestataireDetailsModal
-              open={showDetailsModal}
-              onClose={() => setShowDetailsModal(false)}
-              prestataire={selectedPrestataire}
-              pays={pays}
-              centres={centres}
-            />
-          </>
-        )}
-        
-        <GlobalSyncModal
-          open={showGlobalSyncModal}
-          onClose={() => setShowGlobalSyncModal(false)}
-          loading={loading.globalSync}
-          onGlobalSync={handleGlobalSync}
-        />
+        {/* Statistiques */}
+        <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+          <Col xs={24} sm={12} md={6}>
+            <Card size="small" hoverable>
+              <Statistic
+                title="Prestataires Totaux"
+                value={statistiques.total}
+                prefix={<TeamOutlined />}
+                valueStyle={{ color: '#1890ff' }}
+              />
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#999' }}>
+                {statistiques.actifs} actifs • {statistiques.inactifs} inactifs
+              </div>
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Card size="small" hoverable>
+              <Statistic
+                title="Centres de Santé"
+                value={statistiques.totalCentres}
+                prefix={<BankOutlined />}
+                valueStyle={{ color: '#52c41a' }}
+              />
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#999' }}>
+                Disponibles pour affectation
+              </div>
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Card size="small" hoverable>
+              <Statistic
+                title="Pays Couverts"
+                value={statistiques.totalPays}
+                prefix={<GlobalOutlined />}
+                valueStyle={{ color: '#722ed1' }}
+              />
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#999' }}>
+                {pays.length} pays disponibles
+              </div>
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Card size="small" hoverable>
+              <Statistic
+                title="30 Derniers Jours"
+                value={statistiques.derniers_30_jours}
+                prefix={<ArrowUpOutlined />}
+                valueStyle={{ color: '#fa8c16' }}
+              />
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#999' }}>
+                Nouvelles créations
+              </div>
+            </Card>
+          </Col>
+        </Row>
 
-        {/* Notifications */}
-        <Snackbar
-          open={notification.open}
-          autoHideDuration={6000}
-          onClose={() => setNotification(prev => ({ ...prev, open: false }))}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        {/* Tableau des prestataires */}
+        <Card
+          title={`Liste des Prestataires (${pagination.total})`}
+          extra={
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <Text type="secondary" style={{ marginRight: '16px' }}>
+                Page {pagination.current} sur {Math.ceil(pagination.total / pagination.pageSize)}
+              </Text>
+            </div>
+          }
         >
-          <Alert 
-            onClose={() => setNotification(prev => ({ ...prev, open: false }))} 
-            severity={notification.severity}
-            sx={{ width: '100%' }}
-            variant="filled"
+          <Table
+            columns={prestatairesColumns}
+            dataSource={prestataires}
+            loading={loading.prestataires}
+            pagination={{
+              current: pagination.current,
+              pageSize: pagination.pageSize,
+              total: pagination.total,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total, range) => 
+                `${range[0]}-${range[1]} sur ${total} prestataires`,
+              onChange: (page, pageSize) => {
+                setPagination({ current: page, pageSize, total: pagination.total });
+              }
+            }}
+            scroll={{ x: 1200 }}
+          />
+        </Card>
+      </Card>
+
+      {/* ==================== MODALES ==================== */}
+
+      {/* Modal Ajout Prestataire */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <PlusOutlined style={{ marginRight: '8px', color: '#52c41a' }} />
+            <span>Ajouter un Nouveau Prestataire</span>
+          </div>
+        }
+        open={addModal.visible}
+        onCancel={() => {
+          setAddModal({ visible: false, loading: false, currentStep: 0 });
+          addForm.resetFields();
+        }}
+        width={900}
+        footer={null}
+        destroyOnClose
+      >
+        <Steps current={addModal.currentStep} style={{ marginBottom: '24px' }}>
+          <Step title="Informations personnelles" />
+          <Step title="Informations professionnelles" />
+          <Step title="Contact et localisation" />
+          <Step title="Validation" />
+        </Steps>
+        
+        <Form
+          form={addForm}
+          layout="vertical"
+          onFinish={handleAddPrestataire}
+        >
+          {addModal.currentStep === 0 && (
+            <>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="nom"
+                    label="Nom"
+                    rules={[{ required: true, message: 'Veuillez saisir le nom' }]}
+                  >
+                    <Input placeholder="Nom de famille" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="prenom"
+                    label="Prénom"
+                    rules={[{ required: true, message: 'Veuillez saisir le prénom' }]}
+                  >
+                    <Input placeholder="Prénom" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="type_prestataire"
+                    label="Type de prestataire"
+                    rules={[{ required: true, message: 'Veuillez sélectionner le type' }]}
+                  >
+                    <Select placeholder="Sélectionnez un type">
+                      {typesPrestataire.map(type => (
+                        <Option key={type.value} value={type.value}>
+                          {type.label}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="specialite"
+                    label="Spécialité"
+                    rules={[{ required: true, message: 'Veuillez sélectionner la spécialité' }]}
+                  >
+                    <Select placeholder="Sélectionnez une spécialité">
+                      <Option value="">Sélectionnez une spécialité</Option>
+                      {specialites.map(spec => (
+                        <Option key={spec.value} value={spec.value}>
+                          {spec.label}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Form.Item
+                name="titre"
+                label="Titre professionnel"
+              >
+                <Select placeholder="Sélectionnez un titre">
+                  <Option value="">Sélectionnez un titre</Option>
+                  {titresOptions.map(titre => (
+                    <Option key={titre.value} value={titre.value}>
+                      {titre.label}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </>
+          )}
+          
+          {addModal.currentStep === 1 && (
+            <>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="num_licence"
+                    label="Numéro de licence"
+                  >
+                    <Input placeholder="Ex: MED12345" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="num_ordre"
+                    label="Numéro d'ordre"
+                  >
+                    <Input placeholder="Ex: 123456" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="date_obtention_licence"
+                    label="Date d'obtention de licence"
+                  >
+                    <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="date_expiration_licence"
+                    label="Date d'expiration de licence"
+                  >
+                    <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="universite_formation"
+                    label="Université de formation"
+                  >
+                    <Input placeholder="Nom de l'université" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="annee_diplome"
+                    label="Année de diplôme"
+                  >
+                    <Input placeholder="Ex: 2015" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Form.Item
+                name="experience_annee"
+                label="Expérience (années)"
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0}
+                  max={60}
+                  placeholder="Nombre d'années d'expérience"
+                />
+              </Form.Item>
+            </>
+          )}
+          
+          {addModal.currentStep === 2 && (
+            <>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="telephone"
+                    label="Téléphone"
+                  >
+                    <Input placeholder="Numéro de téléphone" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="email"
+                    label="Email"
+                    rules={[
+                      { type: 'email', message: 'Veuillez saisir un email valide' }
+                    ]}
+                  >
+                    <Input placeholder="adresse@email.com" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="cod_cen"
+                    label="Centre de pratique"
+                  >
+                    <Select
+                      showSearch
+                      placeholder="Rechercher ou sélectionner un centre..."
+                      optionFilterProp="children"
+                      onSearch={handleSearchCenters}
+                      filterOption={(input, option) =>
+                        option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+                      }
+                    >
+                      <Option value="">Sélectionnez un centre</Option>
+                      {centres.map(centre => (
+                        <Option key={centre.id} value={centre.id}>
+                          {centre.name}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="centre_pratique"
+                    label="Lieu de pratique"
+                  >
+                    <Input placeholder="Lieu de pratique spécifique" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="cod_pay"
+                    label="Pays"
+                    rules={[{ required: true, message: 'Veuillez sélectionner un pays' }]}
+                  >
+                    <Select placeholder="Sélectionnez un pays">
+                      <Option value="">Sélectionnez un pays</Option>
+                      {pays.map(p => (
+                        <Option key={p.value} value={p.value}>
+                          {p.label}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="num_adr"
+                    label="Numéro d'adresse"
+                  >
+                    <Input placeholder="Numéro et rue" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="honoraires"
+                    label="Honoraires (FCFA)"
+                  >
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder="Montant des honoraires"
+                      min={0}
+                      formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="langue_parlee"
+                    label="Langue parlée"
+                  >
+                    <Select placeholder="Sélectionnez une langue">
+                      {languesOptions.map(langue => (
+                        <Option key={langue.value} value={langue.value}>
+                          {langue.label}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Form.Item
+                name="disponibilite"
+                label="Disponibilité"
+              >
+                <Select placeholder="Sélectionnez une disponibilité">
+                  {disponibiliteOptions.map(dispo => (
+                    <Option key={dispo.value} value={dispo.value}>
+                      {dispo.label}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </>
+          )}
+          
+          {addModal.currentStep === 3 && (
+            <>
+              <Alert
+                message="Récapitulatif"
+                description="Veuillez vérifier les informations saisies avant de créer le prestataire."
+                type="info"
+                showIcon
+                style={{ marginBottom: '16px' }}
+              />
+              
+              <Descriptions column={2} bordered>
+                <Descriptions.Item label="Nom complet">
+                  {addForm.getFieldValue('prenom')} {addForm.getFieldValue('nom')}
+                </Descriptions.Item>
+                <Descriptions.Item label="Spécialité">
+                  {addForm.getFieldValue('specialite')}
+                </Descriptions.Item>
+                <Descriptions.Item label="Type">
+                  {addForm.getFieldValue('type_prestataire')}
+                </Descriptions.Item>
+                <Descriptions.Item label="Téléphone">
+                  {addForm.getFieldValue('telephone') || 'Non renseigné'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Email">
+                  {addForm.getFieldValue('email') || 'Non renseigné'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Pays">
+                  {getPaysLabel(addForm.getFieldValue('cod_pay'))}
+                </Descriptions.Item>
+                <Descriptions.Item label="Centre">
+                  {getCentreLabel(addForm.getFieldValue('cod_cen')) || 'Non renseigné'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Disponibilité">
+                  {addForm.getFieldValue('disponibilite')}
+                </Descriptions.Item>
+              </Descriptions>
+              
+              <Form.Item
+                name="actif"
+                label="Statut"
+                valuePropName="checked"
+                style={{ marginTop: '16px' }}
+              >
+                <Switch checkedChildren="Actif" unCheckedChildren="Inactif" defaultChecked />
+              </Form.Item>
+            </>
+          )}
+          
+          <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between' }}>
+            <div>
+              {addModal.currentStep > 0 && (
+                <Button
+                  onClick={() => setAddModal(prev => ({ ...prev, currentStep: prev.currentStep - 1 }))}
+                >
+                  Retour
+                </Button>
+              )}
+            </div>
+            <div>
+              {addModal.currentStep < 3 ? (
+                <Button
+                  type="primary"
+                  onClick={() => setAddModal(prev => ({ ...prev, currentStep: prev.currentStep + 1 }))}
+                >
+                  Suivant
+                </Button>
+              ) : (
+                <Button
+                  type="primary"
+                  loading={addModal.loading}
+                  onClick={() => addForm.submit()}
+                >
+                  Créer le prestataire
+                </Button>
+              )}
+            </div>
+          </div>
+        </Form>
+      </Modal>
+
+      {/* Modal Modification Prestataire */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <EditOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
+            <span>Modifier le Prestataire</span>
+          </div>
+        }
+        open={editModal.visible}
+        onCancel={() => {
+          setEditModal({ visible: false, loading: false, prestataire: null });
+          editForm.resetFields();
+        }}
+        width={900}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setEditModal({ visible: false, loading: false, prestataire: null });
+            editForm.resetFields();
+          }}>
+            Annuler
+          </Button>,
+          <Button 
+            key="submit" 
+            type="primary" 
+            loading={editModal.loading}
+            onClick={() => editForm.submit()}
           >
-            {notification.message}
-          </Alert>
-        </Snackbar>
-      </Box>
-    </LocalizationProvider>
+            Modifier
+          </Button>
+        ]}
+        destroyOnClose
+      >
+        <Form
+          form={editForm}
+          layout="vertical"
+          onFinish={handleUpdatePrestataire}
+        >
+          <Tabs defaultActiveKey="personnelles">
+            <Tabs.TabPane tab="Informations personnelles" key="personnelles">
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="nom"
+                    label="Nom"
+                    rules={[{ required: true, message: 'Veuillez saisir le nom' }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="prenom"
+                    label="Prénom"
+                    rules={[{ required: true, message: 'Veuillez saisir le prénom' }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="type_prestataire"
+                    label="Type de prestataire"
+                    rules={[{ required: true, message: 'Veuillez sélectionner le type' }]}
+                  >
+                    <Select>
+                      {typesPrestataire.map(type => (
+                        <Option key={type.value} value={type.value}>
+                          {type.label}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="specialite"
+                    label="Spécialité"
+                    rules={[{ required: true, message: 'Veuillez sélectionner la spécialité' }]}
+                  >
+                    <Select>
+                      <Option value="">Sélectionnez une spécialité</Option>
+                      {specialites.map(spec => (
+                        <Option key={spec.value} value={spec.value}>
+                          {spec.label}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Form.Item
+                name="titre"
+                label="Titre professionnel"
+              >
+                <Select>
+                  <Option value="">Sélectionnez un titre</Option>
+                  {titresOptions.map(titre => (
+                    <Option key={titre.value} value={titre.value}>
+                      {titre.label}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Tabs.TabPane>
+            
+            <Tabs.TabPane tab="Informations professionnelles" key="professionnelles">
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="num_licence"
+                    label="Numéro de licence"
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="num_ordre"
+                    label="Numéro d'ordre"
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="date_obtention_licence"
+                    label="Date d'obtention de licence"
+                  >
+                    <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="date_expiration_licence"
+                    label="Date d'expiration de licence"
+                  >
+                    <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="universite_formation"
+                    label="Université de formation"
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="annee_diplome"
+                    label="Année de diplôme"
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Form.Item
+                name="experience_annee"
+                label="Expérience (années)"
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0}
+                  max={60}
+                />
+              </Form.Item>
+            </Tabs.TabPane>
+            
+            <Tabs.TabPane tab="Contact et localisation" key="contact">
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="telephone"
+                    label="Téléphone"
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="email"
+                    label="Email"
+                    rules={[
+                      { type: 'email', message: 'Veuillez saisir un email valide' }
+                    ]}
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="cod_cen"
+                    label="Centre de pratique"
+                  >
+                    <Select
+                      showSearch
+                      optionFilterProp="children"
+                      onSearch={handleSearchCenters}
+                      filterOption={(input, option) =>
+                        option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+                      }
+                    >
+                      <Option value="">Sélectionnez un centre</Option>
+                      {centres.map(centre => (
+                        <Option key={centre.id} value={centre.id}>
+                          {centre.name}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="centre_pratique"
+                    label="Lieu de pratique"
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="cod_pay"
+                    label="Pays"
+                    rules={[{ required: true, message: 'Veuillez sélectionner un pays' }]}
+                  >
+                    <Select>
+                      <Option value="">Sélectionnez un pays</Option>
+                      {pays.map(p => (
+                        <Option key={p.value} value={p.value}>
+                          {p.label}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="num_adr"
+                    label="Numéro d'adresse"
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="honoraires"
+                    label="Honoraires (FCFA)"
+                  >
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      min={0}
+                      formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="langue_parlee"
+                    label="Langue parlée"
+                  >
+                    <Select>
+                      {languesOptions.map(langue => (
+                        <Option key={langue.value} value={langue.value}>
+                          {langue.label}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Form.Item
+                name="disponibilite"
+                label="Disponibilité"
+              >
+                <Select>
+                  {disponibiliteOptions.map(dispo => (
+                    <Option key={dispo.value} value={dispo.value}>
+                      {dispo.label}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Tabs.TabPane>
+          </Tabs>
+          
+          <Form.Item
+            name="actif"
+            label="Statut"
+            valuePropName="checked"
+          >
+            <Switch checkedChildren="Actif" unCheckedChildren="Inactif" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Drawer Détails Prestataire */}
+      <Drawer
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <EyeOutlined style={{ marginRight: '12px', fontSize: '20px' }} />
+            <span>Détails du Prestataire</span>
+          </div>
+        }
+        width={800}
+        open={detailsDrawer.visible}
+        onClose={() => setDetailsDrawer({ 
+          visible: false, 
+          prestataire: null,
+          informations: {}
+        })}
+        extra={
+          <Space>
+            {detailsDrawer.prestataire && (
+              <>
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    setDetailsDrawer({ visible: false, prestataire: null, informations: {} });
+                    setEditModal({
+                      visible: true,
+                      loading: false,
+                      prestataire: detailsDrawer.prestataire
+                    });
+                    editForm.setFieldsValue({
+                      type_prestataire: detailsDrawer.prestataire.type_prestataire || 'Médecin',
+                      nom: detailsDrawer.prestataire.nom || '',
+                      prenom: detailsDrawer.prestataire.prenom || '',
+                      specialite: detailsDrawer.prestataire.specialite || '',
+                      titre: detailsDrawer.prestataire.titre || '',
+                      num_licence: detailsDrawer.prestataire.num_licence || '',
+                      num_ordre: detailsDrawer.prestataire.num_ordre || '',
+                      date_obtention_licence: detailsDrawer.prestataire.date_obtention_licence ? 
+                        moment(detailsDrawer.prestataire.date_obtention_licence) : null,
+                      date_expiration_licence: detailsDrawer.prestataire.date_expiration_licence ? 
+                        moment(detailsDrawer.prestataire.date_expiration_licence) : null,
+                      universite_formation: detailsDrawer.prestataire.universite_formation || '',
+                      annee_diplome: detailsDrawer.prestataire.annee_diplome || '',
+                      experience_annee: detailsDrawer.prestataire.experience_annee || 0,
+                      telephone: detailsDrawer.prestataire.telephone || '',
+                      email: detailsDrawer.prestataire.email || '',
+                      cod_cen: detailsDrawer.prestataire.cod_cen || undefined,
+                      centre_pratique: detailsDrawer.prestataire.centre_pratique || '',
+                      cod_pay: detailsDrawer.prestataire.cod_pay || undefined,
+                      num_adr: detailsDrawer.prestataire.num_adr || '',
+                      honoraires: detailsDrawer.prestataire.honoraires || '',
+                      langue_parlee: detailsDrawer.prestataire.langue_parlee || 'Français',
+                      disponibilite: detailsDrawer.prestataire.disponibilite || 'Disponible',
+                      actif: detailsDrawer.prestataire.isActif
+                    });
+                  }}
+                >
+                  Modifier
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<SyncOutlined />}
+                  onClick={() => {
+                    setDetailsDrawer({ visible: false, prestataire: null, informations: {} });
+                    setSyncModal({
+                      visible: true,
+                      loading: false,
+                      prestataire: detailsDrawer.prestataire
+                    });
+                    syncForm.setFieldsValue({
+                      cod_cen: detailsDrawer.prestataire.cod_cen || undefined,
+                      date_debut: moment(),
+                      tarif1: detailsDrawer.prestataire.honoraires || ''
+                    });
+                  }}
+                >
+                  Synchroniser
+                </Button>
+              </>
+            )}
+          </Space>
+        }
+      >
+        {loading.details ? (
+          <div style={{ textAlign: 'center', padding: '50px' }}>
+            <Spin size="large" />
+            <div style={{ marginTop: '20px' }}>Chargement des détails...</div>
+          </div>
+        ) : detailsDrawer.prestataire ? (
+          <>
+            <div style={{ marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+                <Avatar
+                  size={64}
+                  icon={<UserOutlined />}
+                  style={{
+                    backgroundColor: detailsDrawer.prestataire.isActif ? '#1890ff' : '#d9d9d9',
+                    color: '#fff',
+                    marginRight: '16px'
+                  }}
+                />
+                <div>
+                  <Typography.Title level={3} style={{ margin: 0 }}>
+                    {detailsDrawer.prestataire.nom_complet}
+                  </Typography.Title>
+                  <Space style={{ marginTop: '8px' }}>
+                    <Tag color={getTypeConfig(detailsDrawer.prestataire.type_prestataire).color}>
+                      {detailsDrawer.prestataire.type_prestataire}
+                    </Tag>
+                    <Tag 
+                      color={getStatusConfig(detailsDrawer.prestataire.isActif ? 'Actif' : 'Inactif').color}
+                      icon={getStatusConfig(detailsDrawer.prestataire.isActif ? 'Actif' : 'Inactif').icon}
+                    >
+                      {detailsDrawer.prestataire.isActif ? 'Actif' : 'Inactif'}
+                    </Tag>
+                  </Space>
+                </div>
+              </div>
+
+              <Tabs defaultActiveKey="info">
+                <Tabs.TabPane tab="Informations" key="info">
+                  <Descriptions column={2} bordered>
+                    {detailsDrawer.informations.personnelles?.map((info, index) => (
+                      <Descriptions.Item key={index} label={info.label}>
+                        {info.value}
+                      </Descriptions.Item>
+                    ))}
+                  </Descriptions>
+                </Tabs.TabPane>
+                
+                <Tabs.TabPane tab="Professionnelles" key="prof">
+                  <Descriptions column={2} bordered>
+                    {detailsDrawer.informations.professionnelles?.map((info, index) => (
+                      <Descriptions.Item key={index} label={info.label}>
+                        {info.value}
+                      </Descriptions.Item>
+                    ))}
+                  </Descriptions>
+                </Tabs.TabPane>
+                
+                <Tabs.TabPane tab="Contact" key="contact">
+                  <Descriptions column={2} bordered>
+                    {detailsDrawer.informations.contact?.map((info, index) => (
+                      <Descriptions.Item key={index} label={info.label}>
+                        {info.icon && <span style={{ marginRight: '8px' }}>{info.icon}</span>}
+                        {info.value}
+                      </Descriptions.Item>
+                    ))}
+                  </Descriptions>
+                </Tabs.TabPane>
+                
+                <Tabs.TabPane tab="Système" key="system">
+                  <Descriptions column={2} bordered>
+                    {detailsDrawer.informations.systeme?.map((info, index) => (
+                      <Descriptions.Item key={index} label={info.label}>
+                        {info.value}
+                      </Descriptions.Item>
+                    ))}
+                  </Descriptions>
+                </Tabs.TabPane>
+              </Tabs>
+            </div>
+          </>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <Typography.Text type="secondary">
+              Aucune donnée disponible
+            </Typography.Text>
+          </div>
+        )}
+      </Drawer>
+
+      {/* Modal Synchronisation */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <SyncOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
+            <span>Synchronisation avec Centre</span>
+          </div>
+        }
+        open={syncModal.visible}
+        onCancel={() => {
+          setSyncModal({ visible: false, loading: false, prestataire: null });
+          syncForm.resetFields();
+        }}
+        width={800}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setSyncModal({ visible: false, loading: false, prestataire: null });
+            syncForm.resetFields();
+          }}>
+            Annuler
+          </Button>,
+          <Button 
+            key="submit" 
+            type="primary" 
+            loading={syncModal.loading}
+            onClick={() => syncForm.submit()}
+          >
+            Synchroniser
+          </Button>
+        ]}
+        destroyOnClose
+      >
+        <Alert
+          message="Information"
+          description="Cette opération va créer ou mettre à jour une entrée dans la table CENTRE_PRESTATAIRE pour lier ce prestataire au centre sélectionné."
+          type="info"
+          showIcon
+          style={{ marginBottom: '16px' }}
+        />
+        
+        <Form
+          form={syncForm}
+          layout="vertical"
+          onFinish={handleSyncPrestataire}
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+  name="cod_cen"
+  label="Centre"
+  rules={[
+    { required: true, message: 'Veuillez sélectionner un centre' },
+    {
+      validator: (_, value) => {
+        if (!value || isNaN(parseInt(value))) {
+          return Promise.reject(new Error('Le centre doit être un nombre valide'));
+        }
+        return Promise.resolve();
+      }
+    }
+  ]}
+>
+  <Select
+    showSearch
+    placeholder="Rechercher ou sélectionner un centre..."
+    optionFilterProp="children"
+    onSearch={handleSearchCenters}
+    filterOption={(input, option) =>
+      option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+    }
+  >
+    <Option value="">Sélectionnez un centre</Option>
+    {centres.map(centre => (
+      <Option key={centre.id} value={centre.cod_cen}> {/* Utiliser cod_cen (nombre) */}
+        {centre.name} (ID: {centre.cod_cen})
+      </Option>
+    ))}
+  </Select>
+</Form.Item>
+            </Col>
+          </Row>
+          
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="date_debut"
+                label="Date début d'agrément"
+              >
+                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="date_fin"
+                label="Date fin d'agrément"
+              >
+                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+              </Form.Item>
+            </Col>
+          </Row>
+          
+          <Form.Item
+            name="observations"
+            label="Observations"
+          >
+            <TextArea rows={3} placeholder="Observations sur l'agrément..." />
+          </Form.Item>
+          
+          <Divider orientation="left">Tarification</Divider>
+          
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                name="tarif1"
+                label="Tarif 1 (FCFA)"
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="Tarif principal"
+                  min={0}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="tarif2"
+                label="Tarif 2 (FCFA)"
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="Tarif secondaire"
+                  min={0}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="tarif3"
+                label="Tarif 3 (FCFA)"
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="Tarif spécial"
+                  min={0}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="tps"
+                label="TPS (%)"
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="Taxe sur les produits et services"
+                  min={0}
+                  max={100}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="tva"
+                label="TVA (%)"
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="Taxe sur la valeur ajoutée"
+                  min={0}
+                  max={100}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+      </Modal>
+    </div>
   );
 };
+
+// Composant MedicineBoxOutlined manquant dans @ant-design/icons
+const MedicineBoxOutlined = (props) => (
+  <span {...props} role="img" aria-label="medicine-box" style={{ marginRight: 8 }}>
+    💊
+  </span>
+);
 
 export default GestionPrestataires;

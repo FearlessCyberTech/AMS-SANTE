@@ -18,8 +18,3 @@ body {
 #root {
   min-height: 100vh;
 }
-
-/* Reset pour débogage */
-.debug {
-  border: 1px solid red !important;
-}

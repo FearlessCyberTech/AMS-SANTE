@@ -18,7 +18,9 @@ import {
   Tooltip,
   InputNumber,
   Drawer,
-  Descriptions
+  Descriptions,
+  Spin,
+  Alert
 } from 'antd';
 import {
   PlusOutlined,
@@ -33,13 +35,15 @@ import {
   DollarOutlined,
   TeamOutlined,
   FileTextOutlined,
-  BarChartOutlined
+  BarChartOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { prestationsAPI, beneficiairesAPI, prestatairesAPI } from '../../services/api';
 
 const { RangePicker } = DatePicker;
 const { TextArea } = Input;
+const { Option } = Select;
 
 const PrestationsManagementPage = () => {
   // États principaux
@@ -55,6 +59,7 @@ const PrestationsManagementPage = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalType, setModalType] = useState('create');
   const [form] = Form.useForm();
+  const [initialLoading, setInitialLoading] = useState(true);
 
   // Pagination et filtres
   const [pagination, setPagination] = useState({
@@ -89,33 +94,49 @@ const PrestationsManagementPage = () => {
   // Chargement des données initiales
   useEffect(() => {
     loadInitialData();
-    loadStatistics();
   }, []);
 
-  // Fonction pour convertir le statut de paiement en code API
-const getStatusCode = (statut) => {
-  const statutMap = {
-    'paye': 'P',
-    'impaye': 'I',
-    'partiel': 'T',
-    'en_attente': 'E'
+  useEffect(() => {
+    if (initialLoading === false) {
+      loadStatistics();
+    }
+  }, [filters, initialLoading]);
+
+  // Fonction pour convertir le statut de paiement
+  const getStatusCode = (statut) => {
+    const statutMap = {
+      'paye': 'P',
+      'impaye': 'I',
+      'partiel': 'T',
+      'en_attente': 'E'
+    };
+    return statutMap[statut?.toLowerCase()] || 'E';
   };
-  return statutMap[statut?.toLowerCase()] || 'E';
-};
+
+  const getStatutFromCode = (code) => {
+    const codeMap = {
+      'P': 'paye',
+      'I': 'impaye',
+      'T': 'partiel',
+      'E': 'en_attente'
+    };
+    return codeMap[code] || 'impaye';
+  };
 
   const loadInitialData = async () => {
     try {
-      setLoading(true);
+      setInitialLoading(true);
       await Promise.all([
-        loadPrestations(),
         loadTypesPrestations(),
         loadBeneficiaires(),
         loadPrestataires()
       ]);
+      await loadPrestations(1, pagination.pageSize);
     } catch (error) {
       console.error('Erreur chargement données:', error);
+      message.error('Erreur lors du chargement des données initiales');
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
     }
   };
 
@@ -130,13 +151,20 @@ const getStatusCode = (statut) => {
       });
 
       if (response.success) {
-        setPrestations(response.prestations || []);
-        setPagination({
-          ...pagination,
+        // S'assurer que chaque prestation a un ID unique pour la table
+        const prestationsWithId = response.prestations?.map((prestation, index) => ({
+          ...prestation,
+          key: prestation.COD_PREST || prestation.id || `prestation-${index}`,
+          id: prestation.COD_PREST || prestation.id || `prestation-${index}`
+        })) || [];
+        
+        setPrestations(prestationsWithId);
+        setPagination(prev => ({
+          ...prev,
           current: page,
           pageSize,
           total: response.pagination?.total || 0,
-        });
+        }));
       } else {
         message.error(response.message || 'Erreur lors du chargement des prestations');
       }
@@ -156,44 +184,67 @@ const getStatusCode = (statut) => {
       }
     } catch (error) {
       console.error('Erreur chargement types prestations:', error);
+      message.error('Erreur lors du chargement des types de prestations');
     }
   };
 
-  const loadBeneficiaires = async () => {
-    try {
-      const response = await beneficiairesAPI.getAll({ limit: 1000 });
-      if (response.success) {
-        setBeneficiaires(response.beneficiaires || []);
-        console.log('Bénéficiaires chargés:', response.beneficiaires?.length);
-      } else {
-        console.error('Erreur API bénéficiaires:', response.message);
-      }
-    } catch (error) {
-      console.error('Erreur chargement bénéficiaires:', error);
+// Dans loadBeneficiaires :
+const loadBeneficiaires = async () => {
+  try {
+    // Utiliser limit: 500 au lieu de 1000
+    const response = await beneficiairesAPI.getAll({ limit: 500 });
+    if (response.success) {
+      const beneficiairesFormatted = response.beneficiaires?.map(ben => ({
+        ...ben,
+        COD_BEN: ben.COD_BEN || ben.id,
+        NOM_BEN: ben.NOM_BEN || ben.nom || '',
+        PRE_BEN: ben.PRE_BEN || ben.prenom || ''
+      })) || [];
+      setBeneficiaires(beneficiairesFormatted);
+    } else {
       message.error('Erreur lors du chargement des bénéficiaires');
     }
-  };
+  } catch (error) {
+    console.error('Erreur chargement bénéficiaires:', error);
+    message.error('Erreur lors du chargement des bénéficiaires');
+  }
+};
 
-  const loadPrestataires = async () => {
-    try {
-      const response = await prestatairesAPI.getAll({ limit: 1000 });
-      if (response.success) {
-        setPrestataires(response.prestataires || []);
-        console.log('Prestataires chargés:', response.prestataires?.length);
-      } else {
-        console.error('Erreur API prestataires:', response.message);
-      }
-    } catch (error) {
-      console.error('Erreur chargement prestataires:', error);
+// Dans loadPrestataires :
+const loadPrestataires = async () => {
+  try {
+    // Utiliser limit: 500 au lieu de 1000
+    const response = await prestatairesAPI.getAll({ limit: 500 });
+    if (response.success) {
+      const prestatairesFormatted = response.prestataires?.map(prest => ({
+        ...prest,
+        COD_PRE: prest.COD_PRE || prest.id,
+        NOM_PRESTATAIRE: prest.NOM_PRESTATAIRE || prest.nom || '',
+        PRENOM_PRESTATAIRE: prest.PRENOM_PRESTATAIRE || prest.prenom || ''
+      })) || [];
+      setPrestataires(prestatairesFormatted);
+    } else {
       message.error('Erreur lors du chargement des prestataires');
     }
-  };
+  } catch (error) {
+    console.error('Erreur chargement prestataires:', error);
+    message.error('Erreur lors du chargement des prestataires');
+  }
+};
+
+ 
 
   const loadStatistics = async () => {
     try {
       const response = await prestationsAPI.getStatistics(filters);
       if (response.success) {
-        setStatistics(response.statistics || {});
+        setStatistics(response.statistics || {
+          total: 0,
+          total_montant: 0,
+          total_prise_charge: 0,
+          par_type: [],
+          par_mois: []
+        });
       }
     } catch (error) {
       console.error('Erreur chargement statistiques:', error);
@@ -204,28 +255,25 @@ const getStatusCode = (statut) => {
   const handleFilterChange = (key, value) => {
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
-    if (key === 'search') {
-      loadPrestations(1, pagination.pageSize);
-    }
   };
 
   const handleDateFilterChange = (dates) => {
     const newFilters = {
       ...filters,
-      date_debut: dates ? dates[0].format('YYYY-MM-DD') : null,
-      date_fin: dates ? dates[1].format('YYYY-MM-DD') : null,
+      date_debut: dates && dates[0] ? dates[0].format('YYYY-MM-DD') : null,
+      date_fin: dates && dates[1] ? dates[1].format('YYYY-MM-DD') : null,
     };
     setFilters(newFilters);
   };
 
   const applyFilters = () => {
+    setPagination(prev => ({ ...prev, current: 1 }));
     loadPrestations(1, pagination.pageSize);
-    loadStatistics();
     setFiltersVisible(false);
   };
 
   const resetFilters = () => {
-    const resetFilters = {
+    const resetFiltersState = {
       search: '',
       type_prestation: null,
       date_debut: null,
@@ -235,7 +283,8 @@ const getStatusCode = (statut) => {
       cod_ben: null,
       cod_prestataire: null,
     };
-    setFilters(resetFilters);
+    setFilters(resetFiltersState);
+    setPagination(prev => ({ ...prev, current: 1 }));
     loadPrestations(1, pagination.pageSize);
     setFiltersVisible(false);
   };
@@ -244,38 +293,39 @@ const getStatusCode = (statut) => {
   const handleCreatePrestation = () => {
     setModalType('create');
     form.resetFields();
+    form.setFieldsValue({
+      DATE_PRESTATION: dayjs(),
+      STATUT_PAIEMENT: 'impaye',
+      STATUT_DECLARATION: 'non_declare',
+      QUANTITE: 1,
+      TAUX_PRISE_CHARGE: 100
+    });
     setIsModalVisible(true);
   };
 
-const handleEditPrestation = (prestation) => {
-  setModalType('edit');
-  setSelectedPrestation(prestation);
-  
-  // Convertir le code statut API vers statut lisible
-  const getStatutFromCode = (code) => {
-    const codeMap = {
-      'P': 'paye',
-      'I': 'impaye',
-      'T': 'partiel',
-      'E': 'en_attente'
+  const handleEditPrestation = (prestation) => {
+    setModalType('edit');
+    setSelectedPrestation(prestation);
+    
+    const formValues = {
+      ...prestation,
+      DATE_PRESTATION: prestation.DATE_PRESTATION ? dayjs(prestation.DATE_PRESTATION) : null,
+      COD_BEN: prestation.COD_BEN ? String(prestation.COD_BEN) : null,
+      COD_PRESTATAIRE: prestation.COD_PRESTATAIRE ? String(prestation.COD_PRESTATAIRE) : null,
+      // Champs API
+      LIC_TAR: prestation.LIC_TAR || prestation.TYPE_PRESTATION?.replace(/\s+/g, '_').toUpperCase() || 'PRESTATION',
+      LIC_NOM: prestation.LIC_NOM || prestation.LIB_PREST || prestation.TYPE_PRESTATION || 'Prestation',
+      MLT_PRE: prestation.MLT_PRE || prestation.MONTANT || 0,
+      MONTANT: prestation.MONTANT || 0,
+      STATUT_PAIEMENT: getStatutFromCode(prestation.STA_PRE) || 'impaye',
+      QUANTITE: prestation.QUANTITE || 1,
+      TAUX_PRISE_CHARGE: prestation.TAUX_PRISE_CHARGE || 100,
+      OBSERVATIONS: prestation.OBSERVATIONS || prestation.OBS_PRE || ''
     };
-    return codeMap[code] || 'impaye';
+    
+    form.setFieldsValue(formValues);
+    setIsModalVisible(true);
   };
-
-  form.setFieldsValue({
-    ...prestation,
-    DATE_PRESTATION: prestation.DATE_PRESTATION ? dayjs(prestation.DATE_PRESTATION) : null,
-    COD_BEN: prestation.COD_BPR ? String(prestation.COD_BPR) : null,
-    COD_PRESTATAIRE: prestation.COD_BPR ? String(prestation.COD_BPR) : null,
-    // Champs API
-    LIC_TAR: prestation.LIC_TAR || prestation.TYPE_PRESTATION?.replace(/\s+/g, '_').toUpperCase() || 'PRESTATION',
-    LIC_NOM: prestation.LIC_NOM || prestation.LIB_PREST || prestation.TYPE_PRESTATION || 'Prestation',
-    MLT_PRE: prestation.MLT_PRE || prestation.MONTANT || 0,
-    COD_POL: prestation.COD_POL,
-    STATUT_PAIEMENT: getStatutFromCode(prestation.STA_PRE) || 'impaye',
-  });
-  setIsModalVisible(true);
-};
 
   const handleViewDetails = (prestation) => {
     setSelectedPrestation(prestation);
@@ -335,13 +385,27 @@ const handleEditPrestation = (prestation) => {
     }
   };
 
-  const handleMarkAsDeclared = async (prestationId) => {
+  const handleMarkAsDeclared = (prestationId) => {
+    let declarationId = '';
     Modal.confirm({
       title: 'Marquer comme déclaré',
-      content: 'Veuillez saisir l\'ID de la déclaration :',
-      onOk: async (value) => {
+      content: (
+        <div>
+          <p>Veuillez saisir l'ID de la déclaration :</p>
+          <Input
+            placeholder="ID déclaration"
+            onChange={(e) => declarationId = e.target.value}
+            style={{ marginTop: 8 }}
+          />
+        </div>
+      ),
+      onOk: async () => {
         try {
-          const response = await prestationsAPI.markAsDeclared(prestationId, value);
+          if (!declarationId) {
+            message.warning('Veuillez saisir un ID de déclaration');
+            return;
+          }
+          const response = await prestationsAPI.markAsDeclared(prestationId, declarationId);
           if (response.success) {
             message.success('Prestation marquée comme déclarée');
             loadPrestations(pagination.current, pagination.pageSize);
@@ -354,91 +418,78 @@ const handleEditPrestation = (prestation) => {
     });
   };
 
- // Dans handleSubmitPrestation du composant frontend
-const handleSubmitPrestation = async (values) => {
-  try {
-    setLoading(true);
-    
-    // Fonction pour convertir le statut de paiement en code API
-    const getStatusCode = (statut) => {
-      const statutMap = {
-        'paye': 'P',
-        'impaye': 'I', 
-        'partiel': 'T',
-        'en_attente': 'E'
+  const handleSubmitPrestation = async (values) => {
+    try {
+      setLoading(true);
+      
+      // Calculer le montant de prise en charge
+      const montant = parseFloat(values.MONTANT) || 0;
+      const taux = parseFloat(values.TAUX_PRISE_CHARGE) || 100;
+      const montantPriseEnCharge = (montant * taux) / 100;
+      const quantite = parseInt(values.QUANTITE) || 1;
+
+      // Formater la date correctement
+      const datePrestation = values.DATE_PRESTATION 
+        ? values.DATE_PRESTATION.format('YYYY-MM-DD HH:mm:ss')
+        : dayjs().format('YYYY-MM-DD HH:mm:ss');
+
+      const prestationData = {
+        // Champs obligatoires pour l'API
+        COD_BEN: values.COD_BEN ? parseInt(values.COD_BEN, 10) : null,
+        LIC_TAR: values.LIC_TAR || values.TYPE_PRESTATION?.replace(/\s+/g, '_').toUpperCase() || 'PRESTATION',
+        LIC_NOM: values.LIC_NOM || values.LIB_PREST || values.TYPE_PRESTATION || 'Prestation',
+        MLT_PRE: values.MLT_PRE || values.MONTANT || 0,
+        
+        // Champs supplémentaires
+        DATE_PRESTATION: datePrestation,
+        CRE_PRE: datePrestation,
+        QT_PRE: quantite,
+        MTR_PRE: montantPriseEnCharge,
+        OBS_PRE: values.OBSERVATIONS || '',
+        STA_PRE: getStatusCode(values.STATUT_PAIEMENT) || 'E',
+        COD_POL: values.COD_POL || null,
+        NUM_BAR: values.NUM_BAR || null,
+        COD_TYP_PRES: values.COD_TYP_PRES || null,
+        COD_CONTRAT: values.COD_CONTRAT || null,
+        
+        // Champs pour l'affichage
+        TYPE_PRESTATION: values.TYPE_PRESTATION,
+        LIB_PREST: values.LIB_PREST,
+        MONTANT: values.MONTANT || 0,
+        QUANTITE: quantite,
+        TAUX_PRISE_CHARGE: taux,
+        STATUT_PAIEMENT: values.STATUT_PAIEMENT || 'impaye',
+        STATUT_DECLARATION: values.STATUT_DECLARATION || 'non_declare',
+        COD_PRESTATAIRE: values.COD_PRESTATAIRE ? parseInt(values.COD_PRESTATAIRE, 10) : null,
       };
-      return statutMap[statut?.toLowerCase()] || 'E';
-    };
 
-    // Calculer le montant de prise en charge
-    const montant = parseFloat(values.MONTANT) || 0;
-    const taux = parseFloat(values.TAUX_PRISE_CHARGE) || 100;
-    const montantPriseEnCharge = (montant * taux) / 100;
+      let response;
+      if (modalType === 'create') {
+        response = await prestationsAPI.createPrestation(prestationData);
+      } else {
+        response = await prestationsAPI.updatePrestation(selectedPrestation.id, prestationData);
+      }
 
-    // Formater la date correctement
-    const datePrestation = values.DATE_PRESTATION 
-      ? values.DATE_PRESTATION.format('YYYY-MM-DD HH:mm:ss')
-      : dayjs().format('YYYY-MM-DD HH:mm:ss');
-
-   // Dans handleSubmitPrestation
-const prestationData = {
-  // Champs obligatoires pour l'API
-  COD_BPR: values.COD_BEN ? parseInt(values.COD_BEN, 10) : null,
-  LIC_TAR: values.LIC_TAR || values.TYPE_PRESTATION?.replace(/\s+/g, '_').toUpperCase() || 'PRESTATION',
-  LIC_NOM: values.LIC_NOM || values.LIB_PREST || values.TYPE_PRESTATION || 'Prestation',
-  MLT_PRE: values.MLT_PRE || values.MONTANT || 0,
-  
-  // Champs supplémentaires
-  CRE_PRE: datePrestation,
-  QT_PRE: values.QUANTITE || 1,
-  MTR_PRE: montantPriseEnCharge,
-  OBS_PRE: values.OBSERVATIONS || '',
-  STA_PRE: getStatusCode(values.STATUT_PAIEMENT) || 'E',
-  COD_POL: values.COD_POL || null,
-  NUM_BAR: values.NUM_BAR || null,
-  
-  // Pour la compatibilité (champs qui seront ignorés par le backend)
-  COD_BEN: values.COD_BEN ? parseInt(values.COD_BEN, 10) : null,
-  TYPE_PRESTATION: values.TYPE_PRESTATION,
-  LIB_PREST: values.LIB_PREST,
-  DATE_PRESTATION: values.DATE_PRESTATION ? values.DATE_PRESTATION.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
-  MONTANT: values.MONTANT || 0,
-  QUANTITE: values.QUANTITE || 1,
-  TAUX_PRISE_CHARGE: values.TAUX_PRISE_CHARGE || 100,
-  STATUT_PAIEMENT: values.STATUT_PAIEMENT || 'impaye',
-  STATUT_DECLARATION: values.STATUT_DECLARATION || 'non_declare',
-  COD_PRESTATAIRE: values.COD_PRESTATAIRE || null,
-};
-
-    console.log('📤 Données envoyées à l\'API:', prestationData);
-
-    let response;
-    if (modalType === 'create') {
-      response = await prestationsAPI.createPrestation(prestationData);
-    } else {
-      response = await prestationsAPI.updatePrestation(selectedPrestation.id, prestationData);
+      if (response.success) {
+        message.success(modalType === 'create' ? 'Prestation créée avec succès' : 'Prestation mise à jour avec succès');
+        setIsModalVisible(false);
+        form.resetFields();
+        loadPrestations(pagination.current, pagination.pageSize);
+        loadStatistics();
+      } else {
+        message.error(response.message || 'Erreur lors de l\'enregistrement');
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      message.error(error.message || 'Erreur lors de l\'enregistrement');
+    } finally {
+      setLoading(false);
     }
-
-    if (response.success) {
-      message.success(modalType === 'create' ? 'Prestation créée avec succès' : 'Prestation mise à jour avec succès');
-      setIsModalVisible(false);
-      form.resetFields();
-      loadPrestations(pagination.current, pagination.pageSize);
-      loadStatistics();
-    } else {
-      message.error(response.message || 'Erreur lors de l\'enregistrement');
-    }
-  } catch (error) {
-    console.error('Erreur:', error);
-    message.error(error.message || 'Erreur lors de l\'enregistrement');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   // Gestion de la pagination
-  const handleTableChange = (pagination) => {
-    loadPrestations(pagination.current, pagination.pageSize);
+  const handleTableChange = (newPagination) => {
+    loadPrestations(newPagination.current, newPagination.pageSize);
   };
 
   // Gestion de la sélection
@@ -467,6 +518,8 @@ const prestationData = {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
         message.success('Export réussi');
+      } else {
+        throw new Error('Format de réponse invalide');
       }
     } catch (error) {
       console.error('Erreur export:', error);
@@ -491,9 +544,9 @@ const prestationData = {
       key: 'beneficiaire',
       render: (text, record) => (
         <div>
-          <div style={{ fontWeight: '500' }}>{text}</div>
+          <div style={{ fontWeight: '500' }}>{text || 'Non renseigné'}</div>
           <div style={{ fontSize: '12px', color: '#666' }}>
-            ID: {record.COD_BEN}
+            ID: {record.COD_BEN || '-'}
           </div>
         </div>
       ),
@@ -509,7 +562,7 @@ const prestationData = {
       onFilter: (value, record) => record.TYPE_PRESTATION === value,
       render: (text) => (
         <Tag color="blue" style={{ marginRight: 0 }}>
-          {text}
+          {text || 'Non spécifié'}
         </Tag>
       ),
     },
@@ -518,6 +571,7 @@ const prestationData = {
       dataIndex: 'LIB_PREST',
       key: 'LIB_PREST',
       ellipsis: true,
+      render: (text) => text || '-'
     },
     {
       title: 'Date',
@@ -534,10 +588,10 @@ const prestationData = {
       width: 150,
       render: (amount) => (
         <div style={{ textAlign: 'right', fontWeight: '500' }}>
-          {parseInt(amount).toLocaleString('fr-FR')}
+          {parseFloat(amount || 0).toLocaleString('fr-FR')}
         </div>
       ),
-      sorter: (a, b) => a.MONTANT - b.MONTANT,
+      sorter: (a, b) => parseFloat(a.MONTANT || 0) - parseFloat(b.MONTANT || 0),
     },
     {
       title: 'Prise en charge',
@@ -547,10 +601,10 @@ const prestationData = {
       render: (amount, record) => (
         <div>
           <div style={{ textAlign: 'right', fontWeight: '500' }}>
-            {parseInt(amount || 0).toLocaleString('fr-FR')}
+            {parseFloat(amount || 0).toLocaleString('fr-FR')}
           </div>
           <div style={{ fontSize: '12px', color: '#666', textAlign: 'right' }}>
-            {record.TAUX_PRISE_CHARGE}%
+            {record.TAUX_PRISE_CHARGE || 0}%
           </div>
         </div>
       ),
@@ -567,7 +621,7 @@ const prestationData = {
           'partiel': { color: 'orange', text: 'Partiel' },
           'en_attente': { color: 'gold', text: 'En attente' },
         };
-        const config = statusConfig[statut?.toLowerCase()] || { color: 'default', text: statut };
+        const config = statusConfig[statut?.toLowerCase()] || { color: 'default', text: statut || 'Inconnu' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
       filters: [
@@ -589,7 +643,7 @@ const prestationData = {
           'non_declare': { color: 'red', text: 'Non déclaré' },
           'en_cours': { color: 'orange', text: 'En cours' },
         };
-        const config = statusConfig[statut?.toLowerCase()] || { color: 'default', text: statut };
+        const config = statusConfig[statut?.toLowerCase()] || { color: 'default', text: statut || 'Non déclaré' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
@@ -661,29 +715,37 @@ const prestationData = {
   const statCards = [
     {
       title: 'Total Prestations',
-      value: statistics.total,
+      value: statistics.total || 0,
       icon: <MedicineBoxOutlined />,
       color: '#1890ff',
     },
     {
       title: 'Montant Total',
-      value: `${parseInt(statistics.total_montant || 0).toLocaleString('fr-FR')} FCFA`,
+      value: `${parseFloat(statistics.total_montant || 0).toLocaleString('fr-FR')} FCFA`,
       icon: <DollarOutlined />,
       color: '#52c41a',
     },
     {
       title: 'Prise en Charge',
-      value: `${parseInt(statistics.total_prise_charge || 0).toLocaleString('fr-FR')} FCFA`,
+      value: `${parseFloat(statistics.total_prise_charge || 0).toLocaleString('fr-FR')} FCFA`,
       icon: <TeamOutlined />,
       color: '#fa8c16',
     },
     {
       title: 'Reste à Charge',
-      value: `${parseInt((statistics.total_montant || 0) - (statistics.total_prise_charge || 0)).toLocaleString('fr-FR')} FCFA`,
+      value: `${parseFloat((statistics.total_montant || 0) - (statistics.total_prise_charge || 0)).toLocaleString('fr-FR')} FCFA`,
       icon: <BarChartOutlined />,
       color: '#f5222d',
     },
   ];
+
+  if (initialLoading) {
+    return (
+      <div style={{ padding: '24px', textAlign: 'center' }}>
+        <Spin size="large" tip="Chargement des données..." />
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '24px' }}>
@@ -727,7 +789,7 @@ const prestationData = {
           <Col span={24}>
             <Row gutter={16}>
               {statCards.map((stat, index) => (
-                <Col span={6} key={index}>
+                <Col xs={24} sm={12} md={6} key={index}>
                   <Card size="small">
                     <Statistic
                       title={stat.title}
@@ -744,7 +806,7 @@ const prestationData = {
 
         {/* Tableau des prestations */}
         <Table
-          rowKey="id"
+          rowKey="key"
           columns={columns}
           dataSource={prestations}
           loading={loading}
@@ -753,35 +815,37 @@ const prestationData = {
           rowSelection={rowSelection}
           scroll={{ x: 1500 }}
           summary={() => (
-            <Table.Summary fixed>
-              <Table.Summary.Row>
-                <Table.Summary.Cell index={0} colSpan={5}>
-                  <strong>Total sélectionné ({selectedRowKeys.length})</strong>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={5}>
-                  <div style={{ textAlign: 'right', fontWeight: 'bold' }}>
-                    {prestations
-                      .filter(p => selectedRowKeys.includes(p.id))
-                      .reduce((sum, p) => sum + (p.MONTANT || 0), 0)
-                      .toLocaleString('fr-FR')} FCFA
-                  </div>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={6}>
-                  <div style={{ textAlign: 'right', fontWeight: 'bold' }}>
-                    {prestations
-                      .filter(p => selectedRowKeys.includes(p.id))
-                      .reduce((sum, p) => sum + (p.MONTANT_PRISE_CHARGE || 0), 0)
-                      .toLocaleString('fr-FR')} FCFA
-                  </div>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={7} colSpan={3} />
-              </Table.Summary.Row>
-            </Table.Summary>
+            selectedRowKeys.length > 0 ? (
+              <Table.Summary fixed>
+                <Table.Summary.Row>
+                  <Table.Summary.Cell index={0} colSpan={5}>
+                    <strong>Total sélectionné ({selectedRowKeys.length})</strong>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={5}>
+                    <div style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                      {prestations
+                        .filter(p => selectedRowKeys.includes(p.key))
+                        .reduce((sum, p) => sum + (parseFloat(p.MONTANT) || 0), 0)
+                        .toLocaleString('fr-FR')} FCFA
+                    </div>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={6}>
+                    <div style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                      {prestations
+                        .filter(p => selectedRowKeys.includes(p.key))
+                        .reduce((sum, p) => sum + (parseFloat(p.MONTANT_PRISE_CHARGE) || 0), 0)
+                        .toLocaleString('fr-FR')} FCFA
+                    </div>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={7} colSpan={3} />
+                </Table.Summary.Row>
+              </Table.Summary>
+            ) : null
           )}
         />
       </Card>
 
-      {/* Modale de filtres */}
+      {/* Drawer de filtres */}
       <Drawer
         title="Filtres avancés"
         placement="right"
@@ -818,9 +882,9 @@ const prestationData = {
               onChange={(value) => handleFilterChange('type_prestation', value)}
             >
               {typesPrestations.map(type => (
-                <Select.Option key={type.id} value={type.libelle}>
+                <Option key={type.id} value={type.libelle}>
                   {type.libelle}
-                </Select.Option>
+                </Option>
               ))}
             </Select>
           </Form.Item>
@@ -833,12 +897,15 @@ const prestationData = {
               allowClear
               value={filters.cod_ben}
               onChange={(value) => handleFilterChange('cod_ben', value)}
+              filterOption={(input, option) =>
+                option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+              }
             >
               {beneficiaires.map(ben => (
-                <Select.Option key={ben.ID_BEN || ben.id} value={String(ben.ID_BEN || ben.id)}>
-                  {ben.NOM_BEN || ben.nom} {ben.PRE_BEN || ben.prenom}
+                <Option key={ben.COD_BEN} value={String(ben.COD_BEN)}>
+                  {ben.NOM_BEN} {ben.PRE_BEN}
                   {ben.IDENTIFIANT_NATIONAL && ` (${ben.IDENTIFIANT_NATIONAL})`}
-                </Select.Option>
+                </Option>
               ))}
             </Select>
           </Form.Item>
@@ -851,9 +918,9 @@ const prestationData = {
               onChange={(value) => handleFilterChange('cod_prestataire', value)}
             >
               {prestataires.map(prest => (
-                <Select.Option key={prest.COD_PRE || prest.id} value={String(prest.COD_PRE || prest.id)}>
-                  {prest.NOM_PRESTATAIRE || prest.nom} {prest.PRENOM_PRESTATAIRE || prest.prenom}
-                </Select.Option>
+                <Option key={prest.COD_PRE} value={String(prest.COD_PRE)}>
+                  {prest.NOM_PRESTATAIRE} {prest.PRENOM_PRESTATAIRE}
+                </Option>
               ))}
             </Select>
           </Form.Item>
@@ -865,10 +932,10 @@ const prestationData = {
               value={filters.statut_paiement}
               onChange={(value) => handleFilterChange('statut_paiement', value)}
             >
-              <Select.Option value="paye">Payé</Select.Option>
-              <Select.Option value="impaye">Impayé</Select.Option>
-              <Select.Option value="partiel">Partiel</Select.Option>
-              <Select.Option value="en_attente">En attente</Select.Option>
+              <Option value="paye">Payé</Option>
+              <Option value="impaye">Impayé</Option>
+              <Option value="partiel">Partiel</Option>
+              <Option value="en_attente">En attente</Option>
             </Select>
           </Form.Item>
 
@@ -879,9 +946,9 @@ const prestationData = {
               value={filters.statut_declaration}
               onChange={(value) => handleFilterChange('statut_declaration', value)}
             >
-              <Select.Option value="declare">Déclaré</Select.Option>
-              <Select.Option value="non_declare">Non déclaré</Select.Option>
-              <Select.Option value="en_cours">En cours</Select.Option>
+              <Option value="declare">Déclaré</Option>
+              <Option value="non_declare">Non déclaré</Option>
+              <Option value="en_cours">En cours</Option>
             </Select>
           </Form.Item>
 
@@ -909,11 +976,13 @@ const prestationData = {
         onOk={() => form.submit()}
         confirmLoading={loading}
         width={800}
+        destroyOnClose
       >
         <Form
           form={form}
           layout="vertical"
           onFinish={handleSubmitPrestation}
+          preserve={false}
         >
           <Row gutter={16}>
             <Col span={12}>
@@ -928,15 +997,15 @@ const prestationData = {
                   optionFilterProp="children"
                   allowClear
                   loading={loading}
+                  filterOption={(input, option) =>
+                    option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+                  }
                 >
                   {beneficiaires.map(ben => (
-                    <Select.Option 
-                      key={ben.ID_BEN || ben.id} 
-                      value={String(ben.ID_BEN || ben.id)}
-                    >
-                      {ben.NOM_BEN || ben.nom} {ben.PRE_BEN || ben.prenom}
+                    <Option key={ben.COD_BEN} value={String(ben.COD_BEN)}>
+                      {ben.NOM_BEN} {ben.PRE_BEN}
                       {ben.IDENTIFIANT_NATIONAL && ` (${ben.IDENTIFIANT_NATIONAL})`}
-                    </Select.Option>
+                    </Option>
                   ))}
                 </Select>
               </Form.Item>
@@ -953,9 +1022,9 @@ const prestationData = {
                   allowClear
                 >
                   {typesPrestations.map(type => (
-                    <Select.Option key={type.id} value={type.libelle}>
+                    <Option key={type.id} value={type.libelle}>
                       {type.libelle}
-                    </Select.Option>
+                    </Option>
                   ))}
                 </Select>
               </Form.Item>
@@ -1036,6 +1105,7 @@ const prestationData = {
                   formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
                   parser={value => value.replace(/\s/g, '')}
                   min={0}
+                  step={100}
                 />
               </Form.Item>
             </Col>
@@ -1054,6 +1124,7 @@ const prestationData = {
                   formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
                   parser={value => value.replace(/\s/g, '')}
                   min={0}
+                  step={100}
                 />
               </Form.Item>
             </Col>
@@ -1100,43 +1171,44 @@ const prestationData = {
                   loading={loading}
                 >
                   {prestataires.map(prest => (
-                    <Select.Option key={prest.COD_PRE || prest.id} value={String(prest.COD_PRE || prest.id)}>
-                      {prest.NOM_PRESTATAIRE || prest.nom} {prest.PRENOM_PRESTATAIRE || prest.prenom}
-                    </Select.Option>
+                    <Option key={prest.COD_PRE} value={String(prest.COD_PRE)}>
+                      {prest.NOM_PRESTATAIRE} {prest.PRENOM_PRESTATAIRE}
+                    </Option>
                   ))}
                 </Select>
               </Form.Item>
             </Col>
           </Row>
-<Row gutter={16}>
-  <Col span={12}>
-    <Form.Item
-      label="Contrat (COD_POL)"
-      name="COD_CONTRAT"
-    >
-      <InputNumber
-        style={{ width: '100%' }}
-        placeholder="Code contrat"
-        min={0}
-      />
-    </Form.Item>
-  </Col>
-  <Col span={12}>
-    <Form.Item
-      label="Type prestation (COD_TYP_PRES)"
-      name="COD_TYP_PRES"
-    >
-      <Input placeholder="Code type prestation" />
-    </Form.Item>
-  </Col>
-</Row>
 
-<Form.Item
-  label="Numéro de barre (NUM_BAR)"
-  name="NUM_BAR"
->
-  <Input placeholder="Numéro de barre ou code barre" />
-</Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="Contrat (COD_POL)"
+                name="COD_POL"
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="Code contrat"
+                  min={0}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="Type prestation (COD_TYP_PRES)"
+                name="COD_TYP_PRES"
+              >
+                <Input placeholder="Code type prestation" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item
+            label="Numéro de barre (NUM_BAR)"
+            name="NUM_BAR"
+          >
+            <Input placeholder="Numéro de barre ou code barre" />
+          </Form.Item>
 
           <Row gutter={16}>
             <Col span={12}>
@@ -1145,10 +1217,10 @@ const prestationData = {
                 name="STATUT_PAIEMENT"
               >
                 <Select defaultValue="impaye">
-                  <Select.Option value="impaye">Impayé</Select.Option>
-                  <Select.Option value="paye">Payé</Select.Option>
-                  <Select.Option value="partiel">Partiel</Select.Option>
-                  <Select.Option value="en_attente">En attente</Select.Option>
+                  <Option value="impaye">Impayé</Option>
+                  <Option value="paye">Payé</Option>
+                  <Option value="partiel">Partiel</Option>
+                  <Option value="en_attente">En attente</Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -1159,9 +1231,9 @@ const prestationData = {
                 name="STATUT_DECLARATION"
               >
                 <Select defaultValue="non_declare">
-                  <Select.Option value="non_declare">Non déclaré</Select.Option>
-                  <Select.Option value="declare">Déclaré</Select.Option>
-                  <Select.Option value="en_cours">En cours</Select.Option>
+                  <Option value="non_declare">Non déclaré</Option>
+                  <Option value="declare">Déclaré</Option>
+                  <Option value="en_cours">En cours</Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -1187,57 +1259,57 @@ const prestationData = {
         open={prestationDetailsVisible}
         width={600}
       >
-        {selectedPrestation && (
+        {selectedPrestation ? (
           <>
             <Descriptions column={1} bordered>
               <Descriptions.Item label="ID">
-                <Tag color="blue">{selectedPrestation.COD_PREST}</Tag>
+                <Tag color="blue">{selectedPrestation.COD_PREST || selectedPrestation.id}</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Bénéficiaire">
-                <strong>{selectedPrestation.beneficiaire_nom_complet}</strong>
+                <strong>{selectedPrestation.beneficiaire_nom_complet || 'Non renseigné'}</strong>
                 <div style={{ color: '#666', fontSize: '12px' }}>
-                  ID: {selectedPrestation.COD_BEN}
+                  ID: {selectedPrestation.COD_BEN || '-'}
                 </div>
               </Descriptions.Item>
               <Descriptions.Item label="Type de prestation">
-                <Tag color="blue">{selectedPrestation.TYPE_PRESTATION}</Tag>
+                <Tag color="blue">{selectedPrestation.TYPE_PRESTATION || 'Non spécifié'}</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Libellé">
-                {selectedPrestation.LIB_PREST}
+                {selectedPrestation.LIB_PREST || '-'}
               </Descriptions.Item>
               <Descriptions.Item label="Code Tarif">
-                {selectedPrestation.LIC_TAR}
+                {selectedPrestation.LIC_TAR || '-'}
               </Descriptions.Item>
               <Descriptions.Item label="Libellé Nomenclature">
-                {selectedPrestation.LIC_NOM}
+                {selectedPrestation.LIC_NOM || '-'}
               </Descriptions.Item>
               <Descriptions.Item label="Date">
                 {selectedPrestation.DATE_PRESTATION ? dayjs(selectedPrestation.DATE_PRESTATION).format('DD/MM/YYYY') : '-'}
               </Descriptions.Item>
               <Descriptions.Item label="Montant total">
                 <strong style={{ color: '#1890ff' }}>
-                  {parseInt(selectedPrestation.MONTANT || 0).toLocaleString('fr-FR')} FCFA
+                  {parseFloat(selectedPrestation.MONTANT || 0).toLocaleString('fr-FR')} FCFA
                 </strong>
               </Descriptions.Item>
               <Descriptions.Item label="Montant prévisionnel">
                 <strong style={{ color: '#722ed1' }}>
-                  {parseInt(selectedPrestation.MLT_PRE || 0).toLocaleString('fr-FR')} FCFA
+                  {parseFloat(selectedPrestation.MLT_PRE || 0).toLocaleString('fr-FR')} FCFA
                 </strong>
               </Descriptions.Item>
               <Descriptions.Item label="Quantité">
                 {selectedPrestation.QUANTITE || 1}
               </Descriptions.Item>
               <Descriptions.Item label="Taux de prise en charge">
-                {selectedPrestation.TAUX_PRISE_CHARGE}%
+                {selectedPrestation.TAUX_PRISE_CHARGE || 0}%
               </Descriptions.Item>
               <Descriptions.Item label="Montant prise en charge">
                 <strong style={{ color: '#52c41a' }}>
-                  {parseInt(selectedPrestation.MONTANT_PRISE_CHARGE || 0).toLocaleString('fr-FR')} FCFA
+                  {parseFloat(selectedPrestation.MONTANT_PRISE_CHARGE || 0).toLocaleString('fr-FR')} FCFA
                 </strong>
               </Descriptions.Item>
               <Descriptions.Item label="Reste à charge">
                 <strong style={{ color: '#f5222d' }}>
-                  {parseInt((selectedPrestation.MONTANT || 0) - (selectedPrestation.MONTANT_PRISE_CHARGE || 0)).toLocaleString('fr-FR')} FCFA
+                  {parseFloat((selectedPrestation.MONTANT || 0) - (selectedPrestation.MONTANT_PRISE_CHARGE || 0)).toLocaleString('fr-FR')} FCFA
                 </strong>
               </Descriptions.Item>
               <Descriptions.Item label="Statut de paiement">
@@ -1246,7 +1318,7 @@ const prestationData = {
                 ) : selectedPrestation.STATUT_PAIEMENT === 'impaye' ? (
                   <Tag color="red">Impayé</Tag>
                 ) : (
-                  <Tag color="orange">{selectedPrestation.STATUT_PAIEMENT}</Tag>
+                  <Tag color="orange">{selectedPrestation.STATUT_PAIEMENT || 'Inconnu'}</Tag>
                 )}
               </Descriptions.Item>
               <Descriptions.Item label="Statut de déclaration">
@@ -1293,7 +1365,7 @@ const prestationData = {
                   icon={<EditOutlined />}
                   onClick={() => {
                     setPrestationDetailsVisible(false);
-                    handleEditPrestation(selectedPrestation);
+                    setTimeout(() => handleEditPrestation(selectedPrestation), 300);
                   }}
                 >
                   Modifier
@@ -1328,6 +1400,13 @@ const prestationData = {
               </Space>
             </div>
           </>
+        ) : (
+          <Alert
+            message="Aucune information"
+            description="Impossible de charger les détails de la prestation"
+            type="warning"
+            showIcon
+          />
         )}
       </Drawer>
     </div>

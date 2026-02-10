@@ -1,4 +1,4 @@
-// components/DetailDialog.jsx - VERSION CORRIGÉE
+// components/DetailDialog.jsx
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -23,8 +23,7 @@ import {
   ListItemIcon,
   Avatar,
   Stack,
-  Tooltip,
-  Snackbar
+  Tooltip
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -50,63 +49,6 @@ import {
 import PrintDetails from './PrintDetails';
 import { facturationAPI, financesAPI } from '../../services/api';
 
-// Fonction pour extraire les valeurs de manière sécurisée
-const extractValue = (data, keys, defaultValue = 'N/A') => {
-  if (!data) return defaultValue;
-  
-  for (const key of keys) {
-    const value = data[key];
-    if (value !== undefined && value !== null) {
-      // Si c'est un objet, essayer d'extraire les valeurs courantes
-      if (typeof value === 'object' && !Array.isArray(value)) {
-        return value.NOM_BEN || value.nom || value.PRE_BEN || value.prenom || 
-               value.numero || value.NUMERO_FACTURE || value.reference || 
-               value.toString();
-      }
-      return value;
-    }
-  }
-  return defaultValue;
-};
-
-// Fonction pour normaliser les données
-const normalizeData = (data, type) => {
-  if (!data) return null;
-  
-  const normalized = { ...data };
-  
-  // Normaliser les champs communs
-  normalized.id = extractValue(data, ['id', 'ID', 'COD_FACTURE', 'COD_TRANS', 'COD_DECL']);
-  normalized.numero = extractValue(data, ['numero', 'NUMERO_FACTURE', 'numero_facture', 'NUM_DECLARATION']);
-  normalized.reference = extractValue(data, ['REFERENCE_TRANSACTION', 'reference', 'reference_transaction']);
-  
-  // Normaliser les informations de bénéficiaire
-  normalized.nom = extractValue(data, ['NOM_BEN', 'nom_ben', 'nom', 'BENEFICIAIRE', 'NOM_CLIENT']);
-  normalized.prenom = extractValue(data, ['PRE_BEN', 'PRENOM_BEN', 'prenom_ben', 'prenom', 'PRENOM_CLIENT']);
-  
-  // Normaliser les montants
-  normalized.montant = parseFloat(extractValue(data, ['MONTANT', 'montant'], 0));
-  normalized.montant_total = parseFloat(extractValue(data, ['MONTANT_TOTAL', 'montant_total'], 0));
-  normalized.montant_paye = parseFloat(extractValue(data, ['MONTANT_PAYE', 'montant_paye'], 0));
-  normalized.montant_restant = parseFloat(extractValue(data, ['MONTANT_RESTANT', 'montant_restant'], 0));
-  
-  // Normaliser les dates
-  normalized.date = extractValue(data, ['DATE_INITIATION', 'date_initiation', 'date', 'created_at']);
-  normalized.date_facture = extractValue(data, ['DATE_FACTURE', 'date_facture']);
-  normalized.date_echeance = extractValue(data, ['DATE_ECHEANCE', 'date_echeance']);
-  
-  // Normaliser les statuts
-  normalized.statut = extractValue(data, ['STATUT_TRANSACTION', 'statut', 'STATUT_FACTURE', 'STATUT']);
-  
-  // Normaliser les autres champs
-  normalized.observations = extractValue(data, ['OBSERVATIONS', 'observations']);
-  normalized.description = extractValue(data, ['DESCRIPTION', 'description']);
-  normalized.methode_paiement = extractValue(data, ['METHODE_PAIEMENT', 'methode_paiement', 'method']);
-  normalized.telephone = extractValue(data, ['TELEPHONE', 'telephone', 'phone']);
-  
-  return normalized;
-};
-
 const DetailDialog = ({ 
   open, 
   type, 
@@ -115,35 +57,24 @@ const DetailDialog = ({
   onClose, 
   onDownload,
   statusConfig,
-  paymentMethods,
-  formatCurrency,
-  formatDate
+  paymentMethods
 }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [showPrintView, setShowPrintView] = useState(false);
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState(null);
-  const [data, setData] = useState(() => normalizeData(initialData, type));
+  const [data, setData] = useState(initialData);
   const [paiements, setPaiements] = useState([]);
   const [loadingPaiements, setLoadingPaiements] = useState(false);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', type: 'info' });
 
   useEffect(() => {
     if (open && !initialData && id) {
       loadData();
     } else if (initialData) {
-      setData(normalizeData(initialData, type));
+      setData(initialData);
       setLoading(false);
     }
   }, [open, id, type, initialData]);
-
-  const showNotification = (message, type = 'info') => {
-    setSnackbar({ open: true, message, type });
-  };
-
-  const handleCloseNotification = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
 
   const loadData = async () => {
     try {
@@ -159,7 +90,7 @@ const DetailDialog = ({
         });
         
         if (response.success && response.transactions && response.transactions.length > 0) {
-          setData(normalizeData(response.transactions[0], type));
+          setData(response.transactions[0]);
         } else {
           throw new Error('Transaction non trouvée');
         }
@@ -168,9 +99,8 @@ const DetailDialog = ({
         response = await facturationAPI.getFactureById(id);
         
         if (response.success && response.facture) {
-          const normalizedData = normalizeData(response.facture, type);
-          setData(normalizedData);
-          loadPaiements(normalizedData.id);
+          setData(response.facture);
+          loadPaiements(response.facture.id || response.facture.ID_FACTURE);
         } else {
           throw new Error('Facture non trouvée');
         }
@@ -190,20 +120,35 @@ const DetailDialog = ({
       const response = await facturationAPI.getPaiements(factureId);
       
       if (response.success) {
-        // Normaliser les paiements
-        const normalizedPaiements = (response.paiements || []).map(p => ({
-          id: extractValue(p, ['id', 'ID_PAIEMENT']),
-          montant: parseFloat(extractValue(p, ['MONTANT', 'montant'], 0)),
-          mode_paiement: extractValue(p, ['MODE_PAIEMENT', 'mode_paiement', 'method']),
-          date_paiement: extractValue(p, ['DATE_PAIEMENT', 'date_paiement']),
-          reference: extractValue(p, ['REFERENCE', 'reference'])
-        }));
-        setPaiements(normalizedPaiements);
+        setPaiements(response.paiements || []);
       }
       setLoadingPaiements(false);
     } catch (error) {
       console.error('❌ Erreur chargement paiements:', error);
       setLoadingPaiements(false);
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    if (!amount && amount !== 0) return 'N/A';
+    return new Intl.NumberFormat('fr-FR', {
+      style: 'currency',
+      currency: 'CFA'
+    }).format(amount);
+  };
+
+  const formatDate = (date) => {
+    if (!date) return 'N/A';
+    try {
+      return new Date(date).toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return date;
     }
   };
 
@@ -242,7 +187,7 @@ const DetailDialog = ({
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({
-        title: `${type === 'transaction' ? 'Transaction' : 'Facture'} ${data.reference || data.numero || id}`,
+        title: `${type === 'transaction' ? 'Transaction' : 'Facture'} ${data.REFERENCE_TRANSACTION || data.numero || data.ID_FACTURE}`,
         text: `Détails de ${type === 'transaction' ? 'la transaction' : 'la facture'}`,
         url: window.location.href,
       });
@@ -251,23 +196,38 @@ const DetailDialog = ({
 
   const handleDownload = async () => {
     try {
-      showNotification('Téléchargement en cours...', 'info');
-      
-      if (onDownload) {
-        const reference = data.reference || data.numero || id;
-        await onDownload(reference, type);
-      } else {
-        showNotification('Fonction de téléchargement non disponible', 'error');
+      if (type === 'transaction') {
+        const blob = await facturationAPI.genererRecuPDF(
+          data.REFERENCE_TRANSACTION || data.id || data.ID_TRANSACTION
+        );
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `recu-transaction-${data.REFERENCE_TRANSACTION || data.id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else if (type === 'facture') {
+        const blob = await facturationAPI.genererQuittancePDF(
+          data.numero || data.id || data.ID_FACTURE
+        );
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `quittance-facture-${data.numero || data.id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
       }
     } catch (error) {
       console.error('❌ Erreur téléchargement:', error);
-      showNotification('Erreur lors du téléchargement', 'error');
+      alert('Erreur lors du téléchargement: ' + error.message);
     }
   };
 
   const renderQuickStats = () => {
-    if (!data) return null;
-    
     if (type === 'transaction') {
       return (
         <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
@@ -276,7 +236,7 @@ const DetailDialog = ({
               Montant
             </Typography>
             <Typography variant="h6" color="primary" fontWeight="bold">
-              {formatCurrency ? formatCurrency(data.montant) : `${data.montant} XAF`}
+              {formatCurrency(data.MONTANT || data.montant)}
             </Typography>
           </Paper>
           <Paper sx={{ p: 2, flex: 1, minWidth: 200, textAlign: 'center' }}>
@@ -284,8 +244,8 @@ const DetailDialog = ({
               Statut
             </Typography>
             <Chip
-              label={getStatutText(data.statut)}
-              color={getStatutColor(data.statut)}
+              label={getStatutText(data.STATUT_TRANSACTION || data.statut)}
+              color={getStatutColor(data.STATUT_TRANSACTION || data.statut)}
               sx={{ mt: 0.5, fontWeight: 'medium' }}
             />
           </Paper>
@@ -294,7 +254,7 @@ const DetailDialog = ({
               Date
             </Typography>
             <Typography variant="body2" sx={{ mt: 0.5 }}>
-              {formatDate ? formatDate(data.date) : data.date}
+              {formatDate(data.DATE_INITIATION || data.date_transaction || data.created_at)}
             </Typography>
           </Paper>
         </Box>
@@ -307,7 +267,7 @@ const DetailDialog = ({
               Montant Total
             </Typography>
             <Typography variant="h6" color="primary" fontWeight="bold">
-              {formatCurrency ? formatCurrency(data.montant_total) : `${data.montant_total} XAF`}
+              {formatCurrency(data.MONTANT_TOTAL || data.montant_total)}
             </Typography>
           </Paper>
           <Paper sx={{ p: 2, flex: 1, minWidth: 200, textAlign: 'center' }}>
@@ -324,8 +284,8 @@ const DetailDialog = ({
             <Typography variant="caption" color="text.secondary">
               Restant à Payer
             </Typography>
-            <Typography variant="h6" color={data.montant_restant > 0 ? 'error' : 'success'} fontWeight="bold">
-              {formatCurrency ? formatCurrency(data.montant_restant) : `${data.montant_restant} XAF`}
+            <Typography variant="h6" color={data.MONTANT_RESTANT > 0 ? 'error' : 'success'} fontWeight="bold">
+              {formatCurrency(data.MONTANT_RESTANT || data.montant_restant || 0)}
             </Typography>
           </Paper>
         </Box>
@@ -334,237 +294,280 @@ const DetailDialog = ({
     return null;
   };
 
-  const renderTransactionDetails = () => {
-    if (!data) return null;
-    
-    return (
-      <Paper sx={{ p: 3, borderRadius: 2 }}>
-        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <ReceiptIcon color="primary" />
-          Informations Transaction
-        </Typography>
-        <Divider sx={{ mb: 3 }} />
-        
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Référence Transaction
-              </Typography>
-              <Typography variant="body1" fontWeight="medium">
-                {data.reference || 'N/A'}
-              </Typography>
-            </Box>
-            
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Bénéficiaire
-              </Typography>
-              <Typography variant="body1">
-                {data.nom || 'N/A'} {data.prenom || ''}
-              </Typography>
-            </Box>
-            
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Méthode de paiement
-              </Typography>
-              <Typography variant="body1">
-                {data.methode_paiement || 'N/A'}
-              </Typography>
-            </Box>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Montant
-              </Typography>
-              <Typography variant="body1" fontWeight="bold" color="primary">
-                {formatCurrency ? formatCurrency(data.montant) : `${data.montant} XAF`}
-              </Typography>
-            </Box>
-            
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Statut
-              </Typography>
-              <Chip
-                label={getStatutText(data.statut)}
-                color={getStatutColor(data.statut)}
-                size="small"
-              />
-            </Box>
-            
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Date
-              </Typography>
-              <Typography variant="body1">
-                {formatDate ? formatDate(data.date) : data.date}
-              </Typography>
-            </Box>
-          </Grid>
-        </Grid>
-        
-        {(data.observations || data.description) && (
-          <Box sx={{ mt: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-              {data.description ? 'Description' : 'Observations'}
+  const renderTransactionDetails = () => (
+    <Paper sx={{ p: 3, borderRadius: 2 }}>
+      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <ReceiptIcon color="primary" />
+        Informations Transaction
+      </Typography>
+      <Divider sx={{ mb: 3 }} />
+      
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={6}>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Référence Transaction
             </Typography>
-            <Typography variant="body2">
-              {data.description || data.observations}
+            <Typography variant="body1" fontWeight="medium">
+              {data.REFERENCE_TRANSACTION || 'N/A'}
             </Typography>
           </Box>
-        )}
-      </Paper>
-    );
-  };
+          
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Type de Transaction
+            </Typography>
+            <Typography variant="body1">
+              {data.TYPE_TRANSACTION || data.type_transaction || 'N/A'}
+            </Typography>
+          </Box>
+          
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Canal
+            </Typography>
+            <Typography variant="body1">
+              {data.CANAL || data.canal || 'N/A'}
+            </Typography>
+          </Box>
+        </Grid>
+        
+        <Grid item xs={12} md={6}>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Numéro Facture Associée
+            </Typography>
+            <Typography variant="body1">
+              {data.NUMERO_FACTURE || data.numero_facture || 'Aucune'}
+            </Typography>
+          </Box>
+          
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Client/Bénéficiaire
+            </Typography>
+            <Typography variant="body1">
+              {data.NOM_CLIENT || data.nom_client || data.NOM_BEN || 'N/A'}
+            </Typography>
+          </Box>
+          
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Moyen de Paiement
+            </Typography>
+            <Typography variant="body1">
+              {data.MOYEN_PAIEMENT || data.moyen_paiement || 'N/A'}
+            </Typography>
+          </Box>
+        </Grid>
+      </Grid>
+      
+      {data.DESCRIPTION && (
+        <Box sx={{ mt: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+            Description
+          </Typography>
+          <Typography variant="body2">
+            {data.DESCRIPTION}
+          </Typography>
+        </Box>
+      )}
+    </Paper>
+  );
 
-  const renderFactureDetails = () => {
-    if (!data) return null;
-    
-    return (
-      <Paper sx={{ p: 3, borderRadius: 2 }}>
-        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <AssignmentIcon color="primary" />
-          Informations Facture
-        </Typography>
-        <Divider sx={{ mb: 3 }} />
-        
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Numéro Facture
-              </Typography>
-              <Typography variant="body1" fontWeight="medium">
-                {data.numero || 'N/A'}
-              </Typography>
-            </Box>
-            
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Date Facturation
-              </Typography>
-              <Typography variant="body1">
-                {formatDate ? formatDate(data.date_facture) : data.date_facture}
-              </Typography>
-            </Box>
-            
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Échéance
-              </Typography>
-              <Typography variant="body1" color={data.date_echeance && new Date(data.date_echeance) < new Date() ? 'error' : 'inherit'}>
-                {formatDate ? formatDate(data.date_echeance) : data.date_echeance}
-              </Typography>
-            </Box>
-            
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Bénéficiaire
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                <PersonIcon fontSize="small" />
-                <Typography variant="body1">
-                  {data.nom || 'N/A'} {data.prenom || ''}
-                </Typography>
-              </Box>
-            </Box>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Montant Total
-              </Typography>
-              <Typography variant="body1" fontWeight="bold" color="primary">
-                {formatCurrency ? formatCurrency(data.montant_total) : `${data.montant_total} XAF`}
-              </Typography>
-            </Box>
-            
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Montant Payé
-              </Typography>
-              <Typography variant="body1" color="success.main">
-                {formatCurrency ? formatCurrency(data.montant_paye) : `${data.montant_paye} XAF`}
-              </Typography>
-            </Box>
-            
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Restant à Payer
-              </Typography>
-              <Typography variant="body1" fontWeight="bold" color={data.montant_restant > 0 ? 'error' : 'success'}>
-                {formatCurrency ? formatCurrency(data.montant_restant) : `${data.montant_restant} XAF`}
-              </Typography>
-            </Box>
-            
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Statut
-              </Typography>
-              <Chip
-                label={getStatutText(data.statut)}
-                color={getStatutColor(data.statut)}
-                size="small"
-              />
-            </Box>
-          </Grid>
-        </Grid>
-        
-        {data.observations && (
-          <Box sx={{ mt: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-              Observations
+  const renderFactureDetails = () => (
+    <Paper sx={{ p: 3, borderRadius: 2 }}>
+      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <AssignmentIcon color="primary" />
+        Informations Facture
+      </Typography>
+      <Divider sx={{ mb: 3 }} />
+      
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={6}>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Numéro Facture
             </Typography>
-            <Typography variant="body2">
-              {data.observations}
+            <Typography variant="body1" fontWeight="medium">
+              {data.numero || data.NUMERO_FACTURE || 'N/A'}
             </Typography>
           </Box>
-        )}
-      </Paper>
-    );
-  };
+          
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Date Facturation
+            </Typography>
+            <Typography variant="body1">
+              {formatDate(data.DATE_FACTURE || data.date_facture)}
+            </Typography>
+          </Box>
+          
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Type de Facture
+            </Typography>
+            <Typography variant="body1">
+              {data.TYPE_FACTURE || data.type_facture || 'Consultation'}
+            </Typography>
+          </Box>
+          
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Patient/Bénéficiaire
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+              <PersonIcon fontSize="small" />
+              <Typography variant="body1">
+                {data.NOM_BEN} {data.PRE_BEN}
+                {data.IDENTIFIANT_NATIONAL && ` (${data.IDENTIFIANT_NATIONAL})`}
+              </Typography>
+            </Box>
+          </Box>
+        </Grid>
+        
+        <Grid item xs={12} md={6}>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Médecin/Praticien
+            </Typography>
+            <Typography variant="body1">
+              {data.NOM_MEDECIN || data.medecin_nom || 'N/A'}
+            </Typography>
+          </Box>
+          
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Centre de Santé
+            </Typography>
+            <Typography variant="body1">
+              {data.NOM_CENTRE || data.centre_nom || 'N/A'}
+            </Typography>
+          </Box>
+          
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Montant Assurance
+            </Typography>
+            <Typography variant="body1" color="info.main">
+              {formatCurrency(data.MONTANT_ASSURANCE || 0)}
+            </Typography>
+          </Box>
+          
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Montant Patient
+            </Typography>
+            <Typography variant="body1" color="warning.main">
+              {formatCurrency(data.MONTANT_PATIENT || 0)}
+            </Typography>
+          </Box>
+        </Grid>
+      </Grid>
+      
+      {data.OBSERVATIONS && (
+        <Box sx={{ mt: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+            Observations
+          </Typography>
+          <Typography variant="body2">
+            {data.OBSERVATIONS}
+          </Typography>
+        </Box>
+      )}
+    </Paper>
+  );
 
   const renderHistorique = () => {
-    if (!data) return null;
-    
-    return (
-      <Paper sx={{ p: 3, borderRadius: 2 }}>
-        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <HistoryIcon color="primary" />
-          Historique
-        </Typography>
-        <Divider sx={{ mb: 3 }} />
-        
-        <List>
-          <ListItem>
-            <ListItemIcon>
-              <CalendarIcon color="info" />
-            </ListItemIcon>
-            <ListItemText
-              primary="Date"
-              secondary={formatDate ? formatDate(data.date) : data.date}
-            />
-          </ListItem>
+    if (type === 'transaction') {
+      return (
+        <Paper sx={{ p: 3, borderRadius: 2 }}>
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <HistoryIcon color="primary" />
+            Historique Transaction
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
           
-          {type === 'facture' && data.date_echeance && (
+          <List>
+            <ListItem>
+              <ListItemIcon>
+                <CalendarIcon color="info" />
+              </ListItemIcon>
+              <ListItemText
+                primary="Date d'initiation"
+                secondary={formatDate(data.DATE_INITIATION)}
+              />
+            </ListItem>
+            
+            <ListItem>
+              <ListItemIcon>
+                <CreditCardIcon color="info" />
+              </ListItemIcon>
+              <ListItemText
+                primary="Date de validation"
+                secondary={data.DATE_VALIDATION ? formatDate(data.DATE_VALIDATION) : 'Non validée'}
+              />
+            </ListItem>
+            
+            {data.DATE_MAJ && (
+              <ListItem>
+                <ListItemIcon>
+                  <HistoryIcon color="info" />
+                </ListItemIcon>
+                <ListItemText
+                  primary="Dernière mise à jour"
+                  secondary={formatDate(data.DATE_MAJ)}
+                />
+              </ListItem>
+            )}
+          </List>
+        </Paper>
+      );
+    } else if (type === 'facture') {
+      return (
+        <Paper sx={{ p: 3, borderRadius: 2 }}>
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <HistoryIcon color="primary" />
+            Historique Facture
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+          
+          <List>
+            <ListItem>
+              <ListItemIcon>
+                <CalendarIcon color="info" />
+              </ListItemIcon>
+              <ListItemText
+                primary="Date de création"
+                secondary={formatDate(data.DATE_CREATION || data.created_at)}
+              />
+            </ListItem>
+            
             <ListItem>
               <ListItemIcon>
                 <PaidIcon color="info" />
               </ListItemIcon>
               <ListItemText
                 primary="Date d'échéance"
-                secondary={formatDate ? formatDate(data.date_echeance) : data.date_echeance}
+                secondary={data.DATE_ECHEANCE ? formatDate(data.DATE_ECHEANCE) : 'Non définie'}
               />
             </ListItem>
-          )}
-        </List>
-      </Paper>
-    );
+            
+            {data.DATE_MODIFICATION && (
+              <ListItem>
+                <ListItemIcon>
+                  <HistoryIcon color="info" />
+                </ListItemIcon>
+                <ListItemText
+                  primary="Dernière modification"
+                  secondary={formatDate(data.DATE_MODIFICATION)}
+                />
+              </ListItem>
+            )}
+          </List>
+        </Paper>
+      );
+    }
   };
 
   const renderPaiements = () => {
@@ -605,10 +608,10 @@ const DetailDialog = ({
                 primary={
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body1" fontWeight="medium">
-                      {formatCurrency ? formatCurrency(paiement.montant) : `${paiement.montant} XAF`}
+                      {formatCurrency(paiement.MONTANT || paiement.montant)}
                     </Typography>
                     <Chip
-                      label={paiement.mode_paiement || 'N/A'}
+                      label={paiement.MODE_PAIEMENT || paiement.mode_paiement}
                       size="small"
                       color="primary"
                       variant="outlined"
@@ -618,11 +621,11 @@ const DetailDialog = ({
                 secondary={
                   <>
                     <Typography variant="body2" color="text.secondary">
-                      Date: {formatDate ? formatDate(paiement.date_paiement) : paiement.date_paiement}
+                      Date: {formatDate(paiement.DATE_PAIEMENT || paiement.date_paiement)}
                     </Typography>
-                    {paiement.reference && (
+                    {paiement.REFERENCE && (
                       <Typography variant="body2" color="text.secondary">
-                        Référence: {paiement.reference}
+                        Référence: {paiement.REFERENCE}
                       </Typography>
                     )}
                   </>
@@ -639,7 +642,7 @@ const DetailDialog = ({
     <Paper sx={{ p: 3, borderRadius: 2 }}>
       <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <AttachFileIcon color="primary" />
-        Documents
+        Pièces Jointes
       </Typography>
       <Divider sx={{ mb: 3 }} />
       
@@ -649,10 +652,35 @@ const DetailDialog = ({
           startIcon={<PdfIcon />}
           onClick={handleDownload}
           sx={{ justifyContent: 'flex-start' }}
-          disabled={!data}
         >
-          Télécharger {type === 'transaction' ? 'le reçu' : 'la facture'} (PDF)
+          Télécharger le {type === 'transaction' ? 'reçu' : 'quittance'} (PDF)
         </Button>
+        
+        {type === 'facture' && data.FICHIER_JOINT && (
+          <Button
+            variant="outlined"
+            startIcon={<DescriptionIcon />}
+            onClick={async () => {
+              try {
+                const blob = await facturationAPI.downloadPDF(data.id || data.ID_FACTURE);
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `facture-${data.numero}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+              } catch (error) {
+                console.error('❌ Erreur téléchargement facture:', error);
+                alert('Erreur lors du téléchargement: ' + error.message);
+              }
+            }}
+            sx={{ justifyContent: 'flex-start' }}
+          >
+            Télécharger la facture originale (PDF)
+          </Button>
+        )}
       </Box>
     </Paper>
   );
@@ -668,172 +696,155 @@ const DetailDialog = ({
   }
 
   return (
-    <>
-      <Dialog
-        open={open}
-        onClose={onClose}
-        maxWidth="lg"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            maxHeight: '95vh',
-            minHeight: '70vh'
-          }
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
+      PaperProps={{
+        sx: {
+          borderRadius: 3,
+          maxHeight: '95vh',
+          minHeight: '70vh'
+        }
+      }}
+    >
+      <DialogTitle sx={{ 
+        bgcolor: type === 'transaction' ? 'primary.main' : 'secondary.main',
+        color: 'white',
+        borderBottom: 1, 
+        borderColor: 'divider',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        py: 2,
+        position: 'sticky',
+        top: 0,
+        zIndex: 1
+      }}>
+        <Box>
+          <Typography variant="h5" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {type === 'transaction' ? <ReceiptIcon /> : <AssignmentIcon />}
+            {type === 'transaction' && `Transaction ${data?.REFERENCE_TRANSACTION || id}`}
+            {type === 'facture' && `Facture ${data?.numero || id}`}
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'white', opacity: 0.9 }}>
+            {type === 'transaction' && data?.DATE_INITIATION && `Initée le ${formatDate(data.DATE_INITIATION)}`}
+            {type === 'facture' && data?.DATE_FACTURE && `Créée le ${formatDate(data.DATE_FACTURE)}`}
+          </Typography>
+        </Box>
+        <IconButton onClick={onClose} size="small" sx={{ color: 'white' }}>
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+
+      <Tabs
+        value={activeTab}
+        onChange={(e, newValue) => setActiveTab(newValue)}
+        sx={{ 
+          bgcolor: 'background.paper',
+          borderBottom: 1,
+          borderColor: 'divider',
+          px: 3,
+          position: 'sticky',
+          top: 64,
+          zIndex: 1
         }}
       >
-        <DialogTitle sx={{ 
-          bgcolor: type === 'transaction' ? 'primary.main' : 'secondary.main',
-          color: 'white',
-          borderBottom: 1, 
-          borderColor: 'divider',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          py: 2,
-          position: 'sticky',
-          top: 0,
-          zIndex: 1
-        }}>
-          <Box>
-            <Typography variant="h5" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {type === 'transaction' ? <ReceiptIcon /> : <AssignmentIcon />}
-              {type === 'transaction' && `Transaction ${data?.reference || id || ''}`}
-              {type === 'facture' && `Facture ${data?.numero || id || ''}`}
-            </Typography>
-            {data?.date && (
-              <Typography variant="body2" sx={{ color: 'white', opacity: 0.9 }}>
-                {type === 'transaction' && `Initée le ${formatDate ? formatDate(data.date) : data.date}`}
-                {type === 'facture' && `Créée le ${formatDate ? formatDate(data.date_facture) : data.date_facture}`}
-              </Typography>
-            )}
-          </Box>
-          <IconButton onClick={onClose} size="small" sx={{ color: 'white' }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
+        <Tab label="Détails" icon={<ReceiptIcon />} iconPosition="start" />
+        <Tab label="Historique" icon={<HistoryIcon />} iconPosition="start" />
+        {type === 'facture' && <Tab label="Paiements" icon={<PaymentsIcon />} iconPosition="start" />}
+        <Tab label="Documents" icon={<AttachFileIcon />} iconPosition="start" />
+      </Tabs>
 
-        <Tabs
-          value={activeTab}
-          onChange={(e, newValue) => setActiveTab(newValue)}
-          sx={{ 
-            bgcolor: 'background.paper',
-            borderBottom: 1,
-            borderColor: 'divider',
-            px: 3,
-            position: 'sticky',
-            top: 64,
-            zIndex: 1
-          }}
-        >
-          <Tab label="Détails" icon={<ReceiptIcon />} iconPosition="start" />
-          <Tab label="Historique" icon={<HistoryIcon />} iconPosition="start" />
-          {type === 'facture' && <Tab label="Paiements" icon={<PaymentsIcon />} iconPosition="start" />}
-          <Tab label="Documents" icon={<AttachFileIcon />} iconPosition="start" />
-        </Tabs>
+      <DialogContent sx={{ p: 0, overflow: 'auto' }}>
+        <Box sx={{ p: 3 }}>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+              <CircularProgress />
+            </Box>
+          ) : error ? (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          ) : !data ? (
+            <Alert severity="warning">
+              Aucune donnée disponible
+            </Alert>
+          ) : (
+            <>
+              {renderQuickStats()}
+              
+              {activeTab === 0 && (
+                <>
+                  {type === 'transaction' && renderTransactionDetails()}
+                  {type === 'facture' && renderFactureDetails()}
+                </>
+              )}
 
-        <DialogContent sx={{ p: 0, overflow: 'auto' }}>
-          <Box sx={{ p: 3 }}>
-            {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
-                <CircularProgress />
-              </Box>
-            ) : error ? (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {error}
-              </Alert>
-            ) : !data ? (
-              <Alert severity="warning">
-                Aucune donnée disponible
-              </Alert>
-            ) : (
-              <>
-                {renderQuickStats()}
-                
-                {activeTab === 0 && (
-                  <>
-                    {type === 'transaction' && renderTransactionDetails()}
-                    {type === 'facture' && renderFactureDetails()}
-                  </>
-                )}
+              {activeTab === 1 && (
+                renderHistorique()
+              )}
 
-                {activeTab === 1 && (
-                  renderHistorique()
-                )}
+              {activeTab === 2 && type === 'facture' && (
+                renderPaiements()
+              )}
 
-                {activeTab === 2 && type === 'facture' && (
-                  renderPaiements()
-                )}
-
-                {activeTab === (type === 'facture' ? 3 : 2) && (
-                  renderAttachments()
-                )}
-              </>
-            )}
-          </Box>
-        </DialogContent>
-
-        <DialogActions sx={{ 
-          bgcolor: 'background.paper', 
-          p: 2, 
-          borderTop: 1, 
-          borderColor: 'divider',
-          position: 'sticky',
-          bottom: 0,
-          zIndex: 1
-        }}>
-          <Button onClick={onClose} variant="outlined">
-            Fermer
-          </Button>
-          
-          <Box sx={{ flex: 1 }} />
-          
-          {navigator.share && (
-            <Button
-              variant="outlined"
-              startIcon={<ShareIcon />}
-              onClick={handleShare}
-              disabled={!data}
-            >
-              Partager
-            </Button>
+              {activeTab === (type === 'facture' ? 3 : 2) && (
+                renderAttachments()
+              )}
+            </>
           )}
-          
-          <Button
-            variant="contained"
-            startIcon={<PrintIcon />}
-            onClick={handlePrint}
-            sx={{ ml: 1 }}
-            disabled={!data}
-          >
-            Imprimer
-          </Button>
-          
-          <Button
-            variant="contained"
-            startIcon={<DownloadIcon />}
-            onClick={handleDownload}
-            sx={{ ml: 1 }}
-            color={type === 'transaction' ? 'primary' : 'secondary'}
-            disabled={!data}
-          >
-            Télécharger
-          </Button>
-        </DialogActions>
-      </Dialog>
+        </Box>
+      </DialogContent>
 
-      {/* Snackbar pour les notifications */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseNotification}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={handleCloseNotification} severity={snackbar.type} sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </>
+      <DialogActions sx={{ 
+        bgcolor: 'background.paper', 
+        p: 2, 
+        borderTop: 1, 
+        borderColor: 'divider',
+        position: 'sticky',
+        bottom: 0,
+        zIndex: 1
+      }}>
+        <Button onClick={onClose} variant="outlined">
+          Fermer
+        </Button>
+        
+        <Box sx={{ flex: 1 }} />
+        
+        {navigator.share && (
+          <Button
+            variant="outlined"
+            startIcon={<ShareIcon />}
+            onClick={handleShare}
+          >
+            Partager
+          </Button>
+        )}
+        
+        <Button
+          variant="contained"
+          startIcon={<PrintIcon />}
+          onClick={handlePrint}
+          sx={{ ml: 1 }}
+          disabled={!data}
+        >
+          Imprimer
+        </Button>
+        
+        <Button
+          variant="contained"
+          startIcon={<DownloadIcon />}
+          onClick={handleDownload}
+          sx={{ ml: 1 }}
+          color={type === 'transaction' ? 'primary' : 'secondary'}
+          disabled={!data}
+        >
+          Télécharger
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 

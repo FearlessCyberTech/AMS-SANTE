@@ -905,7 +905,7 @@ const ConsultationWizardModal = ({ onClose, onComplete }) => {
         <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
           <div className="flex justify-between items-center">
             <div className="text-sm text-gray-500">
-              Étape {currentStep} sur {steps.length} • HealthCenterSoft
+              Étape {currentStep} sur {steps.length} • SaniCareCentre
             </div>
             
             <div className="flex gap-3">

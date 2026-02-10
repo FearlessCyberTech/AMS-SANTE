@@ -1,0 +1,228 @@
+/* EvacuationsPage.css */
+.print-container {
+  padding: 20px;
+  background: white;
+  color: #333;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.print-header {
+  border-bottom: 3px solid #1890ff;
+  padding-bottom: 20px;
+  margin-bottom: 30px;
+}
+
+.logo-section {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.logo-print {
+  width: 120px;
+  height: 120px;
+  margin-right: 20px;
+  object-fit: contain;
+}
+
+.centre-info h1 {
+  color: #1890ff;
+  margin: 0;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.centre-info p {
+  margin: 5px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.header-title {
+  text-align: center;
+}
+
+.header-title h2 {
+  color: #333;
+  margin: 0;
+  font-size: 24px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.reference-badge {
+  display: inline-block;
+  background: #f0f0f0;
+  padding: 8px 16px;
+  border-radius: 4px;
+  margin-top: 10px;
+  font-size: 18px;
+  color: #333;
+}
+
+.print-divider {
+  margin: 30px 0;
+  border-color: #1890ff;
+}
+
+.section {
+  margin-bottom: 30px;
+  page-break-inside: avoid;
+}
+
+.section-title {
+  color: #1890ff;
+  background: #f0f9ff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+}
+
+.section-title svg {
+  margin-right: 10px;
+}
+
+.financial-card {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  border-left: 4px solid #1890ff;
+  text-align: center;
+}
+
+.financial-card h4 {
+  color: #666;
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  text-transform: uppercase;
+}
+
+.financial-card .amount {
+  color: #1890ff;
+  font-size: 24px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.notes-card {
+  background: #fffbe6;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #ffe58f;
+  height: 100%;
+}
+
+.notes-card h4 {
+  color: #d48806;
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  text-transform: uppercase;
+}
+
+.notes-card p {
+  margin: 0;
+  color: #666;
+  line-height: 1.6;
+}
+
+.signatures {
+  margin-top: 40px;
+}
+
+.signature-box {
+  text-align: center;
+  padding: 20px;
+  border: 2px dashed #d9d9d9;
+  border-radius: 8px;
+  height: 120px;
+}
+
+.signature-line {
+  width: 100%;
+  height: 1px;
+  background: #333;
+  margin: 20px 0;
+}
+
+.signature-box p {
+  margin: 5px 0;
+  color: #666;
+}
+
+.print-footer {
+  margin-top: 50px;
+  padding-top: 20px;
+  border-top: 2px solid #f0f0f0;
+  text-align: center;
+  position: relative;
+}
+
+.footer-note {
+  color: #999;
+  font-size: 12px;
+  margin: 0;
+}
+
+.watermark {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  color: rgba(0, 0, 0, 0.1);
+  font-size: 48px;
+  font-weight: bold;
+  transform: rotate(-45deg);
+  user-select: none;
+}
+
+/* Styles pour l'impression */
+@media print {
+  @page {
+    size: A4;
+    margin: 20mm;
+  }
+  
+  body {
+    margin: 0;
+    padding: 0;
+    background: white;
+  }
+  
+  .print-container {
+    padding: 0;
+    background: white;
+  }
+  
+  .print-header {
+    border-bottom: 3px solid #000;
+  }
+  
+  .section {
+    page-break-inside: avoid;
+  }
+  
+  .financial-card {
+    background: white !important;
+    border: 2px solid #000;
+  }
+  
+  .watermark {
+    opacity: 0.1;
+  }
+  
+  /* Masquer les éléments non nécessaires à l'impression */
+  button, .no-print {
+    display: none !important;
+  }
+}
+
+/* Styles pour le rendu à l'écran */
+@media screen {
+  .print-container {
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+}

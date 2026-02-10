@@ -60,7 +60,8 @@ function authenticateToken(req, res, next) {
           u.SUPER_ADMIN as super_admin,
           p.COD_PRE as prestataire_id,
           p.SPECIALITE as specialite,
-          p.NUM_LICENCE as numero_license
+          p.NUM_LICENCE as numero_license,
+          p.COD_CEN as centre_id
         FROM security.UTILISATEUR u
         LEFT JOIN core.PRESTATAIRE p ON u.EMAIL_UTI = p.EMAIL AND u.PROFIL_UTI = 'Medecin'
         WHERE u.ID_UTI = @userId AND u.ACTIF = 1
@@ -98,6 +99,12 @@ function authenticateToken(req, res, next) {
         langue: decoded.langue || 'fr',
         theme: decoded.theme || 'light'
       };
+      // ajouter l'information du centre si présente
+      if (decoded && decoded.centre_id) {
+        req.user.centre_id = decoded.centre_id;
+      } else if (user.centre_id) {
+        req.user.centre_id = user.centre_id;
+      }
       
       console.log('Authentification réussie pour:', req.user.username, 'COD_PAY:', req.user.cod_pay);
       next();

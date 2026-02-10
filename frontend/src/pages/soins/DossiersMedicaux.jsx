@@ -89,11 +89,15 @@ import {
   LockOutlined
 } from '@ant-design/icons';
 import moment from 'moment';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import { toPng } from 'html-to-image';
+import QRCode from 'qrcode';
 import 'moment/locale/fr';
 import { useAuth } from '../../contexts/AuthContext'; // Import du contexte d'authentification
 import api, { dossiersMedicauxAPI, beneficiairesAPI, consultationsAPI, prescriptionsAPI, facturationAPI,
   antecedentsAPI,
-  allergiesAPI } from '../../services/api';
+  allergiesAPI,exportPDFAPI } from '../../services/api';
 import './DossiersMedicaux.css';
 
 const { Search } = Input;
@@ -223,6 +227,466 @@ const DossiersMedicauxPage = () => {
       complianceScore
     };
   };
+
+
+ 
+const handleExportPDF = async () => {
+  if (!selectedBeneficiaire || !dossier) {
+    message.error('Aucun dossier sélectionné');
+    return;
+  }
+
+  setExportLoading(true);
+  try {
+    // 1. Préparer les données
+    const exportData = prepareExportData(dossier, selectedBeneficiaire, exportOptions, COMPANY_INFO);
+    
+    // 2. Générer le PDF selon la méthode choisie
+    if (exportType === 'pdf') {
+      await generateProfessionalPDF(exportData, exportOptions);
+    } else if (exportType === 'json') {
+      await exportAsJSON(exportData);
+    }
+    
+    setExportModalVisible(false);
+    message.success('Exportation terminée avec succès');
+    
+  } catch (error) {
+    console.error('Erreur lors de l\'exportation:', error);
+    message.error('Erreur lors de l\'exportation: ' + error.message);
+  } finally {
+    setExportLoading(false);
+  }
+};
+
+// Préparer les données d'export
+const prepareExportData = (dossier, beneficiaire, options, companyInfo) => {
+  const data = {
+    metadata: {
+      exportDate: moment().format('DD/MM/YYYY HH:mm:ss'),
+      exportType: exportType,
+      exportOptions: options,
+      generatedBy: user?.username || 'Utilisateur',
+      companyInfo: companyInfo
+    },
+    patient: dossier.patient?.informations || beneficiaire,
+    dossier: {
+      consultations: options.includeConsultations ? dossier.consultations : null,
+      prescriptions: options.includePrescriptions ? dossier.prescriptions : null,
+      facturation: options.includeFactures ? dossier.facturation : null,
+      antecedents: options.includeAntecedents ? dossier.antecedents : null,
+      allergies: options.includeAllergies ? dossier.allergies : null,
+      examens: options.includeExamens ? dossier.examens : null,
+      traitements: options.includeTraitements ? dossier.traitements : null,
+      hospitalisations: options.includeHospitalisations ? dossier.hospitalisations : null,
+      notes: options.includeNotes ? dossier.notes : null
+    },
+    rapport: dossier.rapport,
+    stats: {
+      scoreCompletude: dossier.rapport?.score_completude || 0,
+      alertes: dossier.rapport?.alertes || [],
+      recommandations: dossier.rapport?.recommandations || []
+    }
+  };
+  
+  return data;
+};
+
+// Exporter en JSON
+const exportAsJSON = async (exportData) => {
+  const dataStr = JSON.stringify(exportData, null, 2);
+  const dataBlob = new Blob([dataStr], { type: 'application/json' });
+  const filename = `DossierMedical_${selectedBeneficiaire.nom}_${selectedBeneficiaire.prenom}_${moment().format('YYYY-MM-DD')}.json`;
+  
+  exportPDFAPI.downloadPDF(dataBlob, filename);
+};
+
+// Générer un PDF professionnel avec jsPDF
+const generateProfessionalPDF = async (exportData, options) => {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  // Paramètres
+  const pageWidth = doc.internal.pageSize.width;
+  const margin = 15;
+  const contentWidth = pageWidth - (2 * margin);
+  
+  let yPos = margin;
+  const lineHeight = 7;
+  const sectionSpacing = 10;
+  
+  // 1. EN-TÊTE AVEC FILIGRANE
+  if (options.includeWatermark) {
+    doc.setFontSize(40);
+    doc.setTextColor(200, 200, 200);
+    doc.text('CONFIDENTIEL', pageWidth / 2, 150, { angle: 45 });
+    doc.setTextColor(0, 0, 0);
+  }
+  
+  // Logo et informations de l'entreprise
+  if (options.includeCompanyInfo) {
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text(COMPANY_INFO.name, margin, yPos);
+    yPos += lineHeight / 2;
+    doc.text(COMPANY_INFO.address, margin, yPos);
+    yPos += lineHeight / 2;
+    doc.text(COMPANY_INFO.city, margin, yPos);
+    yPos += lineHeight / 2;
+    doc.text(`Tél: ${COMPANY_INFO.phone} | Email: ${COMPANY_INFO.email}`, margin, yPos);
+    yPos += lineHeight;
+    
+    // Ligne séparatrice
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += sectionSpacing;
+  }
+  
+  // 2. TITRE PRINCIPAL
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text('DOSSIER MÉDICAL', pageWidth / 2, yPos, { align: 'center' });
+  yPos += lineHeight;
+  
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Export généré le: ${moment().format('DD/MM/YYYY à HH:mm')}`, pageWidth / 2, yPos, { align: 'center' });
+  yPos += sectionSpacing;
+  
+  // 3. INFORMATIONS DU PATIENT
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('INFORMATIONS DU BÉNÉFICIAIRE', margin, yPos);
+  yPos += lineHeight;
+  
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  
+  const patient = exportData.patient;
+  const patientInfo = [
+    ['Nom complet:', `${patient.nom} ${patient.prenom}`],
+    ['Identifiant:', patient.identifiant],
+    ['Date de naissance:', patient.date_naissance ? moment(patient.date_naissance).format('DD/MM/YYYY') : 'N/A'],
+    ['Âge:', `${patient.age || 'N/A'} ans`],
+    ['Sexe:', patient.sexe === 'M' ? 'Masculin' : 'Féminin'],
+    ['Type bénéficiaire:', patient.type_beneficiaire],
+    ['Groupe sanguin:', patient.groupe_sanguin || 'Non renseigné'],
+    ['Taux de couverture:', `${patient.taux_couverture || 0}%`]
+  ];
+  
+  // Tableau d'informations patient
+  doc.autoTable({
+    startY: yPos,
+    head: [['Champ', 'Valeur']],
+    body: patientInfo,
+    theme: 'striped',
+    headStyles: { fillColor: [24, 144, 255] },
+    margin: { left: margin, right: margin },
+    styles: { fontSize: 9 },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 50 },
+      1: { cellWidth: contentWidth - 50 }
+    }
+  });
+  
+  yPos = doc.lastAutoTable.finalY + sectionSpacing;
+  
+  // 4. CONTACTS ET ASSURANCE
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('COORDONNÉES ET ASSURANCE', margin, yPos);
+  yPos += lineHeight;
+  
+  const contactInfo = [
+    ['Téléphone:', patient.telephone || 'N/A'],
+    ['Email:', patient.email || 'N/A'],
+    ['Adresse:', patient.adresse || 'N/A'],
+    ['Ville:', patient.ville || 'N/A'],
+    ['Profession:', patient.profession || 'N/A'],
+    ['Assureur:', patient.assureur || 'N/A'],
+    ['N° Police:', patient.num_police || 'N/A'],
+    ['Statut assurance:', patient.statut_assurance || 'N/A']
+  ];
+  
+  doc.autoTable({
+    startY: yPos,
+    body: contactInfo,
+    theme: 'grid',
+    margin: { left: margin, right: margin },
+    styles: { fontSize: 9 },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 40 },
+      1: { cellWidth: contentWidth - 40 }
+    }
+  });
+  
+  yPos = doc.lastAutoTable.finalY + sectionSpacing;
+  
+  // 5. SCORE DE COMPLÉTUDE
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('SCORE DE COMPLÉTUDE DU DOSSIER', margin, yPos);
+  yPos += lineHeight;
+  
+  const score = exportData.stats.scoreCompletude;
+  const scoreColor = score >= 80 ? [82, 196, 26] : score >= 50 ? [250, 173, 20] : [255, 77, 79];
+  
+  // Barre de progression
+  const barWidth = contentWidth;
+  const barHeight = 8;
+  const progressWidth = (barWidth * score) / 100;
+  
+  doc.setFillColor(230, 230, 230);
+  doc.roundedRect(margin, yPos, barWidth, barHeight, 2, 2, 'F');
+  doc.setFillColor(scoreColor[0], scoreColor[1], scoreColor[2]);
+  doc.roundedRect(margin, yPos, progressWidth, barHeight, 2, 2, 'F');
+  
+  doc.setFontSize(10);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`${score}%`, margin + barWidth / 2, yPos + barHeight / 2 + 2, { align: 'center' });
+  
+  yPos += barHeight + 10;
+  
+  // 6. ALERTES ET RECOMMANDATIONS
+  if (exportData.stats.alertes.length > 0) {
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ALERTES MÉDICALES', margin, yPos);
+    yPos += lineHeight;
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    
+    exportData.stats.alertes.forEach((alerte, index) => {
+      if (yPos > 270) { // Nouvelle page si nécessaire
+        doc.addPage();
+        yPos = margin;
+      }
+      
+      const alerteColor = alerte.niveau === 'danger' ? [255, 77, 79] : 
+                         alerte.niveau === 'warning' ? [250, 173, 20] : 
+                         [24, 144, 255];
+      
+      doc.setFillColor(alerteColor[0], alerteColor[1], alerteColor[2], 0.1);
+      doc.roundedRect(margin, yPos, contentWidth, 12, 2, 2, 'F');
+      
+      doc.setTextColor(alerteColor[0], alerteColor[1], alerteColor[2]);
+      doc.text(`• ${alerte.message}`, margin + 3, yPos + 7);
+      
+      yPos += 15;
+    });
+    
+    yPos += 5;
+  }
+  
+  // 7. CONSULTATIONS (si inclus)
+  if (options.includeConsultations && exportData.dossier.consultations?.liste?.length > 0) {
+    doc.addPage();
+    yPos = margin;
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('HISTORIQUE DES CONSULTATIONS', margin, yPos);
+    yPos += lineHeight + 5;
+    
+    const consultationsData = exportData.dossier.consultations.liste.map(cons => [
+      moment(cons.DATE_CONSULTATION).format('DD/MM/YYYY'),
+      cons.TYPE_CONSULTATION || 'Standard',
+      cons.MOTIF_CONSULTATION?.substring(0, 50) || 'N/A',
+      cons.DIAGNOSTIC?.substring(0, 50) || 'N/A',
+      cons.MONTANT_CONSULTATION ? `${cons.MONTANT_CONSULTATION} CFA` : 'N/A'
+    ]);
+    
+    doc.autoTable({
+      startY: yPos,
+      head: [['Date', 'Type', 'Motif', 'Diagnostic', 'Montant']],
+      body: consultationsData,
+      theme: 'striped',
+      headStyles: { fillColor: [24, 144, 255] },
+      margin: { left: margin, right: margin },
+      styles: { fontSize: 8 },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 45 },
+        3: { cellWidth: 45 },
+        4: { cellWidth: 25 }
+      }
+    });
+    
+    yPos = doc.lastAutoTable.finalY + sectionSpacing;
+  }
+  
+  // 8. PRESCRIPTIONS (si inclus)
+  if (options.includePrescriptions && exportData.dossier.prescriptions?.liste?.length > 0) {
+    if (yPos > 200) {
+      doc.addPage();
+      yPos = margin;
+    }
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PRESCRIPTIONS MÉDICALES', margin, yPos);
+    yPos += lineHeight + 5;
+    
+    const prescriptionsData = exportData.dossier.prescriptions.liste.map(pres => [
+      moment(pres.DATE_PRESCRIPTION).format('DD/MM/YYYY'),
+      pres.LIB_AFF?.substring(0, 40) || 'N/A',
+      pres.STATUT || 'N/A',
+      pres.NB_ELEMENTS || '0',
+      pres.MONTANT_TOTAL ? `${pres.MONTANT_TOTAL} CFA` : 'N/A'
+    ]);
+    
+    doc.autoTable({
+      startY: yPos,
+      head: [['Date', 'Affection', 'Statut', 'Nb Éléments', 'Montant']],
+      body: prescriptionsData,
+      theme: 'striped',
+      headStyles: { fillColor: [82, 196, 26] },
+      margin: { left: margin, right: margin },
+      styles: { fontSize: 8 },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        1: { cellWidth: 50 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 20 },
+        4: { cellWidth: 30 }
+      }
+    });
+  }
+  
+  // 9. QR CODE (si inclus)
+  if (options.includeQRCode && selectedBeneficiaire) {
+    const qrData = JSON.stringify({
+      patientId: selectedBeneficiaire.id,
+      patientName: `${selectedBeneficiaire.nom} ${selectedBeneficiaire.prenom}`,
+      patientCode: selectedBeneficiaire.identifiant,
+      exportDate: moment().format('DD/MM/YYYY HH:mm'),
+      company: COMPANY_INFO.name
+    });
+    
+    try {
+      // Générer le QR code (vous aurez besoin d'une fonction pour générer le QR code)
+      const qrCodeUrl = await generateQRCode(qrData);
+      
+      // Ajouter le QR code en bas de la dernière page
+      const lastPage = doc.internal.getNumberOfPages();
+      doc.setPage(lastPage);
+      
+      const qrSize = 30;
+      const qrX = pageWidth - margin - qrSize;
+      const qrY = doc.internal.pageSize.height - margin - qrSize;
+      
+      // Ajouter le QR code (cette partie nécessite une adaptation)
+      // doc.addImage(qrCodeUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+      
+      doc.setFontSize(8);
+      doc.text('QR Code d\'identification', qrX, qrY - 5);
+    } catch (error) {
+      console.warn('Impossible de générer le QR code:', error);
+    }
+  }
+  
+  // 10. PIED DE PAGE
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    
+    // Numéro de page
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text(
+      `Page ${i} sur ${totalPages} - Document confidentiel`,
+      pageWidth / 2,
+      doc.internal.pageSize.height - 10,
+      { align: 'center' }
+    );
+    
+    // Ligne de pied de page
+    doc.setDrawColor(200, 200, 200);
+    doc.line(
+      margin,
+      doc.internal.pageSize.height - 15,
+      pageWidth - margin,
+      doc.internal.pageSize.height - 15
+    );
+    
+    // Date de génération
+    doc.text(
+      `Généré le ${moment().format('DD/MM/YYYY à HH:mm')}`,
+      margin,
+      doc.internal.pageSize.height - 5
+    );
+    
+    // Copyright
+    doc.text(
+      `© ${COMPANY_INFO.name} - ${moment().format('YYYY')}`,
+      pageWidth - margin,
+      doc.internal.pageSize.height - 5,
+      { align: 'right' }
+    );
+  }
+  
+  // Sauvegarder le PDF
+  const filename = `DossierMedical_${selectedBeneficiaire.nom}_${selectedBeneficiaire.prenom}_${moment().format('YYYYMMDD_HHmm')}.pdf`;
+  doc.save(filename);
+};
+
+// Fonction pour générer un QR code
+const generateQRCode = async (data) => {
+  return new Promise((resolve, reject) => {
+    QRCode.toDataURL(data, {
+      width: 300,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    }, (err, url) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(url);
+      }
+    });
+  });
+};
+
+// Fonction pour exporter en PDF simple (alternative)
+const exportSimplePDF = async () => {
+  const doc = new jsPDF();
+  
+  const patient = dossier.patient?.informations || selectedBeneficiaire;
+  
+  // Titre
+  doc.setFontSize(20);
+  doc.text('DOSSIER MÉDICAL', 105, 20, { align: 'center' });
+  
+  // Informations patient
+  doc.setFontSize(12);
+  doc.text(`Patient: ${patient.nom} ${patient.prenom}`, 20, 40);
+  doc.text(`ID: ${patient.identifiant}`, 20, 50);
+  doc.text(`Date de naissance: ${patient.date_naissance ? moment(patient.date_naissance).format('DD/MM/YYYY') : 'N/A'}`, 20, 60);
+  doc.text(`Âge: ${patient.age || 'N/A'} ans`, 20, 70);
+  doc.text(`Sexe: ${patient.sexe === 'M' ? 'Masculin' : 'Féminin'}`, 20, 80);
+  doc.text(`Groupe sanguin: ${patient.groupe_sanguin || 'Non renseigné'}`, 20, 90);
+  
+  // Statistiques
+  doc.text(`Total consultations: ${dossier.consultations?.liste?.length || 0}`, 20, 110);
+  doc.text(`Total prescriptions: ${dossier.prescriptions?.liste?.length || 0}`, 20, 120);
+  
+  // Pied de page
+  doc.setFontSize(10);
+  doc.text(`Exporté le ${moment().format('DD/MM/YYYY à HH:mm')}`, 105, 280, { align: 'center' });
+  doc.text(`${COMPANY_INFO.name}`, 105, 285, { align: 'center' });
+  
+  const filename = `DossierMedical_${patient.nom}_${patient.prenom}_${moment().format('YYYYMMDD')}.pdf`;
+  doc.save(filename);
+};
 
   // Charger la liste des bénéficiaires
   const loadBeneficiaires = useCallback(async (page = 1, search = '', currentFilters = {}) => {
@@ -1769,20 +2233,19 @@ const DossiersMedicauxPage = () => {
             Fermer
           </Button>,
           <Button
-            key="export"
-            type="primary"
-            icon={<DownloadOutlined />}
-            style={{ 
-              background: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
-              border: 'none'
-            }}
-            onClick={() => {
-              setDossierModalVisible(false);
-              setTimeout(() => openExportModal(selectedBeneficiaire), 300);
-            }}
-          >
-            Exporter Dossier
-          </Button>
+  key="export"
+  type="primary"
+  icon={<DownloadOutlined />}
+  loading={exportLoading}
+  onClick={handleExportPDF} // Utiliser la nouvelle fonction
+  style={{ 
+    background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
+    border: 'none',
+    boxShadow: '0 4px 12px rgba(24,144,255,0.3)'
+  }}
+>
+  Exporter Maintenant
+</Button>
         ]}
       >
         {dossier && <DossierModalContent 

@@ -607,65 +607,54 @@ const FinancialSettlementModule = () => {
     }
   };
 
- const handleSubmitDeclaration = async (declarationData) => {
-  try {
-    console.log('📝 Création de déclaration:', declarationData);
-    
-    // Validation des données
-    if (!declarationData.cod_ben) {
-      showNotification('Le bénéficiaire est requis', 'error');
-      return;
+  const handleSubmitDeclaration = async (declarationData) => {
+    try {
+      console.log('📝 Création de déclaration:', declarationData);
+      
+      // Validation des données
+      if (!declarationData.cod_ben) {
+        showNotification('Le bénéficiaire est requis', 'error');
+        return;
+      }
+      
+      if (!declarationData.prestations || declarationData.prestations.length === 0) {
+        showNotification('Au moins une prestation est requise', 'error');
+        return;
+      }
+      
+      // Formatage des données pour l'API
+      const formattedData = {
+        COD_BEN: parseInt(declarationData.cod_ben),
+        TYPE_DECLARANT: declarationData.type_declarant || 'Beneficiaire',
+        NOM_DECLARANT: `${declarationData.nom_ben} ${declarationData.prenom_ben}`,
+        details: declarationData.prestations.map(p => ({
+          TYPE_PRESTATION: p.type_prestation || 'Consultation',
+          LIBELLE_PRESTATION: p.libelle || p.nom,
+          MONTANT: p.montant || 0,
+          QUANTITE: p.quantite || 1,
+          DATE_PRESTATION: p.date_prestation || new Date().toISOString().split('T')[0]
+        })),
+        MONTANT_TOTAL: declarationData.prestations.reduce((sum, p) => sum + (p.montant || 0), 0),
+        OBSERVATIONS: declarationData.observations || '',
+        PIECES_JOINTES: declarationData.pieces_jointes || ''
+      };
+      
+      console.log('📤 Données envoyées à l\'API:', formattedData);
+      
+      const response = await remboursementsAPI.creerDeclaration(formattedData);
+      
+      if (response.success) {
+        showNotification('Déclaration créée avec succès', 'success');
+        setOpenNewDeclarationDialog(false);
+        await refreshData();
+      } else {
+        throw new Error(response.message || 'Erreur lors de la création');
+      }
+    } catch (error) {
+      console.error('❌ Erreur création déclaration:', error);
+      showNotification(error.message || 'Erreur lors de la création de la déclaration', 'error');
     }
-    
-    if (!declarationData.prestations || declarationData.prestations.length === 0) {
-      showNotification('Au moins une prestation est requise', 'error');
-      return;
-    }
-    
-    // Calculer les montants
-    const montantTotal = declarationData.prestations.reduce((sum, p) => sum + (p.montant || 0), 0);
-    const montantPriseCharge = declarationData.prestations.reduce((sum, p) => sum + (p.montant_prise_charge || 0), 0);
-    const ticketModerateur = montantTotal - montantPriseCharge;
-    
-    // Formatage des données pour l'API
-    const formattedData = {
-      COD_BEN: parseInt(declarationData.cod_ben),
-      TYPE_DECLARANT: declarationData.type_declarant || 'Beneficiaire',
-      NOM_DECLARANT: `${declarationData.nom_ben} ${declarationData.prenom_ben}`,
-      details: declarationData.prestations.map(p => ({
-        TYPE_PRESTATION: p.type_prestation || 'Consultation',
-        LIBELLE_PRESTATION: p.libelle || p.nom,
-        MONTANT: p.montant || 0,
-        QUANTITE: p.quantite || 1,
-        DATE_PRESTATION: p.date_prestation || new Date().toISOString().split('T')[0],
-        TAUX_PRISE_CHARGE: p.taux_prise_charge || 100,
-        MONTANT_PRISE_CHARGE: p.montant_prise_charge || p.montant,
-        ID_PRESTATION: p.id_prestation || p.COD_PREST
-      })),
-      MONTANT_TOTAL: montantTotal,
-      MONTANT_PRISE_CHARGE: montantPriseCharge,
-      MONTANT_TICKET_MODERATEUR: ticketModerateur,
-      MONTANT_REMBOURSABLE: montantPriseCharge,
-      OBSERVATIONS: declarationData.observations || '',
-      PIECES_JOINTES: declarationData.pieces_jointes || ''
-    };
-    
-    console.log('📤 Données envoyées à l\'API:', formattedData);
-    
-    const response = await remboursementsAPI.creerDeclaration(formattedData);
-    
-    if (response.success) {
-      showNotification('Déclaration créée avec succès', 'success');
-      setOpenNewDeclarationDialog(false);
-      await refreshData();
-    } else {
-      throw new Error(response.message || 'Erreur lors de la création');
-    }
-  } catch (error) {
-    console.error('❌ Erreur création déclaration:', error);
-    showNotification(error.message || 'Erreur lors de la création de la déclaration', 'error');
-  }
-};
+  };
 
   // ==============================================
   // FONCTIONS UTILITAIRES

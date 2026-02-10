@@ -1,11 +1,11 @@
-// NetworkPage.jsx - Version corrigée avec problèmes de membres résolus
-import React, { useState, useEffect, useCallback } from 'react';
+// NetworkPage.jsx - Version corrigée avec gestion des prestataires déjà membres
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Table, Card, Row, Col, Statistic, Button, Modal, Form,
   Select, Input, DatePicker, Tag, Space, message, Tabs,
   Descriptions, Tooltip, Popconfirm, Spin, Alert,
-  Divider, Badge, Typography, Empty,
-  Drawer, List, Avatar, Collapse
+  Divider, Badge, Typography,
+  Drawer, Avatar
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
@@ -17,7 +17,7 @@ import {
   UsergroupAddOutlined,
   CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined,
   InfoCircleOutlined, GlobalOutlined, EnvironmentOutlined,
-  ArrowUpOutlined, LoadingOutlined,
+  ArrowUpOutlined,
   SaveOutlined, CheckOutlined, MinusCircleOutlined,
   DatabaseOutlined, ExclamationCircleOutlined
 } from '@ant-design/icons';
@@ -30,7 +30,6 @@ import 'moment/locale/fr';
 const { Option } = Select;
 const { TextArea } = Input;
 const { Text } = Typography;
-const { Panel } = Collapse;
 
 const NetworkPage = () => {
   const { user } = useAuth();
@@ -40,11 +39,9 @@ const NetworkPage = () => {
   const [loading, setLoading] = useState({
     reseaux: false,
     details: false,
-    statistiques: false,
     membres: false,
     centres: false,
-    prestataires: false,
-    beneficiaires: false
+    prestataires: false
   });
   
   // États de recherche et filtres
@@ -77,7 +74,6 @@ const NetworkPage = () => {
   const [centres, setCentres] = useState([]);
   const [allCentres, setAllCentres] = useState([]);
   const [prestataires, setPrestataires] = useState([]);
-  const [beneficiaires, setBeneficiaires] = useState([]);
   
   // États pour les modales et drawer
   const [networkModal, setNetworkModal] = useState({
@@ -97,6 +93,17 @@ const NetworkPage = () => {
     membres: [],
     statistiques: {}
   });
+  
+  // Modal pour les prestataires d'un centre
+  const [centerProvidersModal, setCenterProvidersModal] = useState({
+    visible: false,
+    centre: null,
+    prestataires: [],
+    loading: false
+  });
+  
+  // Référence pour suivre le centre en cours de chargement
+  const loadingCenterRef = useRef(null);
   
   // États pour les formulaires
   const [networkForm] = Form.useForm();
@@ -119,12 +126,27 @@ const NetworkPage = () => {
   ];
   
   const memberTypes = [
-    { value: 'center', label: 'Centre de Santé', icon: <BankOutlined /> },
-    { value: 'provider', label: 'Prestataire', icon: <TeamOutlined /> },
-    { value: 'beneficiary', label: 'Bénéficiaire', icon: <UserOutlined /> }
+    { value: 'center', label: 'Centre de Santé', icon: <BankOutlined /> }
   ];
 
   // ==================== FONCTIONS UTILITAIRES ====================
+// Fonction pour recharger les prestataires d'un centre
+const reloadCenterProviders = async () => {
+  if (centerProvidersModal.centre) {
+    console.log('🔄 Rechargement des prestataires pour:', centerProvidersModal.centre);
+    await loadPrestatairesByCentre(centerProvidersModal.centre.id, centerProvidersModal.centre.nom);
+  }
+};
+
+// Ajoutez ce bouton dans la modal des prestataires (dans la section footer) :
+<Button 
+  key="refresh" 
+  icon={<SyncOutlined />}
+  onClick={reloadCenterProviders}
+  loading={centerProvidersModal.loading}
+>
+  Actualiser
+</Button>
 
   const getNetworkColor = (type) => {
     const colors = {
@@ -173,35 +195,6 @@ const NetworkPage = () => {
         return { icon: <UserOutlined />, color: 'default', label: type };
     }
   };
-
-  // Fonction pour filtrer les centres localement avec des champs convertis en chaînes
-  const filterCentresLocalement = useCallback((centresListe, searchTerm) => {
-    if (!searchTerm || searchTerm.trim() === '') return centresListe;
-    
-    const searchLower = searchTerm.toLowerCase();
-    
-    return centresListe.filter(centre => {
-      // S'assurer que tous les champs sont des chaînes
-      const name = centre.name ? String(centre.name).toLowerCase() : '';
-      const code = centre.code ? String(centre.code).toLowerCase() : '';
-      const region = centre.region ? String(centre.region).toLowerCase() : '';
-      const type = centre.type ? String(centre.type).toLowerCase() : '';
-      const telephone = centre.telephone ? String(centre.telephone).toLowerCase() : '';
-      const adresse = centre.adresse ? String(centre.adresse).toLowerCase() : '';
-      const cod_cen = centre.cod_cen ? String(centre.cod_cen).toLowerCase() : '';
-      
-      // Rechercher dans tous les champs
-      return (
-        name.includes(searchLower) ||
-        code.includes(searchLower) ||
-        region.includes(searchLower) ||
-        type.includes(searchLower) ||
-        telephone.includes(searchLower) ||
-        adresse.includes(searchLower) ||
-        cod_cen.includes(searchLower)
-      );
-    });
-  }, []);
 
   // ==================== FONCTIONS DE CHARGEMENT ====================
 
@@ -305,128 +298,25 @@ const NetworkPage = () => {
   const loadAllCentres = useCallback(async (searchTerm = '') => {
     setLoading(prev => ({ ...prev, centres: true }));
     try {
-      console.log('🔍 Début du chargement de TOUS les centres...');
+      console.log('🔍 Début du chargement des centres...');
       
-      let allCentresData = [];
-      let methodsTried = [];
+      const response = await centresAPI.getAll({ 
+        limit: 1000,
+        page: 1,
+        actif: 1
+      });
       
-      // STRATÉGIE 1: Utiliser la méthode getAll avec un très grand limit
-      try {
-        console.log('📡 Tentative 1: centresAPI.getAll avec limit: 5000');
-        const response1 = await centresAPI.getAll({ 
-          limit: 5000,
-          page: 1 
-        });
+      if (response.success && response.centres) {
+        const uniqueCentres = [];
+        const seenIds = new Set();
         
-        methodsTried.push({
-          method: 'centresAPI.getAll',
-          success: response1.success,
-          count: response1.centres?.length || 0
-        });
-        
-        if (response1.success && response1.centres && response1.centres.length > 0) {
-          console.log(`✅ Méthode 1: ${response1.centres.length} centres récupérés`);
-          allCentresData = [...allCentresData, ...response1.centres];
-        }
-      } catch (error1) {
-        console.warn('⚠️ Méthode 1 échouée:', error1.message);
-      }
-      
-      // STRATÉGIE 2: Si getAll retourne une pagination, récupérer toutes les pages
-      if (allCentresData.length === 0) {
-        try {
-          console.log('📡 Tentative 2: Récupération paginée');
-          let page = 1;
-          let hasMore = true;
-          let pageCentres = [];
-          
-          while (hasMore && page <= 20) {
-            const pageResponse = await centresAPI.getAll({ 
-              limit: 100,
-              page: page 
-            });
-            
-            if (pageResponse.success && pageResponse.centres && pageResponse.centres.length > 0) {
-              pageCentres = pageResponse.centres;
-              allCentresData = [...allCentresData, ...pageCentres];
-              console.log(`📄 Page ${page}: ${pageCentres.length} centres`);
-              
-              if (pageCentres.length < 100) {
-                hasMore = false;
-              } else {
-                page++;
-              }
-            } else {
-              hasMore = false;
-            }
-          }
-          
-          methodsTried.push({
-            method: 'centresAPI.getAll paginé',
-            success: true,
-            count: allCentresData.length
-          });
-        } catch (error2) {
-          console.warn('⚠️ Méthode 2 échouée:', error2.message);
-        }
-      }
-      
-      // STRATÉGIE 3: Tenter une autre méthode d'API si disponible
-      if (allCentresData.length === 0 && centresAPI.getAllCentres) {
-        try {
-          console.log('📡 Tentative 3: centresAPI.getAllCentres');
-          const response3 = await centresAPI.getAllCentres();
-          methodsTried.push({
-            method: 'centresAPI.getAllCentres',
-            success: response3.success,
-            count: response3.centres?.length || 0
-          });
-          
-          if (response3.success && response3.centres) {
-            allCentresData = response3.centres;
-          }
-        } catch (error3) {
-          console.warn('⚠️ Méthode 3 échouée:', error3.message);
-        }
-      }
-      
-      // STRATÉGIE 4: Recherche avec un terme vide pour tout récupérer
-      if (allCentresData.length === 0 && centresAPI.searchCentres) {
-        try {
-          console.log('📡 Tentative 4: centresAPI.searchCentres avec terme vide');
-          const response4 = await centresAPI.searchCentres('', 1000);
-          methodsTried.push({
-            method: 'centresAPI.searchCentres',
-            success: response4.success,
-            count: response4.centres?.length || 0
-          });
-          
-          if (response4.success && response4.centres) {
-            allCentresData = response4.centres;
-          }
-        } catch (error4) {
-          console.warn('⚠️ Méthode 4 échouée:', error4.message);
-        }
-      }
-      
-      console.log('📊 Résumé des tentatives:', methodsTried);
-      console.log(`📈 Total centres récupérés: ${allCentresData.length}`);
-      
-      // Éliminer les doublons basés sur l'ID
-      const uniqueCentres = [];
-      const seenIds = new Set();
-      
-      allCentresData.forEach(centre => {
-        let centreId = centre.id || centre.COD_CEN || centre.code || centre.ID_CENTRE;
-        
-        if (centreId) {
-          // Convertir l'ID en chaîne
+        response.centres.forEach(centre => {
+          let centreId = centre.id || centre.COD_CEN || centre.code || `cen_${Math.random().toString(36).substr(2, 9)}`;
           centreId = String(centreId);
           
           if (!seenIds.has(centreId)) {
             seenIds.add(centreId);
             
-            // Convertir tous les champs en chaînes pour éviter les erreurs
             const centreName = String(centre.nom || centre.LIB_CEN || centre.NOM_CENTRE || centre.name || `Centre ${centreId}`);
             const centreCode = String(centre.code || centre.COD_CEN || centreId);
             const region = String(centre.region || centre.region_nom || centre.COD_PAI || centre.REGION || 'Non spécifiée');
@@ -442,59 +332,60 @@ const NetworkPage = () => {
               name: centreName,
               nom: centreName,
               code: centreCode,
-              COD_CEN: centreCode,
               region: region,
               type: type,
-              TYP_CEN: type,
               telephone: telephone,
-              TELEPHONE: telephone,
               adresse: adresse,
-              NUM_ADR: adresse,
-              status: status,
-              _raw: centre
+              status: status
             });
           }
-        }
-      });
-      
-      console.log(`✅ ${uniqueCentres.length} centres uniques formatés`);
-      
-      if (uniqueCentres.length > 0) {
-        // Stocker tous les centres
-        setAllCentres(uniqueCentres);
+        });
         
-        // Si un terme de recherche est fourni, filtrer
-        if (searchTerm && searchTerm.trim() !== '') {
-          const filtered = filterCentresLocalement(uniqueCentres, searchTerm);
-          console.log(`🔍 ${filtered.length} centres filtrés pour le terme: "${searchTerm}"`);
-          setCentres(filtered);
-          return filtered;
-        } else {
-          // Sinon, montrer tous les centres
-          setCentres(uniqueCentres);
-          return uniqueCentres;
-        }
-      } else {
-        console.warn('⚠️ Aucun centre trouvé, utilisation du fallback');
-        const fallbackCentres = [
-          {
-            id: '1006',
-            key: '1006',
-            cod_cen: 1006,
-            name: "Hôpital Central de Bangui",
-            code: "1006",
-            region: "2",
-            type: "Centre de Santé",
-            telephone: "+236 21 61 00 00",
-            adresse: "Bangui, République Centrafricaine",
-            status: "Actif"
+        console.log(`✅ ${uniqueCentres.length} centres uniques formatés`);
+        
+        if (uniqueCentres.length > 0) {
+          setAllCentres(uniqueCentres);
+          
+          if (searchTerm && searchTerm.trim() !== '') {
+            const searchLower = searchTerm.toLowerCase();
+            const filtered = uniqueCentres.filter(centre => {
+              const name = centre.name ? String(centre.name).toLowerCase() : '';
+              const code = centre.code ? String(centre.code).toLowerCase() : '';
+              const region = centre.region ? String(centre.region).toLowerCase() : '';
+              const type = centre.type ? String(centre.type).toLowerCase() : '';
+              return name.includes(searchLower) || code.includes(searchLower) || 
+                     region.includes(searchLower) || type.includes(searchLower);
+            });
+            setCentres(filtered);
+            return filtered;
+          } else {
+            setCentres(uniqueCentres);
+            return uniqueCentres;
           }
-        ];
-        
-        setCentres(fallbackCentres);
-        setAllCentres(fallbackCentres);
-        return fallbackCentres;
+        }
       }
+      
+      // Fallback
+      console.warn('⚠️ Aucun centre trouvé, utilisation du fallback');
+      const fallbackCentres = [
+        {
+          id: '1006',
+          key: '1006',
+          cod_cen: 1006,
+          name: "Hôpital Central de Bangui",
+          code: "1006",
+          region: "2",
+          type: "Centre de Santé",
+          telephone: "+236 21 61 00 00",
+          adresse: "Bangui, République Centrafricaine",
+          status: "Actif"
+        }
+      ];
+      
+      setCentres(fallbackCentres);
+      setAllCentres(fallbackCentres);
+      return fallbackCentres;
+      
     } catch (error) {
       console.error('❌ Erreur chargement centres:', error);
       message.error('Erreur lors du chargement des centres de santé');
@@ -502,217 +393,351 @@ const NetworkPage = () => {
     } finally {
       setLoading(prev => ({ ...prev, centres: false }));
     }
-  }, [filterCentresLocalement]);
+  }, []);
 
-  // CORRIGÉ : Fonction handleSearchCenters avec filtrage local
   const handleSearchCenters = useCallback((value) => {
     console.log('🔍 Recherche de centres avec terme:', value);
     
     if (value && value.trim() !== '') {
-      setLoading(prev => ({ ...prev, centres: true }));
-      try {
-        // Filtrer localement les centres
-        const filtered = filterCentresLocalement(allCentres, value);
-        console.log(`🔍 ${filtered.length} centres filtrés localement`);
-        setCentres(filtered);
-      } catch (error) {
-        console.error('❌ Erreur lors de la recherche de centres:', error);
-        // Fallback au filtrage simple en cas d'erreur
-        const searchLower = value.toLowerCase();
-        const filtered = allCentres.filter(centre => {
-          const name = centre.name ? String(centre.name).toLowerCase() : '';
-          const code = centre.code ? String(centre.code).toLowerCase() : '';
-          return name.includes(searchLower) || code.includes(searchLower);
-        });
-        setCentres(filtered);
-      } finally {
-        setLoading(prev => ({ ...prev, centres: false }));
-      }
+      const searchLower = value.toLowerCase();
+      const filtered = allCentres.filter(centre => {
+        const name = centre.name ? String(centre.name).toLowerCase() : '';
+        const code = centre.code ? String(centre.code).toLowerCase() : '';
+        const region = centre.region ? String(centre.region).toLowerCase() : '';
+        const type = centre.type ? String(centre.type).toLowerCase() : '';
+        return name.includes(searchLower) || code.includes(searchLower) || 
+               region.includes(searchLower) || type.includes(searchLower);
+      });
+      setCentres(filtered);
     } else {
-      // Si recherche vide, montrer tous les centres
       setCentres(allCentres);
     }
-  }, [allCentres, filterCentresLocalement]);
+  }, [allCentres]);
 
-  const loadBeneficiaires = useCallback(async (searchTerm = '') => {
-    setLoading(prev => ({ ...prev, beneficiaires: true }));
-    try {
-      const params = {
-        limit: 50,
-        ...(searchTerm && { search: searchTerm })
-      };
-      
-      const response = await beneficiairesAPI.getAll(params);
-      
-      if (response.success && response.beneficiaires) {
-        const formattedBeneficiaires = response.beneficiaires.map(beneficiaire => {
-          const benefData = beneficiaire;
-          
-          return {
-            id: String(benefData.ID_BEN || benefData.id || Math.random().toString(36).substr(2, 9)),
-            nom: String(benefData.NOM_BEN || benefData.nom || ''),
-            prenom: String(benefData.PRE_BEN || benefData.prenom || ''),
-            name: `${benefData.PRE_BEN || benefData.prenom || ''} ${benefData.NOM_BEN || benefData.nom || ''}`.trim(),
-            code: String(benefData.ID_BEN || benefData.id || 'N/A'),
-            age: String(benefData.AGE || benefData.age || 'N/A'),
-            condition: String(benefData.STATUT_ACE || benefData.statut_ace || 'Non spécifiée'),
-            identifiant_national: String(benefData.IDENTIFIANT_NATIONAL || benefData.identifiant_national || '')
-          };
-        });
+ const loadReseauDetails = useCallback(async (reseauId) => {
+  setLoading(prev => ({ ...prev, details: true }));
+  try {
+    const reseauResponse = await reseauSoinsAPI.getNetworkById(reseauId);
+    
+    if (reseauResponse.success && reseauResponse.network) {
+      const membresFormatted = (reseauResponse.members || []).map(membre => {
+        let nom_complet = '';
+        let libelle = '';
+        let type_membre_display = membre.type_membre;
+        let cod_cen = null;
+        let cod_pre = null;
         
-        console.log(`✅ ${formattedBeneficiaires.length} bénéficiaires chargés`);
-        setBeneficiaires(formattedBeneficiaires);
-        return formattedBeneficiaires;
-      } else {
-        console.warn('⚠️ Bénéficiaires non disponibles');
-        return [];
-      }
-    } catch (error) {
-      console.error('❌ Erreur chargement bénéficiaires:', error);
-      message.error('Erreur lors du chargement des bénéficiaires');
-      return [];
-    } finally {
-      setLoading(prev => ({ ...prev, beneficiaires: false }));
-    }
-  }, []);
-
-  const loadPrestataires = useCallback(async (searchTerm = '') => {
-    setLoading(prev => ({ ...prev, prestataires: true }));
-    try {
-      const params = {
-        limit: 50,
-        ...(searchTerm && { search: searchTerm })
-      };
-      
-      const response = await prestatairesAPI.getAll(params);
-      
-      if (response.success && response.prestataires) {
-        const formattedPrestataires = response.prestataires.map(prestataire => {
-          const prestaData = prestataire;
+        if (membre.type_membre === 'Etablissement' || membre.type_membre === 'Centre de santé') {
+          nom_complet = membre.nom_etablissement || 
+                       membre.NOM_ETABLISSEMENT || 
+                       membre.nom || 
+                       `Centre ${membre.cod_cen || membre.code || ''}`;
+          libelle = `Centre de santé: ${nom_complet}`;
+          type_membre_display = 'Centre de Santé';
           
-          return {
-            id: String(prestaData.id || prestaData.COD_PRE || Math.random().toString(36).substr(2, 9)),
-            nom: String(prestaData.nom || prestaData.NOM_PRESTATAIRE || ''),
-            prenom: String(prestaData.prenom || prestaData.PRENOM_PRESTATAIRE || ''),
-            name: `${prestaData.prenom || prestaData.PRENOM_PRESTATAIRE || ''} ${prestaData.nom || prestaData.NOM_PRESTATAIRE || ''}`.trim(),
-            specialite: String(prestaData.specialite || prestaData.SPECIALITE || 'Médecin'),
-            code: String(prestaData.id || prestaData.COD_PRE || 'N/A'),
-            type: String(prestaData.type_prestataire || prestaData.TYPE_PRESTATAIRE || 'Médecin'),
-            telephone: String(prestaData.telephone || prestaData.TELEPHONE || ''),
-            titre: String(prestaData.titre || prestaData.TITRE || '')
-          };
-        });
+          // EXTRACTION CRITIQUE de l'ID du centre
+          cod_cen = membre.cod_cen || 
+                   membre.centre_id || 
+                   membre.etablissement_id || 
+                   membre.COD_CEN ||
+                   null;
+          
+          if (!cod_cen && membre.id && membre.type_membre === 'Etablissement') {
+            const numericId = parseInt(membre.id, 10);
+            if (!isNaN(numericId) && membre.id.toString().length <= 6) {
+              cod_cen = numericId;
+            }
+          }
+        } else if (membre.type_membre === 'Prestataire') {
+          const nom = membre.nom_prestataire || membre.nom || membre.NOM_PRESTATAIRE || '';
+          const prenom = membre.prenom_prestataire || membre.prenom || membre.PRENOM_PRESTATAIRE || '';
+          nom_complet = `${prenom} ${nom}`.trim() || `Prestataire ${membre.id}`;
+          libelle = `Prestataire: ${nom_complet}`;
+          type_membre_display = 'Prestataire';
+          
+          // EXTRACTION CRITIQUE de l'ID du prestataire (PRIORITÉ à cod_pre)
+          cod_pre = membre.cod_pre || 
+                   membre.prestataire_id || 
+                   membre.COD_PRE ||
+                   (membre.id && membre.type_membre === 'Prestataire' ? membre.id : null);
+          
+          // Log pour déboguer
+          console.log('🔍 Extraction ID prestataire:', {
+            membreId: membre.id,
+            cod_pre: membre.cod_pre,
+            prestataire_id: membre.prestataire_id,
+            COD_PRE: membre.COD_PRE,
+            result: cod_pre
+          });
+        } else if (membre.type_membre === 'Beneficiaire') {
+          const nom = membre.nom || membre.NOM_BENEFICIAIRE || '';
+          const prenom = membre.prenom || membre.PRENOM_BENEFICIAIRE || '';
+          nom_complet = `${prenom} ${nom}`.trim() || `Bénéficiaire ${membre.id}`;
+          libelle = `Bénéficiaire: ${nom_complet}`;
+          type_membre_display = 'Bénéficiaire';
+        } else {
+          nom_complet = membre.nom || 'Membre sans nom';
+          libelle = `${membre.type_membre || 'Membre'}: ${nom_complet}`;
+        }
         
-        console.log(`✅ ${formattedPrestataires.length} prestataires chargés`);
-        setPrestataires(formattedPrestataires);
-        return formattedPrestataires;
-      } else {
-        console.warn('⚠️ Prestataires non disponibles');
-        return [];
-      }
-    } catch (error) {
-      console.error('❌ Erreur chargement prestataires:', error);
-      message.error('Erreur lors du chargement des prestataires');
-      return [];
-    } finally {
-      setLoading(prev => ({ ...prev, prestataires: false }));
-    }
-  }, []);
-
-  const loadReseauDetails = useCallback(async (reseauId) => {
-    setLoading(prev => ({ ...prev, details: true }));
-    try {
-      const reseauResponse = await reseauSoinsAPI.getNetworkById(reseauId);
+        const infosSupplementaires = [];
+        if (membre.specialite) infosSupplementaires.push(`Spécialité: ${membre.specialite}`);
+        if (membre.code_membre) infosSupplementaires.push(`Code: ${membre.code_membre}`);
+        if (membre.telephone) infosSupplementaires.push(`Tél: ${membre.telephone}`);
+        
+        return {
+          ...membre,
+          id: String(membre.id || Math.random().toString(36).substr(2, 9)),
+          nom_complet,
+          libelle,
+          infos_supplementaires: infosSupplementaires.join(' • '),
+          type_membre: type_membre_display,
+          date_adhesion: membre.date_adhesion || membre.DATE_ADHESION,
+          statut: String(membre.status_adhesion || membre.STATUS_ADHESION || 'Actif'),
+          specialite: membre.specialite,
+          telephone: membre.telephone,
+          code_membre: membre.code_membre,
+          // IDS EXTRACTS POUR LES VÉRIFICATIONS
+          cod_cen: cod_cen,
+          centre_id: cod_cen,
+          cod_pre: cod_pre,  // AJOUT IMPORTANT
+          prestataire_id: cod_pre  // ALIAS POUR FACILITER LES VÉRIFICATIONS
+        };
+      });
       
-      if (reseauResponse.success && reseauResponse.network) {
-        // AMÉLIORÉ : Construction des libellés des membres
-        const membresFormatted = (reseauResponse.members || []).map(membre => {
-          let nom_complet = '';
-          let libelle = '';
-          let type_membre_display = membre.type_membre;
+      console.log('📋 Membres formatés avec IDs prestataires:', membresFormatted.filter(m => m.type_membre === 'Prestataire'));
+      
+      setDetailsDrawer({
+        visible: true,
+        reseau: reseauResponse.network,
+        membres: membresFormatted,
+        statistiques: {
+          total_membres: membresFormatted.length,
+          etablissements: membresFormatted.filter(m => 
+            m.type_membre === 'Etablissement' || m.type_membre === 'Centre de santé'
+          ).length,
+          prestataires: membresFormatted.filter(m => 
+            m.type_membre === 'Prestataire'
+          ).length,
+          membres_actifs: membresFormatted.filter(m => 
+            m.statut === 'Actif' || m.status_adhesion === 'Actif'
+          ).length
+        }
+      });
+      
+      message.success('Détails du réseau chargés');
+    } else {
+      message.error(reseauResponse.message || 'Erreur lors du chargement des détails');
+    }
+  } catch (error) {
+    console.error('❌ Erreur chargement détails:', error);
+    message.error('Erreur lors du chargement des détails');
+  } finally {
+    setLoading(prev => ({ ...prev, details: false }));
+  }
+}, []);
+
+  // ==================== FONCTION POUR CHARGER LES PRESTATAIRES PAR CENTRE ====================
+
+const loadPrestatairesByCentre = useCallback(async (centreId, centreNom) => {
+  // Vérifier si l'ID est valide
+  if (!centreId || centreId === 'undefined') {
+    console.error('❌ centreId invalide:', centreId);
+    message.error('ID du centre invalide');
+    return;
+  }
+  
+  // Convertir en nombre
+  const numericCentreId = parseInt(centreId);
+  if (isNaN(numericCentreId)) {
+    console.error('❌ centreId n\'est pas un nombre:', centreId);
+    message.error('ID du centre doit être un nombre');
+    return;
+  }
+  
+  // Arrêter si déjà en cours de chargement
+  if (loadingCenterRef.current === numericCentreId) {
+    console.log('⚠️ Centre déjà en cours de chargement:', numericCentreId);
+    return;
+  }
+  
+  loadingCenterRef.current = numericCentreId;
+  
+  setCenterProvidersModal(prev => ({
+    ...prev,
+    loading: true
+  }));
+  
+  try {
+    console.log('📡 Chargement des prestataires pour le centre:', numericCentreId, centreNom);
+    
+    // ESSAYER LA MÉTHODE getByCentre D'ABORD
+    let response = null;
+    
+    try {
+      console.log('🔄 Tentative avec prestatairesAPI.getByCentre');
+      response = await prestatairesAPI.getByCentre(numericCentreId, {
+        limit: 100,
+        status: 'Actif',
+        affectation_active: '1'
+      });
+      console.log('📋 Réponse getByCentre:', response);
+    } catch (error) {
+      console.warn('⚠️ getByCentre a échoué:', error.message);
+      // Si getByCentre échoue, essayer searchByCentre
+      try {
+        response = await prestatairesAPI.searchByCentre('', numericCentreId, {
+          limit: 100,
+          status: 'Actif'
+        });
+        console.log('📋 Réponse searchByCentre:', response);
+      } catch (error2) {
+        console.warn('⚠️ searchByCentre a échoué:', error2.message);
+        // Dernière tentative avec getAll
+        response = await prestatairesAPI.getAll({
+          limit: 500,
+          status: 'Actif',
+          centre_id: numericCentreId
+        });
+        console.log('📋 Réponse getAll:', response);
+      }
+    }
+    
+    if (response && response.success && response.prestataires) {
+      const formattedProviders = response.prestataires.map(prestataire => {
+        const id = prestataire.id || prestataire.COD_PRE || `prest_${Math.random().toString(36).substr(2, 9)}`;
+        const nom = prestataire.nom || prestataire.NOM_PRESTATAIRE || '';
+        const prenom = prestataire.prenom || prestataire.PRENOM_PRESTATAIRE || '';
+        
+        // VÉRIFICATION RENFORCÉE : Comparaison avec TOUS les membres du réseau
+        const deja_membre = detailsDrawer.membres?.some(m => {
+          if (m.type_membre !== 'Prestataire') return false;
           
-          // Construction du nom complet selon le type
-          if (membre.type_membre === 'Etablissement' || membre.type_membre === 'Centre de santé') {
-            nom_complet = membre.nom_etablissement || 
-                         membre.NOM_ETABLISSEMENT || 
-                         membre.nom || 
-                         `Centre ${membre.cod_cen || membre.code || ''}`;
-            libelle = `Centre de santé: ${nom_complet}`;
-            type_membre_display = 'Centre de Santé';
-          } else if (membre.type_membre === 'Prestataire') {
-            const titre = membre.titre || '';
-            const prenom = membre.prenom_prestataire || membre.prenom || '';
-            const nom = membre.nom_prestataire || membre.nom || '';
-            nom_complet = `${titre} ${prenom} ${nom}`.trim();
-            libelle = `${membre.specialite || 'Prestataire'}: ${nom_complet}`;
-            type_membre_display = 'Prestataire';
-          } else if (membre.type_membre === 'Beneficiaire') {
-            const prenom = membre.prenom_beneficiaire || membre.prenom || '';
-            const nom = membre.nom_beneficiaire || membre.nom || '';
-            nom_complet = `${prenom} ${nom}`.trim();
-            libelle = `Bénéficiaire: ${nom_complet}`;
-            type_membre_display = 'Bénéficiaire';
-          } else {
-            nom_complet = membre.nom || 'Membre sans nom';
-            libelle = `${membre.type_membre || 'Membre'}: ${nom_complet}`;
+          // Essayer plusieurs façons de comparer les IDs
+          const membrePrestataireId = m.cod_pre || m.prestataire_id || m.id;
+          const prestataireId = id;
+          
+          // Comparaison en string pour être sûr
+          const match = String(membrePrestataireId) === String(prestataireId);
+          
+          if (match) {
+            console.log(`✅ Prestataire ${prestataireId} déjà membre avec ID membre: ${membrePrestataireId}`);
           }
           
-          // Ajouter des informations supplémentaires
-          const infosSupplementaires = [];
-          if (membre.specialite) infosSupplementaires.push(`Spécialité: ${membre.specialite}`);
-          if (membre.code_membre) infosSupplementaires.push(`Code: ${membre.code_membre}`);
-          if (membre.telephone) infosSupplementaires.push(`Tél: ${membre.telephone}`);
-          if (membre.identifiant_national) infosSupplementaires.push(`ID: ${membre.identifiant_national}`);
-          
-          return {
-            ...membre,
-            id: String(membre.id || Math.random().toString(36).substr(2, 9)),
-            nom_complet,
-            libelle,
-            infos_supplementaires: infosSupplementaires.join(' • '),
-            type_membre: type_membre_display,
-            date_adhesion: membre.date_adhesion || membre.DATE_ADHESION,
-            statut: String(membre.status_adhesion || membre.STATUS_ADHESION || 'Actif'),
-            specialite: membre.specialite,
-            telephone: membre.telephone,
-            code_membre: membre.code_membre
-          };
+          return match;
         });
         
-        console.log('✅ Membres formatés:', membresFormatted);
+        if (deja_membre) {
+          console.log(`⚠️ Prestataire ${id} (${prenom} ${nom}) est déjà membre du réseau`);
+        }
         
-        setDetailsDrawer({
-          visible: true,
-          reseau: reseauResponse.network,
-          membres: membresFormatted,
-          statistiques: {
-            total_membres: membresFormatted.length,
-            etablissements: membresFormatted.filter(m => 
-              m.type_membre === 'Etablissement' || m.type_membre === 'Centre de santé'
-            ).length,
-            prestataires: membresFormatted.filter(m => 
-              m.type_membre === 'Prestataire'
-            ).length,
-            beneficiaires: membresFormatted.filter(m => 
-              m.type_membre === 'Bénéficiaire'
-            ).length,
-            membres_actifs: membresFormatted.filter(m => 
-              m.statut === 'Actif' || m.status_adhesion === 'Actif'
-            ).length
-          }
-        });
-        
-        message.success('Détails du réseau chargés');
-      } else {
-        message.error(reseauResponse.message || 'Erreur lors du chargement des détails');
+        return {
+          id: String(id),
+          nom: String(nom),
+          prenom: String(prenom),
+          nom_complet: `${prenom} ${nom}`.trim(),
+          specialite: String(prestataire.specialite || prestataire.SPECIALITE || 'Non spécifiée'),
+          titre: String(prestataire.titre || prestataire.TITRE || ''),
+          telephone: String(prestataire.telephone || prestataire.TELEPHONE || ''),
+          email: String(prestataire.email || prestataire.EMAIL || ''),
+          date_debut_affectation: prestataire.date_debut_affectation || prestataire.date_affectation,
+          date_fin_affectation: prestataire.date_fin_affectation,
+          statut_affectation: prestataire.statut_affectation || prestataire.STATUT_AFFECTATION || 'Actif',
+          deja_membre,
+          // Stocker l'ID original pour les logs
+          cod_pre: prestataire.COD_PRE || prestataire.id
+        };
+      });
+      
+      const countDejaMembres = formattedProviders.filter(p => p.deja_membre).length;
+      console.log(`✅ ${formattedProviders.length} prestataires formatés, ${countDejaMembres} déjà membres`);
+      
+      setCenterProvidersModal(prev => ({
+        ...prev,
+        prestataires: formattedProviders,
+        loading: false
+      }));
+      
+      if (formattedProviders.length === 0) {
+        message.info('Aucun prestataire trouvé pour ce centre');
       }
-    } catch (error) {
-      console.error('❌ Erreur chargement détails:', error);
-      message.error('Erreur lors du chargement des détails');
-    } finally {
-      setLoading(prev => ({ ...prev, details: false }));
+    } else {
+      console.warn('⚠️ Aucun prestataire trouvé ou erreur API');
+      setCenterProvidersModal(prev => ({
+        ...prev,
+        prestataires: [],
+        loading: false
+      }));
+      message.warning(response?.message || 'Aucun prestataire trouvé pour ce centre');
     }
-  }, []);
+  } catch (error) {
+    console.error('❌ Erreur lors du chargement des prestataires:', error);
+    setCenterProvidersModal(prev => ({
+      ...prev,
+      prestataires: [],
+      loading: false
+    }));
+    message.error(`Erreur: ${error.message}`);
+  } finally {
+    // Réinitialiser la référence de chargement
+    loadingCenterRef.current = null;
+  }
+}, [detailsDrawer.membres]); // IMPORTANT: dépendance à detailsDrawer.membres
+
+  // Fonction pour ouvrir la modal des prestataires d'un centre
+  const openCenterProvidersModal = (centreId, centreNom) => {
+    // VALIDATION COMPLÈTE
+    if (!centreId || centreId === 'undefined' || centreId === 'null' || centreId === '') {
+      console.error('❌ centreId invalide dans openCenterProvidersModal:', {
+        centreId,
+        centreNom,
+        type: typeof centreId
+      });
+      
+      message.error({
+        content: (
+          <div>
+            <div>Impossible d'ouvrir la liste des prestataires</div>
+            <div style={{ fontSize: '12px', color: '#999', marginTop: '5px' }}>
+              L'identifiant du centre est manquant ou invalide
+            </div>
+          </div>
+        ),
+        duration: 5
+      });
+      return;
+    }
+    
+    // Convertir en nombre si possible
+    let numericCentreId = centreId;
+    if (typeof centreId === 'string' && /^\d+$/.test(centreId)) {
+      numericCentreId = parseInt(centreId, 10);
+    }
+    
+    if (isNaN(numericCentreId)) {
+      console.error('❌ centreId n\'est pas un nombre:', centreId);
+      message.error('ID du centre doit être un nombre valide');
+      return;
+    }
+    
+    console.log('✅ Ouverture modal pour le centre:', {
+      id: numericCentreId,
+      nom: centreNom,
+      originalId: centreId
+    });
+    
+    setCenterProvidersModal({
+      visible: true,
+      centre: { id: numericCentreId, nom: centreNom },
+      prestataires: [],
+      loading: true
+    });
+    
+    // Charger les prestataires avec un léger délai
+    setTimeout(() => {
+      loadPrestatairesByCentre(numericCentreId, centreNom);
+    }, 100);
+  };
 
   // ==================== FONCTIONS DE GESTION ====================
 
@@ -734,8 +759,6 @@ const NetworkPage = () => {
         site_web: values.site_web || '',
         status: values.status || 'Actif'
       };
-      
-      console.log('📤 Création réseau avec données:', reseauData);
       
       const result = await reseauSoinsAPI.createNetwork(reseauData);
       
@@ -779,8 +802,6 @@ const NetworkPage = () => {
         status: values.status || 'Actif'
       };
       
-      console.log('📤 Mise à jour réseau avec données:', reseauData);
-      
       const result = await reseauSoinsAPI.updateNetwork(reseauId, reseauData);
       
       if (result.success) {
@@ -817,8 +838,6 @@ const NetworkPage = () => {
   };
 
   const handleAddMember = async (values) => {
-    console.log('🔄 Début handleAddMember:', values);
-    
     if (!detailsDrawer.reseau?.id) {
       message.error('Aucun réseau sélectionné');
       return;
@@ -827,90 +846,34 @@ const NetworkPage = () => {
     setMemberModal(prev => ({ ...prev, loading: true }));
     
     try {
-      const memberType = values.type;
       const dateAdhesion = values.date.format('YYYY-MM-DD');
       const statusAdhesion = values.status || 'Actif';
       
-      let memberData = {};
+      const selectedCenter = allCentres.find(c => c.id === values.centerId);
       
-      switch (memberType) {
-        case 'center':
-          // CORRIGÉ : Rechercher dans allCentres au lieu de centres
-          const selectedCenter = allCentres.find(c => c.id === values.centerId);
-          console.log('🔍 Centre sélectionné:', selectedCenter);
-          console.log('🔍 Tous les centres disponibles:', allCentres.length);
-          
-          if (!selectedCenter) {
-            throw new Error('Centre de santé non trouvé. Veuillez sélectionner un centre dans la liste.');
-          }
-          
-          memberData = {
-            type_membre: 'Etablissement',
-            cod_cen: selectedCenter.cod_cen || parseInt(selectedCenter.id, 10) || selectedCenter.id,
-            date_adhesion: dateAdhesion,
-            statut: statusAdhesion
-          };
-          
-          console.log('📤 Données centre envoyées à l\'API:', memberData);
-          break;
-          
-        case 'provider':
-          const selectedProvider = prestataires.find(p => p.id === values.providerId);
-          if (!selectedProvider) {
-            throw new Error('Prestataire non trouvé');
-          }
-          
-          memberData = {
-            type_membre: 'Prestataire',
-            cod_pre: selectedProvider.cod_pre || selectedProvider.id,
-            date_adhesion: dateAdhesion,
-            statut: statusAdhesion
-          };
-          break;
-          
-        case 'beneficiary':
-          const selectedBeneficiary = beneficiaires.find(b => b.id === values.beneficiaryId);
-          if (!selectedBeneficiary) {
-            throw new Error('Bénéficiaire non trouvé');
-          }
-          
-          memberData = {
-            type_membre: 'Beneficiaire',
-            cod_ben: selectedBeneficiary.cod_ben || selectedBeneficiary.id,
-            date_adhesion: dateAdhesion,
-            statut: statusAdhesion
-          };
-          break;
-          
-        default:
-          throw new Error('Type de membre non reconnu');
+      if (!selectedCenter) {
+        throw new Error('Centre de santé non trouvé');
       }
       
-      console.log('📤 Appel API addMemberToNetwork avec:', {
-        reseauId: detailsDrawer.reseau.id,
-        memberData
-      });
+      const centerMemberData = {
+        type_membre: 'Etablissement',
+        cod_cen: selectedCenter.cod_cen || parseInt(selectedCenter.id, 10) || selectedCenter.id,
+        date_adhesion: dateAdhesion,
+        statut: statusAdhesion
+      };
       
-      const result = await reseauSoinsAPI.addMemberToNetwork(detailsDrawer.reseau.id, memberData);
-      
-      console.log('📋 Réponse API addMemberToNetwork:', result);
+      const result = await reseauSoinsAPI.addMemberToNetwork(detailsDrawer.reseau.id, centerMemberData);
       
       if (result.success) {
-        message.success('Membre ajouté avec succès');
+        message.success(`Centre "${selectedCenter.name}" ajouté au réseau`);
+        
         setMemberModal({ visible: false, loading: false });
         memberForm.resetFields();
         
         await loadReseauDetails(detailsDrawer.reseau.id);
         await loadReseaux();
-        
-        setTimeout(() => {
-          loadReseauDetails(detailsDrawer.reseau.id);
-        }, 500);
-        
       } else {
-        const errorMsg = result.message || result.error || 'Erreur lors de l\'ajout du membre';
-        console.error('❌ Erreur API:', result);
-        throw new Error(errorMsg);
+        throw new Error(result.message || 'Erreur lors de l\'ajout du centre');
       }
     } catch (error) {
       console.error('❌ Erreur détaillée ajout membre:', error);
@@ -920,16 +883,12 @@ const NetworkPage = () => {
     }
   };
 
-  // CORRIGÉ : Fonction handleRemoveMember avec recherche correcte du membre
   const handleRemoveMember = async (membreId) => {
-    console.log('🗑️ Tentative de retrait du membre ID:', membreId);
-    
     if (!detailsDrawer.reseau?.id) {
       message.error('Aucun réseau sélectionné');
       return;
     }
     
-    // Trouver le membre dans la liste pour confirmation
     const membreToRemove = detailsDrawer.membres.find(m => m.id === membreId);
     if (!membreToRemove) {
       message.error('Membre non trouvé dans la liste');
@@ -937,43 +896,23 @@ const NetworkPage = () => {
     }
     
     try {
-      console.log('📤 Appel API pour retirer le membre:', {
-        membreId,
-        reseauId: detailsDrawer.reseau.id,
-        membreName: membreToRemove.nom_complet
-      });
-      
-      // Essayer plusieurs méthodes d'API
       let result = null;
       
-      // Méthode 1: Mettre à jour le statut du membre
       try {
         result = await reseauSoinsAPI.updateMemberStatus(membreId, 'Inactif');
       } catch (apiError1) {
         console.warn('⚠️ Méthode 1 échouée:', apiError1);
-        
-        // Méthode 2: Supprimer directement le membre
         try {
           result = await reseauSoinsAPI.removeMemberFromNetwork(detailsDrawer.reseau.id, membreId);
         } catch (apiError2) {
           console.warn('⚠️ Méthode 2 échouée:', apiError2);
-          
-          // Méthode 3: Mettre à jour l'adhésion
-          try {
-            result = await reseauSoinsAPI.updateMemberStatus(membreId, { status_adhesion: 'Inactif' });
-          } catch (apiError3) {
-            console.warn('⚠️ Méthode 3 échouée:', apiError3);
-            throw new Error('Toutes les méthodes d\'API ont échoué');
-          }
+          throw new Error('Impossible de retirer le membre');
         }
       }
-      
-      console.log('📋 Réponse API retrait membre:', result);
       
       if (result && result.success) {
         message.success(`Membre "${membreToRemove.nom_complet}" retiré du réseau`);
         
-        // Mettre à jour la liste des membres localement
         const updatedMembres = detailsDrawer.membres.filter(m => m.id !== membreId);
         setDetailsDrawer(prev => ({
           ...prev,
@@ -987,7 +926,6 @@ const NetworkPage = () => {
           }
         }));
         
-        // Recharger la liste des réseaux pour mettre à jour le compteur
         await loadReseaux();
         
       } else {
@@ -1001,21 +939,16 @@ const NetworkPage = () => {
   };
 
   const handleEditReseau = (reseau) => {
-    console.log('✏️ Modification du réseau:', reseau);
-    
-    // Vérifier que le réseau existe
     if (!reseau || !reseau.id) {
       message.error('Réseau non valide pour modification');
       return;
     }
     
-    // Mettre à jour le drawer avec le réseau actuel
     setDetailsDrawer(prev => ({
       ...prev,
       reseau: reseau
     }));
     
-    // Remplir le formulaire avec les valeurs du réseau
     networkForm.setFieldsValue({
       nom: reseau.nom || '',
       description: reseau.description || '',
@@ -1030,8 +963,6 @@ const NetworkPage = () => {
       site_web: reseau.site_web || '',
       status: reseau.status || 'Actif'
     });
-    
-    console.log('📝 Formulaire rempli avec:', networkForm.getFieldsValue());
     
     setNetworkModal({
       visible: true,
@@ -1055,37 +986,8 @@ const NetworkPage = () => {
     setPagination(prev => ({ ...prev, current: 1 }));
   };
 
-  const handleSearchProviders = (value) => {
-    loadPrestataires(value);
-  };
-
-  const handleSearchBeneficiaries = (value) => {
-    loadBeneficiaires(value);
-  };
-
-  const handleMemberTypeChange = (value) => {
-    memberForm.setFieldsValue({
-      centerId: undefined,
-      providerId: undefined,
-      beneficiaryId: undefined
-    });
-  };
-
   const openAddMemberModal = () => {
-    console.log('📝 Ouverture modal ajout membre');
-    
-    // Charger les données nécessaires
-    loadAllCentres('').then(loadedCentres => {
-      console.log('✅ Centres chargés pour modal:', loadedCentres?.length);
-      if (loadedCentres && loadedCentres.length > 0) {
-        console.log('📋 Exemple de centre:', loadedCentres[0]);
-      }
-    });
-    
-    loadPrestataires('');
-    loadBeneficiaires('');
-    
-    // Réinitialiser le formulaire
+    loadAllCentres('');
     memberForm.resetFields();
     memberForm.setFieldsValue({
       type: 'center',
@@ -1096,12 +998,118 @@ const NetworkPage = () => {
     setMemberModal({ visible: true, loading: false });
   };
 
-  const forceReloadCentres = () => {
-    message.info('Rechargement des centres en cours...');
-    loadAllCentres('').then(() => {
-      message.success('Centres rechargés avec succès');
+// Fonction pour ajouter un prestataire depuis la modal - VERSION CORRIGÉE AVEC VÉRIFICATION RENFORCÉE
+const handleAddProviderFromModal = async (prestataire) => {
+  if (!detailsDrawer.reseau?.id) {
+    message.error('Aucun réseau sélectionné');
+    return;
+  }
+  
+  // VÉRIFICATION RENFORCÉE - Si déjà membre, on arrête immédiatement
+  if (prestataire.deja_membre === true) {
+    message.warning({
+      content: (
+        <div>
+          <div>Ce prestataire est déjà membre du réseau</div>
+          <div style={{ fontSize: '12px', color: '#999', marginTop: '5px' }}>
+            {prestataire.nom_complet} - {prestataire.specialite}
+          </div>
+        </div>
+      ),
+      duration: 3
     });
-  };
+    return; // IMPORTANT: Arrêter l'exécution ici
+  }
+  
+  // VÉRIFICATION SUPPLÉMENTAIRE : Re-vérifier avec les données actuelles
+  const estDejaMembre = detailsDrawer.membres?.some(m => {
+    if (m.type_membre !== 'Prestataire') return false;
+    const membrePrestataireId = m.cod_pre || m.prestataire_id;
+    return String(membrePrestataireId) === String(prestataire.id);
+  });
+  
+  if (estDejaMembre) {
+    message.warning({
+      content: (
+        <div>
+          <div>Ce prestataire est déjà membre du réseau (vérification double)</div>
+          <div style={{ fontSize: '12px', color: '#999', marginTop: '5px' }}>
+            {prestataire.nom_complet} - {prestataire.specialite}
+          </div>
+        </div>
+      ),
+      duration: 3
+    });
+    
+    // Mettre à jour l'état local
+    const updatedProviders = centerProvidersModal.prestataires.map(p => 
+      p.id === prestataire.id ? { ...p, deja_membre: true } : p
+    );
+    
+    setCenterProvidersModal(prev => ({
+      ...prev,
+      prestataires: updatedProviders
+    }));
+    
+    return;
+  }
+  
+  try {
+    const providerMemberData = {
+      type_membre: 'Prestataire',
+      cod_pre: prestataire.id,
+      date_adhesion: moment().format('YYYY-MM-DD'),
+      statut: 'Actif',
+      centre_affectation: centerProvidersModal.centre?.id,
+      specialite: prestataire.specialite
+    };
+    
+    console.log('📤 Données envoyées pour ajout prestataire:', providerMemberData);
+    
+    const result = await reseauSoinsAPI.addMemberToNetwork(detailsDrawer.reseau.id, providerMemberData);
+    
+    if (result.success) {
+      message.success(`Prestataire "${prestataire.nom_complet}" ajouté au réseau`);
+      
+      // Mettre à jour l'état local pour refléter le changement
+      const updatedProviders = centerProvidersModal.prestataires.map(p => 
+        p.id === prestataire.id ? { ...p, deja_membre: true } : p
+      );
+      
+      setCenterProvidersModal(prev => ({
+        ...prev,
+        prestataires: updatedProviders
+      }));
+      
+      // Recharger les détails du réseau pour avoir les données à jour
+      await loadReseauDetails(detailsDrawer.reseau.id);
+    } else {
+      message.error(result.message || 'Erreur lors de l\'ajout du prestataire');
+    }
+  } catch (error) {
+    console.error('❌ Erreur détaillée ajout prestataire:', error);
+    
+    // Si l'erreur est "déjà membre", mettre à jour l'état local
+    if (error.message && error.message.includes('déjà dans le réseau')) {
+      message.warning(`Ce prestataire est déjà membre du réseau : ${prestataire.nom_complet}`);
+      
+      // Mettre à jour l'état local
+      const updatedProviders = centerProvidersModal.prestataires.map(p => 
+        p.id === prestataire.id ? { ...p, deja_membre: true } : p
+      );
+      
+      setCenterProvidersModal(prev => ({
+        ...prev,
+        prestataires: updatedProviders
+      }));
+      
+      // Recharger les détails pour s'assurer que tout est à jour
+      await loadReseauDetails(detailsDrawer.reseau.id);
+    } else {
+      message.error(`Erreur: ${error.message || 'Erreur lors de l\'ajout du prestataire au réseau'}`);
+    }
+  }
+};
 
   // ==================== CONFIGURATION DES COLONNES DU TABLEAU ====================
 
@@ -1237,245 +1245,12 @@ const NetworkPage = () => {
     }
   ];
 
-  // ==================== CONFIGURATION DES ONGLETS POUR LE DRAWER ====================
-
-  const tabItems = [
-    {
-      key: 'info',
-      label: 'Informations',
-      children: detailsDrawer.reseau ? (
-        <Descriptions column={1} bordered>
-          <Descriptions.Item label="Description">
-            {detailsDrawer.reseau.description || 'Non spécifiée'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Objectifs">
-            {detailsDrawer.reseau.objectifs || 'Non spécifiés'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Zone de Couverture">
-            {detailsDrawer.reseau.zone_couverture || 'Non spécifiée'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Population Cible">
-            {detailsDrawer.reseau.population_cible || 'Non spécifiée'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Région">
-            {regions.find(r => r.code === detailsDrawer.reseau.region_code)?.nom || 
-             detailsDrawer.reseau.region_code || 'Non spécifiée'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Date de Création">
-            {detailsDrawer.reseau.date_creation ? 
-              moment(detailsDrawer.reseau.date_creation).format('DD/MM/YYYY HH:mm') : 
-              'Non spécifiée'}
-          </Descriptions.Item>
-        </Descriptions>
-      ) : null
-    },
-    {
-      key: 'contact',
-      label: 'Contact',
-      children: detailsDrawer.reseau ? (
-        <Descriptions column={1} bordered>
-          <Descriptions.Item label="Contact Principal">
-            {detailsDrawer.reseau.contact_principal || 'Non spécifié'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Téléphone">
-            {detailsDrawer.reseau.telephone_contact ? (
-              <Space>
-                <PhoneOutlined />
-                {detailsDrawer.reseau.telephone_contact}
-              </Space>
-            ) : 'Non spécifié'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Email">
-            {detailsDrawer.reseau.email_contact ? (
-              <Space>
-                <MailOutlined />
-                {detailsDrawer.reseau.email_contact}
-              </Space>
-            ) : 'Non spécifié'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Site Web">
-            {detailsDrawer.reseau.site_web ? (
-              <a href={detailsDrawer.reseau.site_web} target="_blank" rel="noopener noreferrer">
-                <Space>
-                  <LinkOutlined />
-                  {detailsDrawer.reseau.site_web}
-                </Space>
-              </a>
-            ) : 'Non spécifié'}
-          </Descriptions.Item>
-        </Descriptions>
-      ) : null
-    },
-    {
-      key: 'members',
-      label: `Membres (${detailsDrawer.membres?.length || 0})`,
-      children: (
-        <>
-          <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography.Text strong>Liste des membres</Typography.Text>
-            <Button
-              type="primary"
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={openAddMemberModal}
-            >
-              Ajouter
-            </Button>
-          </div>
-          
-          {detailsDrawer.membres?.length > 0 ? (
-            <List
-              dataSource={detailsDrawer.membres}
-              renderItem={member => {
-                const memberType = getMemberTypeLabel(member.type_membre);
-                return (
-                  <List.Item
-                    actions={[
-                      <Tooltip title="Retirer" key="delete">
-                        <Popconfirm
-                          title="Retirer ce membre du réseau ?"
-                          description={`Êtes-vous sûr de vouloir retirer "${member.nom_complet || 'ce membre'}" du réseau ?`}
-                          onConfirm={() => handleRemoveMember(member.id)}
-                          okText="Oui"
-                          cancelText="Non"
-                          okButtonProps={{ danger: true }}
-                        >
-                          <Button 
-                            size="small" 
-                            danger 
-                            icon={<MinusCircleOutlined />} 
-                            loading={loading.membres}
-                          />
-                        </Popconfirm>
-                      </Tooltip>
-                    ]}
-                  >
-                    <List.Item.Meta
-                      avatar={
-                        <Avatar
-                          icon={memberType.icon}
-                          style={{ backgroundColor: memberType.color }}
-                        />
-                      }
-                      title={
-                        <div>
-                          <Text strong>{member.nom_complet || 'Membre sans nom'}</Text>
-                          <Tag color={memberType.color} style={{ marginLeft: '8px', fontSize: '10px' }}>
-                            {memberType.label}
-                          </Tag>
-                        </div>
-                      }
-                      description={
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          {/* LIBELLÉ AMÉLIORÉ */}
-                          <Text type="secondary" style={{ fontSize: '12px', fontWeight: '500' }}>
-                            {member.libelle || `${memberType.label}: ${member.nom_complet}`}
-                          </Text>
-                          
-                          {/* INFORMATIONS SUPPLÉMENTAIRES */}
-                          {member.infos_supplementaires && (
-                            <Text type="secondary" style={{ fontSize: '11px' }}>
-                              {member.infos_supplementaires}
-                            </Text>
-                          )}
-                          
-                          {/* STATUT ET DATE */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                            <Tag 
-                              color={getStatusConfig(member.statut).color} 
-                              size="small"
-                              icon={getStatusConfig(member.statut).icon}
-                              style={{ fontSize: '10px', padding: '0 6px' }}
-                            >
-                              {member.statut || 'Actif'}
-                            </Tag>
-                            
-                            {member.date_adhesion && (
-                              <Text type="secondary" style={{ fontSize: '11px' }}>
-                                <ClockCircleOutlined style={{ marginRight: '4px' }} />
-                                Adhésion: {moment(member.date_adhesion).format('DD/MM/YYYY')}
-                              </Text>
-                            )}
-                          </div>
-                        </div>
-                      }
-                    />
-                  </List.Item>
-                );
-              }}
-            />
-          ) : (
-            <Empty
-              description="Aucun membre dans ce réseau"
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-            >
-              <Button
-                type="primary"
-                icon={<UsergroupAddOutlined />}
-                onClick={openAddMemberModal}
-              >
-                Ajouter le premier membre
-              </Button>
-            </Empty>
-          )}
-        </>
-      )
-    },
-    {
-      key: 'stats',
-      label: 'Statistiques',
-      children: (
-        <Row gutter={[16, 16]}>
-          <Col span={12}>
-            <Card size="small">
-              <Statistic
-                title="Membres Totaux"
-                value={detailsDrawer.statistiques.total_membres || 0}
-                prefix={<TeamOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col span={12}>
-            <Card size="small">
-              <Statistic
-                title="Établissements"
-                value={detailsDrawer.statistiques.etablissements || 0}
-                prefix={<BankOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col span={12}>
-            <Card size="small">
-              <Statistic
-                title="Prestataires"
-                value={detailsDrawer.statistiques.prestataires || 0}
-                prefix={<UserOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col span={12}>
-            <Card size="small">
-              <Statistic
-                title="Membres Actifs"
-                value={detailsDrawer.statistiques.membres_actifs || 0}
-                prefix={<CheckCircleOutlined />}
-              />
-            </Card>
-          </Col>
-        </Row>
-      )
-    }
-  ];
-
   // ==================== EFFETS ====================
 
   useEffect(() => {
     loadRegions();
-  }, [loadRegions]);
-
-  useEffect(() => {
     loadReseaux();
-  }, [loadReseaux]);
+  }, []);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -1485,7 +1260,7 @@ const NetworkPage = () => {
     }, 500);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [filters.search, loadReseaux]);
+  }, [filters.search]);
 
   // ==================== RENDU PRINCIPAL ====================
 
@@ -1703,39 +1478,6 @@ const NetworkPage = () => {
               }
             }}
             scroll={{ x: 1200 }}
-            locale={{
-              emptyText: (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={
-                    filters.search || filters.status !== 'all' || filters.type !== 'all'
-                      ? 'Aucun réseau trouvé avec ces critères'
-                      : 'Aucun réseau disponible. Créez votre premier réseau !'
-                  }
-                >
-                  {(!filters.search && filters.status === 'all' && filters.type === 'all') && (
-                    <Button
-                      type="primary"
-                      icon={<PlusOutlined />}
-                      onClick={() => {
-                        networkForm.resetFields();
-                        networkForm.setFieldsValue({ 
-                          status: 'Actif',
-                          type: 'Hospitalier'
-                        });
-                        setNetworkModal({
-                          visible: true,
-                          mode: 'create',
-                          loading: false
-                        });
-                      }}
-                    >
-                      Créer un Réseau
-                    </Button>
-                  )}
-                </Empty>
-              )
-            }}
           />
         </Card>
       </Card>
@@ -1941,7 +1683,7 @@ const NetworkPage = () => {
         title={
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <ApartmentOutlined style={{ marginRight: '12px', fontSize: '20px' }} />
-            <span>Détails du Réseau</span>
+            <span>Détails du Réseau: {detailsDrawer.reseau?.nom}</span>
           </div>
         }
         width={800}
@@ -1967,7 +1709,7 @@ const NetworkPage = () => {
               onClick={openAddMemberModal}
               disabled={!detailsDrawer.reseau}
             >
-              Ajouter Membre
+              Ajouter Centre
             </Button>
           </Space>
         }
@@ -2008,14 +1750,235 @@ const NetworkPage = () => {
                 </div>
               </div>
 
-              <Tabs defaultActiveKey="info" items={tabItems} />
+              <Tabs defaultActiveKey="info" items={[
+                {
+                  key: 'info',
+                  label: 'Informations',
+                  children: (
+                    <Descriptions column={1} bordered>
+                      <Descriptions.Item label="Description">
+                        {detailsDrawer.reseau.description || 'Non spécifiée'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Objectifs">
+                        {detailsDrawer.reseau.objectifs || 'Non spécifiés'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Zone de Couverture">
+                        {detailsDrawer.reseau.zone_couverture || 'Non spécifiée'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Population Cible">
+                        {detailsDrawer.reseau.population_cible || 'Non spécifiée'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Région">
+                        {regions.find(r => r.code === detailsDrawer.reseau.region_code)?.nom || 
+                         detailsDrawer.reseau.region_code || 'Non spécifiée'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Date de Création">
+                        {detailsDrawer.reseau.date_creation ? 
+                          moment(detailsDrawer.reseau.date_creation).format('DD/MM/YYYY HH:mm') : 
+                          'Non spécifiée'}
+                      </Descriptions.Item>
+                    </Descriptions>
+                  )
+                },
+                {
+                  key: 'members',
+                  label: `Centres (${detailsDrawer.membres?.filter(m => 
+                    m.type_membre === 'Centre de Santé' || m.type_membre === 'Etablissement'
+                  ).length || 0})`,
+                  children: (
+                    <div>
+                      <div style={{ marginBottom: '16px' }}>
+                        <Button
+                          type="primary"
+                          size="small"
+                          icon={<PlusOutlined />}
+                          onClick={openAddMemberModal}
+                        >
+                          Ajouter un centre
+                        </Button>
+                      </div>
+                      
+                      {detailsDrawer.membres?.filter(m => 
+                        m.type_membre === 'Centre de Santé' || m.type_membre === 'Etablissement'
+                      ).length > 0 ? (
+                        <Table
+                          dataSource={detailsDrawer.membres.filter(m => 
+                            m.type_membre === 'Centre de Santé' || m.type_membre === 'Etablissement'
+                          )}
+                          columns={[
+                            {
+                              title: 'Centre',
+                              dataIndex: 'nom_complet',
+                              key: 'nom_complet',
+                              render: (text, record) => (
+                                <div>
+                                  <Text strong>{text}</Text>
+                                  {record.infos_supplementaires && (
+                                    <div style={{ fontSize: '12px', color: '#666' }}>
+                                      {record.infos_supplementaires}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            },
+                            {
+                              title: 'Adhésion',
+                              dataIndex: 'date_adhesion',
+                              key: 'date_adhesion',
+                              width: 120,
+                              render: (date) => date ? moment(date).format('DD/MM/YY') : '-'
+                            },
+                            {
+                              title: 'Statut',
+                              dataIndex: 'statut',
+                              key: 'statut',
+                              width: 100,
+                              render: (statut) => {
+                                const statusConfig = getStatusConfig(statut);
+                                return (
+                                  <Tag color={statusConfig.color}>
+                                    {statusConfig.label}
+                                  </Tag>
+                                );
+                              }
+                            },
+                            {
+                              title: 'Actions',
+                              key: 'actions',
+                              width: 150,
+                              render: (_, record) => {
+                                // VÉRIFICATION ROBUSTE DE L'ID DU CENTRE
+                                const centreId = record.cod_cen || record.centre_id || record.id;
+                                const centreName = record.nom_complet || record.nom_etablissement || 'Centre sans nom';
+                                
+                                // Vérifier si c'est bien un centre de santé
+                                const isCentre = record.type_membre === 'Centre de Santé' || 
+                                                record.type_membre === 'Etablissement';
+                                
+                                // Vérifier si l'ID est valide
+                                const hasValidId = centreId && centreId !== 'undefined' && 
+                                                  centreId !== 'null' && centreId !== '';
+                                
+                                return (
+                                  <Space size="small">
+                                    {isCentre && (
+                                      <Tooltip 
+                                        title={hasValidId ? "Voir prestataires" : "ID centre non disponible"}
+                                      >
+                                        <Button
+                                          size="small"
+                                          icon={<TeamOutlined />}
+                                          onClick={() => {
+                                            if (hasValidId) {
+                                              openCenterProvidersModal(
+                                                centreId, 
+                                                centreName
+                                              );
+                                            } else {
+                                              message.warning('ID du centre non disponible');
+                                              console.error('ID centre manquant dans:', record);
+                                            }
+                                          }}
+                                          disabled={!hasValidId}
+                                        >
+                                          Prestataires
+                                        </Button>
+                                      </Tooltip>
+                                    )}
+                                    <Tooltip title="Retirer">
+                                      <Popconfirm
+                                        title="Retirer ce centre du réseau ?"
+                                        onConfirm={() => handleRemoveMember(record.id)}
+                                        okText="Oui"
+                                        cancelText="Non"
+                                      >
+                                        <Button
+                                          size="small"
+                                          danger
+                                          icon={<MinusCircleOutlined />}
+                                        />
+                                      </Popconfirm>
+                                    </Tooltip>
+                                  </Space>
+                                );
+                              }
+                            }
+                          ]}
+                          pagination={false}
+                          size="small"
+                        />
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '40px' }}>
+                          <Typography.Text type="secondary">
+                            Aucun centre de santé dans ce réseau
+                          </Typography.Text>
+                          <br />
+                          <Button
+                            type="primary"
+                            icon={<PlusOutlined />}
+                            onClick={openAddMemberModal}
+                            style={{ marginTop: '16px' }}
+                          >
+                            Ajouter le premier centre
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                },
+                {
+                  key: 'stats',
+                  label: 'Statistiques',
+                  children: (
+                    <Row gutter={[16, 16]}>
+                      <Col span={12}>
+                        <Card size="small">
+                          <Statistic
+                            title="Membres Totaux"
+                            value={detailsDrawer.statistiques.total_membres || 0}
+                            prefix={<TeamOutlined />}
+                          />
+                        </Card>
+                      </Col>
+                      <Col span={12}>
+                        <Card size="small">
+                          <Statistic
+                            title="Établissements"
+                            value={detailsDrawer.statistiques.etablissements || 0}
+                            prefix={<BankOutlined />}
+                          />
+                        </Card>
+                      </Col>
+                      <Col span={12}>
+                        <Card size="small">
+                          <Statistic
+                            title="Prestataires"
+                            value={detailsDrawer.statistiques.prestataires || 0}
+                            prefix={<UserOutlined />}
+                          />
+                        </Card>
+                      </Col>
+                      <Col span={12}>
+                        <Card size="small">
+                          <Statistic
+                            title="Membres Actifs"
+                            value={detailsDrawer.statistiques.membres_actifs || 0}
+                            prefix={<CheckCircleOutlined />}
+                          />
+                        </Card>
+                      </Col>
+                    </Row>
+                  )
+                }
+              ]} />
             </div>
           </>
         ) : (
-          <Empty
-            description="Aucune donnée disponible"
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-          />
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <Typography.Text type="secondary">
+              Aucune donnée disponible
+            </Typography.Text>
+          </div>
         )}
       </Drawer>
 
@@ -2024,7 +1987,7 @@ const NetworkPage = () => {
         title={
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <UsergroupAddOutlined style={{ marginRight: '8px' }} />
-            <span>Ajouter un Membre au Réseau</span>
+            <span>Ajouter un Centre au Réseau</span>
           </div>
         }
         open={memberModal.visible}
@@ -2047,72 +2010,14 @@ const NetworkPage = () => {
           </Button>
         ]}
         destroyOnClose
-        afterOpenChange={(visible) => {
-          if (visible) {
-            loadAllCentres('');
-          }
-        }}
       >
         <Alert
           message="Information"
-          description={
-            <div>
-              <p>Sélectionnez un type de membre et choisissez parmi la liste disponible.</p>
-              <p>
-                <DatabaseOutlined /> <Text strong>{centres.length}</Text> centres de santé disponibles
-                <Button 
-                  type="link" 
-                  size="small" 
-                  icon={<SyncOutlined />} 
-                  onClick={forceReloadCentres}
-                  style={{ marginLeft: '10px' }}
-                >
-                  Recharger
-                </Button>
-              </p>
-            </div>
-          }
+          description="Sélectionnez un centre de santé à ajouter au réseau"
           type="info"
           showIcon
           style={{ marginBottom: '16px' }}
         />
-        
-        {centres.length < 5 && (
-          <Collapse ghost style={{ marginBottom: '16px' }}>
-            <Panel 
-              header={
-                <Space>
-                  <ExclamationCircleOutlined style={{ color: '#faad14' }} />
-                  <Text type="warning">Peu de centres disponibles ({centres.length})</Text>
-                </Space>
-              } 
-              key="diagnostic"
-            >
-              <Alert
-                message="Diagnostic"
-                description={
-                  <div>
-                    <p>Seulement {centres.length} centre(s) disponible(s). Causes possibles :</p>
-                    <ul>
-                      <li>L'API ne retourne que les centres actifs</li>
-                      <li>Problème de pagination dans l'API</li>
-                      <li>Filtres appliqués par défaut</li>
-                      <li>La base de données contient peu de centres</li>
-                    </ul>
-                    <p>Essayez de :</p>
-                    <ol>
-                      <li>Cliquer sur "Recharger" ci-dessus</li>
-                      <li>Rechercher un centre spécifique</li>
-                      <li>Vérifier les paramètres de l'API centresAPI</li>
-                    </ol>
-                  </div>
-                }
-                type="warning"
-                showIcon
-              />
-            </Panel>
-          </Collapse>
-        )}
         
         <Form
           form={memberForm}
@@ -2120,284 +2025,35 @@ const NetworkPage = () => {
           onFinish={handleAddMember}
         >
           <Form.Item
-            name="type"
-            label="Type de Membre"
-            rules={[{ required: true, message: 'Veuillez sélectionner le type' }]}
-            initialValue="center"
+            name="centerId"
+            label="Centre de Santé"
+            rules={[{ required: true, message: 'Veuillez sélectionner un centre de santé' }]}
           >
             <Select
-              placeholder="Sélectionnez le type de membre"
-              onChange={handleMemberTypeChange}
+              showSearch
+              placeholder="Rechercher ou sélectionner un centre..."
+              optionFilterProp="children"
+              onSearch={handleSearchCenters}
+              loading={loading.centres}
+              filterOption={(input, option) => {
+                if (!option || !option.children) return false;
+                const label = String(option.children).toLowerCase();
+                return label.includes(input.toLowerCase());
+              }}
               style={{ width: '100%' }}
             >
-              {memberTypes.map(type => (
-                <Option key={type.value} value={type.value}>
-                  {type.icon} {type.label}
+              {centres.map(centre => (
+                <Option key={centre.id} value={centre.id}>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <Text strong>{centre.name}</Text>
+                    <div style={{ fontSize: '12px', color: '#666' }}>
+                      {centre.code} • {centre.type} • {centre.region}
+                    </div>
+                  </div>
                 </Option>
               ))}
             </Select>
           </Form.Item>
-
-          {memberForm.getFieldValue('type') === 'center' && (
-            <Form.Item
-              name="centerId"
-              label={
-                <Space>
-                  <span>Centre de Santé</span>
-                  <Tag color="blue">{centres.length} disponible(s)</Tag>
-                </Space>
-              }
-              rules={[{ required: true, message: 'Veuillez sélectionner un centre de santé' }]}
-              help={
-                <div style={{ marginTop: '8px' }}>
-                  <Space>
-                    <Text type="secondary">
-                      Tapez pour rechercher ou faites défiler pour voir tous les centres
-                    </Text>
-                    <Button 
-                      type="link" 
-                      size="small" 
-                      icon={<SyncOutlined />} 
-                      onClick={forceReloadCentres}
-                      loading={loading.centres}
-                    >
-                      Actualiser
-                    </Button>
-                  </Space>
-                </div>
-              }
-            >
-              <Select
-                showSearch
-                placeholder={
-                  loading.centres 
-                    ? "Chargement des centres..." 
-                    : centres.length > 0 
-                      ? "Rechercher ou sélectionner un centre..." 
-                      : "Aucun centre disponible. Cliquez sur Actualiser."
-                }
-                optionFilterProp="children"
-                onSearch={handleSearchCenters}
-                onFocus={() => {
-                  if (centres.length === 0) {
-                    loadAllCentres('');
-                  }
-                }}
-                filterOption={(input, option) => {
-                  if (!option || !option.children) return false;
-                  const text = String(option.children).toLowerCase();
-                  return text.includes(input.toLowerCase());
-                }}
-                loading={loading.centres}
-                notFoundContent={
-                  loading.centres ? (
-                    <div style={{ padding: '20px', textAlign: 'center' }}>
-                      <Spin size="large" />
-                      <div style={{ marginTop: '10px' }}>Chargement des centres...</div>
-                    </div>
-                  ) : (
-                    <div style={{ padding: '20px', textAlign: 'center' }}>
-                      <Empty 
-                        image={Empty.PRESENTED_IMAGE_SIMPLE} 
-                        description={
-                          <div>
-                            <p>Aucun centre trouvé</p>
-                            <p>Essayez une recherche différente ou rechargez la liste</p>
-                          </div>
-                        } 
-                      />
-                      <Button 
-                        type="primary" 
-                        onClick={forceReloadCentres}
-                        style={{ marginTop: '10px' }}
-                        icon={<SyncOutlined />}
-                      >
-                        Recharger tous les centres
-                      </Button>
-                    </div>
-                  )
-                }
-                allowClear
-                style={{ width: '100%' }}
-                dropdownRender={menu => (
-                  <div>
-                    <div style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                      <Text strong>
-                        {centres.length} centre(s) disponible(s)
-                      </Text>
-                      <Button 
-                        type="link" 
-                        size="small" 
-                        onClick={forceReloadCentres}
-                        style={{ float: 'right' }}
-                        icon={<SyncOutlined />}
-                      >
-                        Actualiser
-                      </Button>
-                    </div>
-                    {menu}
-                  </div>
-                )}
-                listHeight={300}
-                virtual={false}
-              >
-                {centres.map(centre => (
-                  <Option 
-                    key={centre.id} 
-                    value={centre.id}
-                    label={`${String(centre.name || 'Sans nom')} | ${String(centre.code || 'N/A')} | ${String(centre.region || 'Non spécifiée')}`}
-                  >
-                    <div style={{ display: 'flex', flexDirection: 'column', padding: '8px 0' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <Text strong style={{ fontSize: '14px', flex: 1 }}>
-                          {String(centre.name || 'Centre sans nom')}
-                        </Text>
-                        <Tag 
-                          color={centre.status === 'Actif' ? 'green' : 'orange'} 
-                          size="small"
-                          style={{ fontSize: '10px', marginLeft: '8px' }}
-                        >
-                          {String(centre.status || 'Inconnu')}
-                        </Tag>
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
-                        <Tag color="blue" size="small" style={{ fontSize: '10px' }}>
-                          {String(centre.type || 'Centre de Santé')}
-                        </Tag>
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                          <strong>Code:</strong> {String(centre.code || 'N/A')}
-                        </Text>
-                        {centre.region && (
-                          <Text type="secondary" style={{ fontSize: '12px' }}>
-                            <strong>Région:</strong> {String(centre.region)}
-                          </Text>
-                        )}
-                      </div>
-                      <div style={{ marginTop: '4px' }}>
-                        {centre.telephone && (
-                          <Text type="secondary" style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <PhoneOutlined /> {String(centre.telephone)}
-                          </Text>
-                        )}
-                        {centre.adresse && (
-                          <Text type="secondary" style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                            <EnvironmentOutlined /> {String(centre.adresse).length > 40 ? `${String(centre.adresse).substring(0, 40)}...` : String(centre.adresse)}
-                          </Text>
-                        )}
-                      </div>
-                      <div style={{ marginTop: '6px', fontSize: '10px', color: '#999' }}>
-                        <Text type="secondary">ID: {String(centre.id)}</Text>
-                      </div>
-                    </div>
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-          )}
-
-          {memberForm.getFieldValue('type') === 'provider' && (
-            <Form.Item
-              name="providerId"
-              label="Prestataire"
-              rules={[{ required: true, message: 'Veuillez sélectionner un prestataire' }]}
-            >
-              <Select
-                showSearch
-                placeholder="Rechercher un prestataire..."
-                optionFilterProp="children"
-                onSearch={handleSearchProviders}
-                filterOption={false}
-                loading={loading.prestataires}
-                notFoundContent={
-                  loading.prestataires ? (
-                    <div style={{ padding: '10px', textAlign: 'center' }}>
-                      <Spin size="small" />
-                      <div>Chargement...</div>
-                    </div>
-                  ) : (
-                    <Empty description="Aucun prestataire trouvé" />
-                  )
-                }
-                allowClear
-                style={{ width: '100%' }}
-              >
-                {prestataires.map(prestataire => (
-                  <Option 
-                    key={prestataire.id} 
-                    value={prestataire.id}
-                  >
-                    <div style={{ display: 'flex', flexDirection: 'column', padding: '4px 0' }}>
-                      <Text strong style={{ fontSize: '14px' }}>
-                        {String(prestataire.prenom || '')} {String(prestataire.nom || '')}
-                      </Text>
-                      <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                        <Tag color="blue" size="small" style={{ fontSize: '10px' }}>
-                          {String(prestataire.specialite || 'Médecin')}
-                        </Tag>
-                        {prestataire.titre && (
-                          <Text type="secondary" style={{ fontSize: '12px' }}>
-                            {String(prestataire.titre)}
-                          </Text>
-                        )}
-                      </div>
-                    </div>
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-          )}
-
-          {memberForm.getFieldValue('type') === 'beneficiary' && (
-            <Form.Item
-              name="beneficiaryId"
-              label="Bénéficiaire"
-              rules={[{ required: true, message: 'Veuillez sélectionner un bénéficiaire' }]}
-            >
-              <Select
-                showSearch
-                placeholder="Rechercher un bénéficiaire..."
-                optionFilterProp="children"
-                onSearch={handleSearchBeneficiaries}
-                filterOption={false}
-                loading={loading.beneficiaires}
-                notFoundContent={
-                  loading.beneficiaires ? (
-                    <div style={{ padding: '10px', textAlign: 'center' }}>
-                      <Spin size="small" />
-                      <div>Chargement...</div>
-                    </div>
-                  ) : (
-                    <Empty description="Aucun bénéficiaire trouvé" />
-                  )
-                }
-                allowClear
-                style={{ width: '100%' }}
-              >
-                {beneficiaires.map(beneficiaire => (
-                  <Option 
-                    key={beneficiaire.id} 
-                    value={beneficiaire.id}
-                  >
-                    <div style={{ display: 'flex', flexDirection: 'column', padding: '4px 0' }}>
-                      <Text strong style={{ fontSize: '14px' }}>
-                        {String(beneficiaire.prenom || '')} {String(beneficiaire.nom || '')}
-                      </Text>
-                      <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                          Âge: {String(beneficiaire.age || 'N/A')} ans
-                        </Text>
-                        {beneficiaire.identifiant_national && (
-                          <Text type="secondary" style={{ fontSize: '12px' }}>
-                            ID: {String(beneficiaire.identifiant_national)}
-                          </Text>
-                        )}
-                      </div>
-                    </div>
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-          )}
 
           <Row gutter={16}>
             <Col span={12}>
@@ -2425,6 +2081,164 @@ const NetworkPage = () => {
             </Col>
           </Row>
         </Form>
+      </Modal>
+
+      {/* Modal Prestataires d'un centre */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <TeamOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
+            <span>
+              Prestataires du centre: <Text strong>{centerProvidersModal.centre?.nom || 'Centre inconnu'}</Text>
+            </span>
+          </div>
+        }
+        open={centerProvidersModal.visible}
+        onCancel={() => setCenterProvidersModal({ visible: false, centre: null, prestataires: [], loading: false })}
+        width={900}
+        footer={[
+          <Button 
+            key="close" 
+            onClick={() => setCenterProvidersModal({ visible: false, centre: null, prestataires: [], loading: false })}
+          >
+            Fermer
+          </Button>
+        ]}
+        destroyOnClose
+      >
+        {centerProvidersModal.loading ? (
+          <div style={{ textAlign: 'center', padding: '50px' }}>
+            <Spin size="large" />
+            <div style={{ marginTop: '20px' }}>Chargement des prestataires...</div>
+          </div>
+        ) : centerProvidersModal.prestataires.length > 0 ? (
+          <>
+            <Alert
+              message="Information"
+              description="Cette liste montre tous les prestataires affectés à ce centre de santé."
+              type="info"
+              showIcon
+              style={{ marginBottom: '16px' }}
+            />
+            
+            <Table
+              dataSource={centerProvidersModal.prestataires}
+              rowKey="id"
+              pagination={{ pageSize: 10 }}
+              scroll={{ x: 800 }}
+              columns={[
+                {
+                  title: 'Prestataire',
+                  dataIndex: 'nom_complet',
+                  key: 'nom_complet',
+                  width: 200,
+                  render: (text, record) => (
+                    <div>
+                      <Text strong>{text}</Text>
+                      {record.titre && (
+                        <div style={{ fontSize: '12px', color: '#666' }}>
+                          {record.titre}
+                        </div>
+                      )}
+                    </div>
+                  )
+                },
+                {
+                  title: 'Spécialité',
+                  dataIndex: 'specialite',
+                  key: 'specialite',
+                  width: 150,
+                  render: (specialite) => (
+                    <Tag color="blue">{specialite || 'Non spécifiée'}</Tag>
+                  )
+                },
+                {
+                  title: 'Contact',
+                  key: 'contact',
+                  width: 150,
+                  render: (_, record) => (
+                    <div>
+                      {record.telephone && (
+                        <div style={{ fontSize: '12px' }}>
+                          <PhoneOutlined style={{ marginRight: '4px' }} />
+                          {record.telephone}
+                        </div>
+                      )}
+                      {record.email && (
+                        <div style={{ fontSize: '12px' }}>
+                          <MailOutlined style={{ marginRight: '4px' }} />
+                          {record.email}
+                        </div>
+                      )}
+                    </div>
+                  )
+                },
+                {
+                  title: 'Statut',
+                  key: 'reseau_status',
+                  width: 120,
+                  render: (_, record) => (
+                    record.deja_membre ? (
+                      <Tag color="success" icon={<CheckCircleOutlined />}>
+                        Membre
+                      </Tag>
+                    ) : (
+                      <Tag color="default" icon={<UserOutlined />}>
+                        Non membre
+                      </Tag>
+                    )
+                  )
+                },
+                {
+                  title: 'Actions',
+                  key: 'actions',
+                  width: 100,
+                  render: (_, record) => (
+                    record.deja_membre ? (
+                      <Tooltip title="Déjà membre du réseau">
+                        <Button
+                          size="small"
+                          disabled
+                          icon={<CheckOutlined />}
+                          style={{ cursor: 'not-allowed' }}
+                        >
+                          Déjà membre
+                        </Button>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip title="Ajouter au réseau">
+                        <Button
+                          type="primary"
+                          size="small"
+                          icon={<UsergroupAddOutlined />}
+                          onClick={() => handleAddProviderFromModal(record)}
+                          loading={loading.membres}
+                        >
+                          Ajouter
+                        </Button>
+                      </Tooltip>
+                    )
+                  )
+                }
+              ]}
+            />
+          </>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <Typography.Text type="secondary">
+              Aucun prestataire trouvé pour ce centre de santé
+            </Typography.Text>
+            <br />
+            <Button
+              type="primary"
+              onClick={() => loadPrestatairesByCentre(centerProvidersModal.centre?.id, centerProvidersModal.centre?.nom)}
+              loading={centerProvidersModal.loading}
+              style={{ marginTop: '16px' }}
+            >
+              Réessayer
+            </Button>
+          </div>
+        )}
       </Modal>
     </div>
   );

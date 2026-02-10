@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HealthCenterSoft - Gestion Médicale</title>
+    <title>SaniCareCentre - Gestion Médicale</title>
     <style>
       /* Style de débogage pour voir si le HTML charge */
       body {
@@ -14,7 +14,6 @@
         font-family: Arial, sans-serif;
       }
       #root {
-        border: 2px solid blue;
         padding: 10px;
         min-height: 100vh;
       }
@@ -23,7 +22,7 @@
   <body>
     <div id="root">
       <div style="color: red; font-size: 18px;">
-        Chargement de HealthCenterSoft...
+        Chargement de SaniCareCentre...
       </div>
     </div>
     <script type="module" src="/src/main.jsx"></script>
@@ -36,4 +35,12 @@
   window._env_ = window._env_ || {};
   window._env_.REACT_APP_API_URL = window._env_.REACT_APP_API_URL || 'http://localhost:5000';
 </script>
+  <script>
+      // Variables d'environnement globales
+      window.REACT_APP_API_URL = 'http://172.20.10.3:3000';
+      window._env_ = {
+        REACT_APP_API_URL: 'http://172.20.10.3:3000',
+        REACT_APP_API_BASE_URL: 'http://172.20.10.3:3000'
+      };
+    </script>
 </html>

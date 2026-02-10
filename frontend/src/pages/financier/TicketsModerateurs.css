@@ -1,0 +1,577 @@
+/* TicketsModerateurs.css */
+
+.gestion-tickets-container {
+  padding: 16px;
+}
+
+.main-card {
+  margin-bottom: 24px;
+}
+
+.header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+}
+
+.search-card {
+  margin-bottom: 16px;
+}
+
+.stat-card {
+  text-align: center;
+  transition: all 0.3s;
+  height: 100%;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.table-container {
+  margin-top: 16px;
+}
+
+.beneficiaire-cell {
+  display: flex;
+  align-items: center;
+}
+
+.expanded-row {
+  background: #fafafa;
+  padding: 16px;
+  border-radius: 4px;
+}
+
+.observations-section {
+  margin-top: 16px;
+}
+
+.observations-content {
+  margin-top: 8px;
+  padding: 12px;
+  background: white;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  white-space: pre-wrap;
+}
+
+.ticket-details .observations-box {
+  padding: 12px;
+  background: #f6f6f6;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  min-height: 60px;
+}
+
+.ticket-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.print-preview {
+  border: 1px solid #d9d9d9;
+  padding: 20px;
+  background: white;
+  overflow: auto;
+  max-height: 500px;
+}
+
+/* Styles pour l'impression */
+.ticket-print {
+  font-family: 'Arial', sans-serif;
+  font-size: 12pt;
+  color: #000;
+  line-height: 1.4;
+  max-width: 210mm;
+  margin: 0 auto;
+  padding: 20mm;
+  background: white;
+  box-sizing: border-box;
+}
+
+.ticket-header {
+  text-align: center;
+  margin-bottom: 15mm;
+  border-bottom: 2px solid #1890ff;
+  padding-bottom: 5mm;
+}
+
+.ticket-title {
+  font-size: 24pt;
+  font-weight: bold;
+  color: #1890ff;
+  margin-bottom: 5mm;
+}
+
+.ticket-subtitle {
+  font-size: 14pt;
+  color: #666;
+}
+
+.ticket-info {
+  font-size: 10pt;
+  color: #999;
+  margin-top: 2mm;
+}
+
+.ticket-main-title {
+  text-align: center;
+  margin-bottom: 10mm;
+  background: #f0f8ff;
+  padding: 8mm;
+  border-radius: 5mm;
+}
+
+.ticket-main-title h1 {
+  font-size: 28pt;
+  margin: 0;
+  font-weight: bold;
+  color: #000;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.ticket-reference {
+  font-size: 14pt;
+  color: #666;
+  margin-top: 3mm;
+}
+
+.ticket-reference strong {
+  color: #1890ff;
+}
+
+.ticket-date {
+  font-size: 12pt;
+  color: #999;
+  margin-top: 2mm;
+}
+
+.ticket-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10mm;
+  margin-bottom: 10mm;
+}
+
+.ticket-section {
+  flex: 1 1 300px;
+  background: #f9f9f9;
+  padding: 8mm;
+  border-radius: 5mm;
+  border: 1px solid #e8e8e8;
+}
+
+.ticket-section h2 {
+  font-size: 16pt;
+  margin: 0 0 5mm 0;
+  color: #1890ff;
+  font-weight: bold;
+  border-bottom: 1px solid #1890ff;
+  padding-bottom: 2mm;
+}
+
+.ticket-field {
+  margin-bottom: 3mm;
+}
+
+.ticket-field label {
+  font-size: 11pt;
+  color: #666;
+  margin-bottom: 1mm;
+  display: block;
+}
+
+.ticket-value {
+  font-size: 12pt;
+  padding: 2mm;
+  background: #fff;
+  border-radius: 2mm;
+  border-left: 3px solid #ddd;
+}
+
+.ticket-value.highlighted {
+  font-size: 14pt;
+  font-weight: bold;
+  border-left-color: #1890ff;
+}
+
+.ticket-financial {
+  background: #fff;
+  padding: 8mm;
+  border-radius: 5mm;
+  margin-bottom: 10mm;
+  border: 2px solid #1890ff;
+}
+
+.ticket-financial h2 {
+  font-size: 18pt;
+  margin: 0 0 8mm 0;
+  color: #1890ff;
+  font-weight: bold;
+  text-align: center;
+}
+
+.financial-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8mm;
+  margin-bottom: 8mm;
+}
+
+.financial-item {
+  flex: 1 1 150px;
+  padding: 5mm;
+  border-radius: 3mm;
+  text-align: center;
+}
+
+.financial-item.total {
+  background: #f0f0f0;
+}
+
+.financial-item.taux {
+  background: #e6f7ff;
+}
+
+.financial-item.couvert {
+  background: #f6ffed;
+}
+
+.financial-label {
+  font-size: 12pt;
+  color: #666;
+  margin-bottom: 2mm;
+}
+
+.financial-amount {
+  font-size: 20pt;
+  font-weight: bold;
+}
+
+.financial-item.total .financial-amount {
+  color: #000;
+}
+
+.financial-item.taux .financial-amount {
+  color: #1890ff;
+}
+
+.financial-item.couvert .financial-amount {
+  color: #52c41a;
+}
+
+.ticket-moderateur {
+  background: #fff7e6;
+  border: 3px solid #fa8c16;
+  padding: 10mm;
+  border-radius: 5mm;
+  text-align: center;
+  margin-top: 5mm;
+}
+
+.ticket-moderateur-label {
+  font-size: 14pt;
+  color: #d46b08;
+  margin-bottom: 3mm;
+  font-weight: bold;
+}
+
+.ticket-moderateur-amount {
+  font-size: 32pt;
+  font-weight: bold;
+  color: #fa8c16;
+}
+
+.ticket-moderateur-note {
+  font-size: 12pt;
+  color: #d46b08;
+  margin-top: 3mm;
+}
+
+.ticket-status {
+  padding: 3mm 6mm;
+  border-radius: 3mm;
+  margin: 15mm 0;
+  border: 2px solid;
+}
+
+.status-label {
+  font-size: 12pt;
+  color: #666;
+  margin-bottom: 1mm;
+}
+
+.status-value {
+  font-size: 16pt;
+  font-weight: bold;
+}
+
+.ticket-footer {
+  margin-top: 15mm;
+  padding-top: 5mm;
+  border-top: 1px solid #ddd;
+  font-size: 9pt;
+  color: #666;
+  text-align: center;
+}
+
+.ticket-footer div {
+  margin-bottom: 2mm;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ticket-sections {
+    flex-direction: column;
+  }
+  
+  .financial-grid {
+    flex-direction: column;
+  }
+  
+  .header-section {
+    flex-direction: column;
+    gap: 16px;
+  }
+}
+
+/* TicketsModerateurs.css */
+
+.gestion-tickets-container {
+  padding: 20px;
+  background-color: #f0f2f5;
+  min-height: 100vh;
+}
+
+.main-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.header-section {
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  text-align: center;
+  border-radius: 6px;
+  transition: all 0.3s;
+}
+
+.stat-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.stat-card .ant-statistic-title {
+  color: #666;
+  font-size: 13px;
+}
+
+.stat-card .ant-statistic-content {
+  font-size: 24px;
+}
+
+.search-card {
+  margin: 20px 0;
+  border-radius: 6px;
+}
+
+.table-container {
+  margin-top: 20px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.beneficiaire-cell {
+  display: flex;
+  align-items: center;
+}
+
+/* Styles pour les statuts */
+.status-tag {
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-pending {
+  background-color: #fff7e6;
+  color: #fa8c16;
+  border-color: #ffd591;
+}
+
+.status-paid {
+  background-color: #f6ffed;
+  color: #52c41a;
+  border-color: #b7eb8f;
+}
+
+.status-exempted {
+  background-color: #f0f5ff;
+  color: #2f54eb;
+  border-color: #adc6ff;
+}
+
+.status-rejected {
+  background-color: #fff1f0;
+  color: #ff4d4f;
+  border-color: #ffa39e;
+}
+
+/* Styles pour les montants */
+.amount-cell {
+  text-align: right;
+  font-family: 'Courier New', monospace;
+}
+
+.amount-total {
+  color: #1890ff;
+  font-weight: 600;
+}
+
+.amount-ticket {
+  color: #fa8c16;
+  font-weight: bold;
+}
+
+.amount-covered {
+  color: #52c41a;
+  font-weight: 500;
+}
+
+/* Styles pour les modales */
+.ticket-details .ant-descriptions-item-label {
+  font-weight: 600;
+  background-color: #fafafa;
+}
+
+.ticket-details .ant-descriptions-item-content {
+  padding-left: 8px;
+}
+
+.observations-box {
+  background-color: #fafafa;
+  padding: 12px;
+  border-radius: 4px;
+  border-left: 3px solid #1890ff;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+/* Styles d'impression */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .ticket-print {
+    font-family: 'Arial', sans-serif;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: white;
+  }
+  
+  .ticket-print * {
+    color: black !important;
+    background-color: white !important;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .gestion-tickets-container {
+    padding: 10px;
+  }
+  
+  .header-section {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .header-title {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .stat-card {
+    margin-bottom: 15px;
+  }
+}
+
+/* Animation pour les nouvelles lignes */
+@keyframes highlightNew {
+  0% { background-color: #e6f7ff; }
+  100% { background-color: transparent; }
+}
+
+.highlight-new {
+  animation: highlightNew 2s ease-in-out;
+}
+
+/* Styles pour les boutons d'action */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Styles pour les filtres */
+.filter-tags {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Styles pour le calculateur */
+.calculator-result {
+  background: linear-gradient(135deg, #f6ffed 0%, #f0f5ff 100%);
+  border: 1px solid #b7eb8f;
+  border-radius: 6px;
+  padding: 15px;
+  margin-top: 15px;
+}
+
+/* Styles pour les totaux de tableau */
+.table-summary {
+  background-color: #fafafa;
+  font-weight: bold;
+}
+
+/* Styles pour les cellules vides */
+.empty-cell {
+  color: #999;
+  font-style: italic;
+}
+
+/* Styles pour les tooltips */
+.ant-tooltip {
+  max-width: 300px;
+}
+
+/* Styles pour les messages de chargement */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}

@@ -1,1526 +1,1523 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
-import { 
-  Users, 
-  Stethoscope, 
-  Calendar, 
-  DollarSign, 
-  TrendingUp,
-  Activity,
-  Building,
-  Clock,
-  AlertCircle,
-  UserPlus,
-  FileText,
-  RefreshCw,
-  Heart,
-  Shield,
-  BarChart3,
-  Globe,
-  ChevronRight,
-  CheckCircle,
-  XCircle,
-  Wifi,
-  Database,
-  Server,
-  Download,
-  Upload,
-  HelpCircle,
-  Search,
-  Settings,
-  Eye,
-  Maximize2,
-  Minimize2,
-  MoreVertical,
-  Cpu,
-  HardDrive,
-  Network,
-  ShieldCheck,
-  Zap,
-  Cloud,
-  Sparkles,
-  Target,
-  Brain,
-  ActivitySquare,
-  BrainCircuit,
-  Radar,
-  Menu,
-  X,
-  Layers,
-  Grid3x3,
-  EyeOff,
-  RotateCw,
-  PieChart,
-  Bell,
-  User,
-  LogOut,
-  Moon,
-  Sun
-} from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  Card, Row, Col, Statistic, Button, Table, Tag, Space, message,
+  Tabs, Tooltip, Typography, Avatar, Badge, Modal, Spin, Alert,
+  Progress, Timeline, List, Divider, Dropdown, Select, Input,
+  DatePicker, Form, Collapse, Rate, Popconfirm, Skeleton
+} from 'antd';
+import {
+  DashboardOutlined, TeamOutlined, UserOutlined, 
+  DollarOutlined, CalendarOutlined, ClockCircleOutlined,
+  RiseOutlined, FallOutlined, CheckCircleOutlined,
+  WarningOutlined, SyncOutlined, EyeOutlined, EditOutlined,
+  PlusOutlined, DownloadOutlined, FilterOutlined, SearchOutlined,
+  SettingOutlined, BellOutlined, InfoCircleOutlined, ArrowUpOutlined,
+  ArrowDownOutlined, BarChartOutlined, PieChartOutlined,
+  LineChartOutlined, AreaChartOutlined,
+  CloudOutlined, SafetyOutlined, HeartOutlined, StarOutlined,
+  PhoneOutlined, MailOutlined, EnvironmentOutlined,
+  MoreOutlined, LoginOutlined, LogoutOutlined, FileTextOutlined,
+  MedicineBoxOutlined, DatabaseOutlined, CarOutlined,
+  TabletOutlined, ExperimentOutlined, SmileOutlined
+} from '@ant-design/icons';
+import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { 
-  consultationsAPI, 
-  prestationsAPI, 
+import moment from 'moment';
+import 'moment/locale/fr';
+import {
+  dashboardAPI,
+  consultationsAPI,
   beneficiairesAPI,
-  paysAPI 
+  prescriptionsAPI,
+  prestationsAPI,
+  centresAPI,
+  statistiquesAPI,
+  syncAPI,
+  authAPI,
+  exportPDFAPI
 } from '../services/api';
 import './Dashboard.css';
-import { toast } from 'react-toastify';
 
-// Particle System Component (inchangé)
-const ParticleSystem = ({ particleCount = 50, color = '#3b82f6' }) => {
-  const canvasRef = useRef(null);
+const { Title, Text, Paragraph } = Typography;
+const { TabPane } = Tabs;
+const { Option } = Select;
+const { RangePicker } = DatePicker;
+const { Panel } = Collapse;
 
+const Dashboard = () => {
+  const { user, logout } = useAuth();
+  const { t, i18n } = useTranslation();
+
+  // États principaux
+  const [loading, setLoading] = useState({
+    stats: true,
+    consultations: false,
+    beneficiaires: false,
+    prescriptions: false,
+    sync: false
+  });
+
+  const [stats, setStats] = useState({
+    general: null,
+    today: null,
+    monthly: null,
+    performance: null
+  });
+
+  // États pour les données
+  const [recentConsultations, setRecentConsultations] = useState([]);
+  const [recentBeneficiaires, setRecentBeneficiaires] = useState([]);
+  const [pendingPrescriptions, setPendingPrescriptions] = useState([]);
+  const [systemAlerts, setSystemAlerts] = useState([]);
+  const [activityTimeline, setActivityTimeline] = useState([]);
+  const [centerDistribution, setCenterDistribution] = useState([]);
+  const [revenueData, setRevenueData] = useState([]);
+
+  // États pour les filtres
+  const [dateRange, setDateRange] = useState([moment().startOf('month'), moment().endOf('month')]);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [filters, setFilters] = useState({
+    period: 'today',
+    center: 'all',
+    type: 'all'
+  });
+
+  // États pour les modales
+  const [quickStatsModal, setQuickStatsModal] = useState({
+    visible: false,
+    type: null,
+    data: null
+  });
+
+  // Initialiser le dashboard
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    loadDashboardData();
+    
+    // Actualiser toutes les 5 minutes
+    const interval = setInterval(() => {
+      loadRealTimeData();
+    }, 300000);
 
-    const ctx = canvas.getContext('2d');
-    let particles = [];
-    let animationFrameId;
+    return () => clearInterval(interval);
+  }, [i18n.language]);
 
-    const resizeCanvas = () => {
-      if (!canvas.parentElement) return;
-      canvas.width = canvas.parentElement.offsetWidth;
-      canvas.height = canvas.parentElement.offsetHeight;
-      initParticles();
-    };
-
-    const initParticles = () => {
-      particles = [];
-      for (let i = 0; i < particleCount; i++) {
-        particles.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          size: Math.random() * 2 + 1,
-          speedX: (Math.random() - 0.5) * 0.5,
-          speedY: (Math.random() - 0.5) * 0.5,
-          color: `${color}${Math.floor(Math.random() * 50 + 10).toString(16)}`
-        });
-      }
-    };
-
-    const animateParticles = () => {
-      if (!ctx) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const loadDashboardData = async () => {
+    try {
+      setLoading(prev => ({ ...prev, stats: true }));
       
-      particles.forEach(particle => {
-        particle.x += particle.speedX;
-        particle.y += particle.speedY;
+      // Charger toutes les données en parallèle
+      await Promise.all([
+        loadGeneralStats(),
+        loadRecentConsultations(),
+        loadRecentBeneficiaires(),
+        loadPendingPrescriptions(),
+        loadSystemAlerts(),
+        loadActivityTimeline(),
+        loadCenterDistribution(),
+        loadRevenueData()
+      ]);
 
-        if (particle.x > canvas.width) particle.x = 0;
-        if (particle.x < 0) particle.x = canvas.width;
-        if (particle.y > canvas.height) particle.y = 0;
-        if (particle.y < 0) particle.y = canvas.height;
+      message.success(t('dashboard.dataLoaded'));
+    } catch (error) {
+      console.error('❌ Erreur chargement dashboard:', error);
+      message.error(t('dashboard.loadError'));
+    } finally {
+      setLoading(prev => ({ ...prev, stats: false }));
+    }
+  };
 
-        ctx.beginPath();
-        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-        ctx.fillStyle = particle.color;
-        ctx.fill();
+  const loadRealTimeData = async () => {
+    try {
+      await Promise.all([
+        loadTodayStats(),
+        loadRecentConsultations(),
+        loadSystemAlerts()
+      ]);
+    } catch (error) {
+      console.error('❌ Erreur données temps réel:', error);
+    }
+  };
+
+  // ==================== FONCTIONS DE CHARGEMENT ====================
+
+  const loadGeneralStats = async () => {
+    try {
+      const response = await dashboardAPI.getStats(filters.period);
+      if (response.success && response.stats) {
+        setStats(prev => ({ ...prev, general: response.stats }));
+      } else {
+        setStats(prev => ({ ...prev, general: getDefaultStats() }));
+      }
+    } catch (error) {
+      console.error('❌ Erreur stats générales:', error);
+      setStats(prev => ({ ...prev, general: getDefaultStats() }));
+    }
+  };
+
+  const loadTodayStats = async () => {
+    try {
+      const response = await dashboardAPI.getStats('today');
+      if (response.success && response.stats) {
+        setStats(prev => ({ ...prev, today: response.stats }));
+      }
+    } catch (error) {
+      console.error('❌ Erreur stats aujourd\'hui:', error);
+    }
+  };
+
+  const loadRecentConsultations = async () => {
+    setLoading(prev => ({ ...prev, consultations: true }));
+    try {
+      const response = await consultationsAPI.getAllConsultations({
+        limit: 10,
+        sortBy: 'DATE_CONSULTATION',
+        sortOrder: 'desc'
       });
 
-      animationFrameId = requestAnimationFrame(animateParticles);
-    };
-
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-    animateParticles();
-
-    return () => {
-      window.removeEventListener('resize', resizeCanvas);
-      cancelAnimationFrame(animationFrameId);
-    };
-  }, [particleCount, color]);
-
-  return (
-    <canvas 
-      ref={canvasRef} 
-      className="particle-canvas"
-    />
-  );
-};
-
-// Glass Card Component (inchangé)
-const GlassCard = ({ children, className = '', intensity = 'medium', hoverEffect = true, glow = false, onClick }) => {
-  const cardRef = useRef(null);
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-
-  const handleMouseMove = (e) => {
-    if (!cardRef.current || !hoverEffect) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setMousePosition({ x, y });
-  };
-
-  const intensityMap = {
-    low: '4px',
-    medium: '12px',
-    high: '20px',
-    ultra: '32px'
-  };
-
-  return (
-    <motion.div
-      ref={cardRef}
-      className={`glass-card ${className} ${glow ? 'glow-effect' : ''}`}
-      style={{
-        '--mouse-x': `${mousePosition.x}%`,
-        '--mouse-y': `${mousePosition.y}%`,
-        '--blur-intensity': intensityMap[intensity] || intensityMap.medium
-      }}
-      onMouseMove={handleMouseMove}
-      onClick={onClick}
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      whileHover={hoverEffect ? { y: -5 } : {}}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
-    >
-      <div className="glass-card-inner">
-        {children}
-      </div>
-      <div className="glass-card-highlight" />
-    </motion.div>
-  );
-};
-
-// Animated Stat Card Component
-const AnimatedStatCard = ({ icon: Icon, title, value, change, trend, color, loading = false, onClick }) => {
-  const [isVisible, setIsVisible] = useState(false);
-  const cardRef = useRef(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsVisible(entry.isIntersecting),
-      { threshold: 0.1 }
-    );
-    
-    if (cardRef.current) {
-      observer.observe(cardRef.current);
+      if (response.success && response.consultations) {
+        const formatted = response.consultations.map(consult => ({
+          key: consult.COD_CONS || consult.id,
+          id: consult.COD_CONS || consult.id,
+          patient: `${consult.NOM_BEN || ''} ${consult.PRE_BEN || ''}`.trim(),
+          medecin: consult.NOM_MEDECIN || 'Non spécifié',
+          type: consult.TYPE_CONSULTATION || 'Consultation',
+          date: moment(consult.DATE_CONSULTATION).format('DD/MM/YY HH:mm'),
+          montant: consult.MONTANT_CONSULTATION || 0,
+          status: getConsultationStatus(consult.STATUT_PAIEMENT),
+          color: getStatusColor(consult.STATUT_PAIEMENT)
+        }));
+        setRecentConsultations(formatted);
+      }
+    } catch (error) {
+      console.error('❌ Erreur consultations récentes:', error);
+    } finally {
+      setLoading(prev => ({ ...prev, consultations: false }));
     }
-    
-    return () => observer.disconnect();
-  }, []);
-
-  const colorClasses = {
-    blue: 'stat-blue',
-    green: 'stat-green',
-    purple: 'stat-purple',
-    yellow: 'stat-yellow',
-    emerald: 'stat-emerald',
-    pink: 'stat-pink',
-    orange: 'stat-orange'
   };
 
-  if (loading) {
-    return (
-      <motion.div
-        ref={cardRef}
-        className="stat-card loading"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-      >
-        <div className="stat-card-skeleton">
-          <div className="skeleton-icon" />
-          <div className="skeleton-content">
-            <div className="skeleton-line large" />
-            <div className="skeleton-line medium" />
-            <div className="skeleton-line small" />
-          </div>
-        </div>
-      </motion.div>
-    );
-  }
+  const loadRecentBeneficiaires = async () => {
+    setLoading(prev => ({ ...prev, beneficiaires: true }));
+    try {
+      const response = await beneficiairesAPI.getAll({
+        limit: 8,
+        page: 1,
+        sortBy: 'CRE_BEN',
+        sortOrder: 'desc'
+      });
 
-  return (
-    <motion.div
-      ref={cardRef}
-      className={`stat-card ${colorClasses[color] || 'stat-blue'}`}
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={isVisible ? { opacity: 1, scale: 1 } : {}}
-      transition={{ duration: 0.3 }}
-      whileHover={{ y: -8, boxShadow: '0 20px 40px rgba(0,0,0,0.15)' }}
-      onClick={onClick}
-    >
-      <div className="stat-card-header">
-        <div className="stat-icon-wrapper">
-          <motion.div
-            className="stat-icon-background"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          >
-            <svg viewBox="0 0 100 100" className="stat-icon-svg">
-              <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="5,5" opacity="0.3" />
-            </svg>
-          </motion.div>
-          <Icon className="stat-icon" size={24} />
-        </div>
-        
-        {trend && (
-          <motion.div 
-            className={`trend-badge ${change >= 0 ? 'positive' : 'negative'}`}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            {change >= 0 ? <TrendingUp size={12} /> : <Activity size={12} />}
-            <span>{Math.abs(change)}%</span>
-          </motion.div>
-        )}
-      </div>
+      if (response.success && response.beneficiaires) {
+        const formatted = response.beneficiaires.map(ben => ({
+          key: ben.ID_BEN || ben.id,
+          id: ben.ID_BEN || ben.id,
+          nom: `${ben.PRE_BEN || ''} ${ben.NOM_BEN || ''}`.trim(),
+          identifiant: ben.IDENTIFIANT_NATIONAL || 'Non défini',
+          telephone: ben.TELEPHONE || ben.TELEPHONE_MOBILE || 'Non défini',
+          age: calculateAge(ben.NAI_BEN),
+          statut: ben.STATUT || 'ACTIF',
+          dateInscription: moment(ben.CRE_BEN).format('DD/MM/YY'),
+          photo: ben.PHOTO_URL || null
+        }));
+        setRecentBeneficiaires(formatted);
+      }
+    } catch (error) {
+      console.error('❌ Erreur bénéficiaires récents:', error);
+    } finally {
+      setLoading(prev => ({ ...prev, beneficiaires: false }));
+    }
+  };
 
-      <div className="stat-card-content">
-        <motion.h3 
-          className="stat-value"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          {value}
-        </motion.h3>
-        <p className="stat-title">{title}</p>
-        
-        {trend && (
-          <motion.div 
-            className="progress-bar"
-            initial={{ width: 0 }}
-            animate={{ width: `${Math.min(Math.abs(change), 100)}%` }}
-            transition={{ delay: 0.3, duration: 1 }}
-          />
-        )}
-      </div>
+  const loadPendingPrescriptions = async () => {
+    setLoading(prev => ({ ...prev, prescriptions: true }));
+    try {
+      const response = await prescriptionsAPI.getAll({
+        limit: 5,
+        page: 1,
+        statut: 'En attente'
+      });
 
-      <div className="stat-card-decoration">
-        <svg viewBox="0 0 200 50" className="stat-wave">
-          <path d="M0,25 C50,10 100,40 150,25 S250,10 300,25" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="1"
-                opacity="0.1" />
-        </svg>
-      </div>
-    </motion.div>
-  );
-};
+      if (response.success && response.prescriptions) {
+        const formatted = response.prescriptions.map(pres => ({
+          key: pres.COD_PRES || pres.id,
+          id: pres.COD_PRES || pres.id,
+          numero: pres.NUM_PRES || pres.numero || `P${pres.id}`,
+          patient: pres.patient_nom || 'Patient non spécifié',
+          medecin: pres.medecin_nom || 'Médecin non spécifié',
+          date: moment(pres.CRE_PRE).format('DD/MM/YY'),
+          medicaments: pres.details?.length || 0,
+          statut: pres.STATUT || 'En attente',
+          priorite: pres.priorite || 'Normal'
+        }));
+        setPendingPrescriptions(formatted);
+      }
+    } catch (error) {
+      console.error('❌ Erreur prescriptions en attente:', error);
+    } finally {
+      setLoading(prev => ({ ...prev, prescriptions: false }));
+    }
+  };
 
-// System Status Component
-const SystemStatus = ({ status, items, loading = false }) => {
-  const [pulse, setPulse] = useState(false);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPulse(true);
-      setTimeout(() => setPulse(false), 500);
-    }, 3000);
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  if (loading) {
-    return (
-      <GlassCard intensity="high" className="system-status-loading">
-        <div className="system-status-skeleton">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="system-item-skeleton">
-              <div className="skeleton-icon" />
-              <div className="skeleton-text" />
-            </div>
-          ))}
-        </div>
-      </GlassCard>
-    );
-  }
-
-  return (
-    <GlassCard intensity="high" className="system-status-card" glow>
-      <div className="system-status-header">
-        <div className="status-title">
-          <motion.div 
-            className={`status-indicator ${status}`}
-            animate={status === 'active' ? { scale: pulse ? 1.2 : 1 } : {}}
-            transition={{ duration: 0.3 }}
-          />
-          <h3>Statut du Système</h3>
-        </div>
-        <span className="status-badge">{status === 'active' ? 'Actif' : 'Erreur'}</span>
-      </div>
-
-      <div className="system-status-grid">
-        {items.map((item, index) => (
-          <motion.div
-            key={index}
-            className="system-status-item"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.1 }}
-          >
-            <div className="system-item-icon">
-              <item.icon size={18} />
-            </div>
-            <div className="system-item-content">
-              <span className="system-item-label">{item.label}</span>
-              <span className="system-item-value">{item.value}</span>
-            </div>
-            <div className={`system-item-status ${item.status}`}>
-              {item.status === 'active' ? <CheckCircle size={12} /> : <XCircle size={12} />}
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      <div className="system-performance">
-        <div className="performance-meter">
-          <div className="meter-labels">
-            <span>CPU</span>
-            <span>65%</span>
-          </div>
-          <div className="meter-bar">
-            <motion.div 
-              className="meter-fill"
-              initial={{ width: 0 }}
-              animate={{ width: '65%' }}
-              transition={{ duration: 1 }}
-            />
-          </div>
-        </div>
-        <div className="performance-meter">
-          <div className="meter-labels">
-            <span>Mémoire</span>
-            <span>78%</span>
-          </div>
-          <div className="meter-bar">
-            <motion.div 
-              className="meter-fill memory"
-              initial={{ width: 0 }}
-              animate={{ width: '78%' }}
-              transition={{ duration: 1, delay: 0.2 }}
-            />
-          </div>
-        </div>
-      </div>
-    </GlassCard>
-  );
-};
-
-// Quick Action Button Component (inchangé)
-const QuickActionButton = ({ icon: Icon, label, color, onClick, index }) => {
-  return (
-    <motion.button
-      className="action-card-modern"
-      whileHover={{ y: -8, scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1 }}
-      onClick={onClick}
-    >
-      <div className={`action-icon-modern ${color}`}>
-        <motion.div
-          className="icon-background"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-        />
-        <Icon size={24} />
-      </div>
-      <span className="action-label">{label}</span>
-      <motion.div 
-        className="action-arrow"
-        whileHover={{ x: 5 }}
-      >
-        <ChevronRight size={16} />
-      </motion.div>
-    </motion.button>
-  );
-};
-
-// Activity Item Component (inchangé)
-const ActivityItem = ({ activity, index }) => {
-  return (
-    <motion.div
-      className="activity-item-modern"
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.1 }}
-    >
-      <div className="activity-icon-modern">
-        <activity.icon size={18} />
-      </div>
-      <div className="activity-content-modern">
-        <p className="activity-text">{activity.text}</p>
-        <span className="activity-time">{activity.time}</span>
-      </div>
-      {activity.urgent && (
-        <div className="activity-badge urgent">
-          Urgent
-        </div>
-      )}
-    </motion.div>
-  );
-};
-
-// User Profile Component (inchangé)
-const UserProfile = ({ user, onLogout }) => {
-  const [showDropdown, setShowDropdown] = useState(false);
-
-  return (
-    <div className="user-profile-modern">
-      <motion.div 
-        className="profile-avatar-modern"
-        whileHover={{ scale: 1.1 }}
-        onClick={() => setShowDropdown(!showDropdown)}
-      >
-        {user?.username?.charAt(0).toUpperCase() || 'U'}
-      </motion.div>
-      <div className="profile-info">
-        <span className="profile-name">{user?.username || 'Utilisateur'}</span>
-        <span className="profile-role">{user?.role || 'Admin'}</span>
-      </div>
+  const loadSystemAlerts = async () => {
+    try {
+      const alerts = [];
       
-      <AnimatePresence>
-        {showDropdown && (
-          <motion.div 
-            className="profile-dropdown"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-          >
-            <button className="dropdown-item">
-              <User size={16} />
-              Mon Profil
-            </button>
-            <button className="dropdown-item">
-              <Settings size={16} />
-              Paramètres
-            </button>
-            <button className="dropdown-item logout" onClick={onLogout}>
-              <LogOut size={16} />
-              Déconnexion
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
+      // Vérifier les synchronisations en erreur
+      const syncResponse = await syncAPI.getStatus();
+      if (!syncResponse.success || syncResponse.inProgress === false) {
+        alerts.push({
+          type: 'warning',
+          title: t('dashboard.syncWarning'),
+          message: t('dashboard.syncStopped'),
+          time: moment().format('HH:mm'),
+          action: 'sync'
+        });
+      }
 
-// Fonctions utilitaires
-const formatDateForAPI = (date) => {
-  if (!date) return '';
-  if (date instanceof Date) {
-    return date.toISOString().split('T')[0];
-  }
-  return date;
-};
+      // Vérifier les centres sans prestataires
+      const centresResponse = await centresAPI.getAll();
+      if (centresResponse.success && centresResponse.centres) {
+        centresResponse.centres.slice(0, 3).forEach(centre => {
+          if (centre.nombre_prestataires === 0) {
+            alerts.push({
+              type: 'info',
+              title: t('dashboard.noProviders'),
+              message: `${centre.LIB_CEN} ${t('dashboard.noProvidersMessage')}`,
+              time: moment().format('HH:mm'),
+              action: 'centers'
+            });
+          }
+        });
+      }
 
-const buildQueryString = (params) => {
-  if (!params || Object.keys(params).length === 0) return '';
-  const queryParams = new URLSearchParams();
-  Object.keys(params).forEach(key => {
-    if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
-      queryParams.append(key, params[key]);
+      // Vérifier les consultations non facturées
+      if (recentConsultations.some(c => c.status === 'À payer')) {
+        alerts.push({
+          type: 'error',
+          title: t('dashboard.unpaidConsultations'),
+          message: t('dashboard.unpaidMessage'),
+          time: moment().format('HH:mm'),
+          action: 'billing'
+        });
+      }
+
+      setSystemAlerts(alerts.slice(0, 5));
+    } catch (error) {
+      console.error('❌ Erreur alertes système:', error);
     }
-  });
-  return queryParams.toString() ? `?${queryParams.toString()}` : '';
-};
-
-const fetchAPI = async (endpoint, options = {}) => {
-  const token = localStorage.getItem('token');
-  const defaultHeaders = {
-    'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` }),
-    ...options.headers,
   };
 
-  const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${endpoint}`, {
-    ...options,
-    headers: defaultHeaders,
+  const loadActivityTimeline = async () => {
+    try {
+      const activities = [];
+      
+      // Récupérer l'historique des consultations
+      const consultations = recentConsultations.slice(0, 3);
+      consultations.forEach(consult => {
+        activities.push({
+          time: consult.date,
+          color: consult.color,
+          icon: <EyeOutlined />,
+          title: `${t('dashboard.consultationFor')} ${consult.patient}`,
+          content: `${consult.type} - ${consult.medecin}`
+        });
+      });
+
+      // Récupérer les nouveaux bénéficiaires
+      const newBenefs = recentBeneficiaires.slice(0, 2);
+      newBenefs.forEach(ben => {
+        activities.push({
+          time: ben.dateInscription,
+          color: 'green',
+          icon: <UserOutlined />,
+          title: `${t('dashboard.newBeneficiary')}`,
+          content: ben.nom
+        });
+      });
+
+      // Trier par date
+      activities.sort((a, b) => moment(b.time, 'DD/MM/YY HH:mm').diff(moment(a.time, 'DD/MM/YY HH:mm')));
+      setActivityTimeline(activities.slice(0, 8));
+    } catch (error) {
+      console.error('❌ Erreur timeline activité:', error);
+    }
+  };
+
+  const loadCenterDistribution = async () => {
+    try {
+      const response = await centresAPI.getAll();
+      if (response.success && response.centres) {
+        const distribution = response.centres.reduce((acc, centre) => {
+          const type = centre.TYP_CEN || centre.type || 'Non spécifié';
+          acc[type] = (acc[type] || 0) + 1;
+          return acc;
+        }, {});
+
+        const formatted = Object.entries(distribution).map(([type, count], index) => ({
+          key: index,
+          type,
+          count,
+          color: getTypeColor(type),
+          percent: Math.round((count / response.centres.length) * 100)
+        }));
+
+        setCenterDistribution(formatted);
+      }
+    } catch (error) {
+      console.error('❌ Erreur distribution centres:', error);
+    }
+  };
+
+  const loadRevenueData = async () => {
+    try {
+      const response = await dashboardAPI.getRevenueParMois(6);
+      if (response.success && response.data) {
+        setRevenueData(response.data.slice(-6));
+      } else {
+        // Données de démo
+        const months = [];
+        for (let i = 5; i >= 0; i--) {
+          const month = moment().subtract(i, 'months');
+          months.push({
+            month: month.format('MMM'),
+            revenue: Math.floor(Math.random() * 1000000) + 500000,
+            consultations: Math.floor(Math.random() * 200) + 50
+          });
+        }
+        setRevenueData(months);
+      }
+    } catch (error) {
+      console.error('❌ Erreur données revenus:', error);
+    }
+  };
+
+  // ==================== FONCTIONS UTILITAIRES ====================
+
+  const getDefaultStats = () => ({
+    totalPatients: 1245,
+    totalConsultations: 3421,
+    revenue: 152300,
+    pendingAppointments: 23,
+    activeDoctors: 8,
+    monthlyRevenue: 450000,
+    todayAppointments: 42,
+    patientSatisfaction: 92,
+    averageWaitTime: 15,
+    todayRevenue: 25000,
+    activeCenters: 12,
+    onlineUsers: 8,
+    activePrescriptions: 156,
+    todayVisits: 128,
+    monthlyGrowth: 12.5
   });
 
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
+  const getConsultationStatus = (statut) => {
+    const statusMap = {
+      'À payer': 'pending',
+      'Payé': 'paid',
+      'Partiellement payé': 'partial',
+      'Annulé': 'cancelled',
+      'Confirmé': 'confirmed',
+      'default': 'pending'
+    };
+    return statusMap[statut] || statusMap.default;
+  };
 
-  return response.json();
-};
+  const getStatusColor = (statut) => {
+    const colorMap = {
+      'À payer': 'warning',
+      'Payé': 'success',
+      'Partiellement payé': 'processing',
+      'Annulé': 'error',
+      'Confirmé': 'default',
+      'default': 'default'
+    };
+    return colorMap[statut] || colorMap.default;
+  };
 
-// Main Dashboard Component
-const DashboardModern = () => {
-  const { user, logout } = useAuth();
-  const { t } = useTranslation();
-  
-  const [dashboardData, setDashboardData] = useState({
-    consultations: [],
-    beneficiaires: [],
-    prestations: [],
-    stats: null,
-    loading: true,
-    error: null
-  });
+  const calculateAge = (dateNaissance) => {
+    if (!dateNaissance) return 'N/A';
+    const birthDate = moment(dateNaissance);
+    const today = moment();
+    return today.diff(birthDate, 'years');
+  };
 
-  const [activePeriod, setActivePeriod] = useState('today');
-  const [refreshing, setRefreshing] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState(new Date());
-  const [recentActivities, setRecentActivities] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [darkMode, setDarkMode] = useState(false);
-  const [activeView, setActiveView] = useState('overview');
-  const [systemStats, setSystemStats] = useState({
-    serverLoad: 65,
-    memoryUsage: 78
-  });
+  const getTypeColor = (type) => {
+    const colors = {
+      'Hospitalier': '#1890ff',
+      'Centre de Santé': '#52c41a',
+      'Dispensaire': '#fa8c16',
+      'Clinique': '#722ed1',
+      'Laboratoire': '#13c2c2',
+      'Pharmacie': '#f5222d',
+      'default': '#d9d9d9'
+    };
+    return colors[type] || colors.default;
+  };
 
-  // Parallax effects
-  const { scrollY } = useScroll();
-  const headerOpacity = useTransform(scrollY, [0, 100], [1, 0.9]);
-  const headerScale = useTransform(scrollY, [0, 100], [1, 0.98]);
-
-  // Format currency
   const formatCurrency = (amount) => {
     if (!amount) return '0 FCFA';
-    return new Intl.NumberFormat('fr-FR').format(amount) + ' FCFA';
+    return new Intl.NumberFormat('fr-FR', {
+      style: 'currency',
+      currency: 'XAF',
+      minimumFractionDigits: 0
+    }).format(amount).replace('XAF', 'FCFA');
   };
 
-  // Format number
   const formatNumber = (num) => {
     if (!num) return '0';
     return new Intl.NumberFormat('fr-FR').format(num);
   };
 
-  // Format date
-  const formatDate = (date) => {
-    return new Intl.DateTimeFormat('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    }).format(date);
+  // ==================== GESTION DES ACTIONS ====================
+
+  const handleRefresh = () => {
+    loadDashboardData();
+    message.info(t('dashboard.refreshing'));
   };
 
-  // Get time ago
-  const getTimeAgo = (date) => {
-    if (!date) return 'Date inconnue';
-    const dateObj = new Date(date);
-    const diffMs = new Date() - dateObj;
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    if (diffMins < 1) return 'À l\'instant';
-    if (diffMins < 60) return `Il y a ${diffMins} min`;
-    if (diffHours < 24) return `Il y a ${diffHours} h`;
-    return `Il y a ${diffDays} j`;
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  // Get period dates
-  const getPeriodDates = (period) => {
-    const now = new Date();
-    const start = new Date();
-    
-    switch(period) {
-      case 'today':
-        start.setHours(0, 0, 0, 0);
+  const handleDateRangeChange = (dates) => {
+    setDateRange(dates);
+  };
+
+  const handleQuickAction = (action) => {
+    switch(action) {
+      case 'newConsultation':
+        window.location.href = '/consultations/new';
         break;
-      case 'week':
-        start.setDate(now.getDate() - 7);
+      case 'newPatient':
+        window.location.href = '/patients/new';
         break;
-      case 'month':
-        start.setMonth(now.getMonth() - 1);
+      case 'newPrescription':
+        window.location.href = '/prescriptions/new';
         break;
-      case 'year':
-        start.setFullYear(now.getFullYear() - 1);
+      case 'viewReports':
+        window.location.href = '/admin/reports';
         break;
       default:
-        start.setMonth(now.getMonth() - 1);
+        break;
     }
-    
-    return { startDate: start, endDate: now };
   };
 
-  // Calculate statistics from real data
-  const calculateStats = useCallback((consultations, beneficiaires, prestations, period) => {
-    const { startDate, endDate } = getPeriodDates(period);
-    
-    // Filter consultations by period
-    const recentConsultations = consultations.filter(consultation => {
-      const consultationDate = new Date(consultation.DATE_CONSULTATION || consultation.date);
-      return consultationDate >= startDate && consultationDate <= endDate;
-    });
-
-    // Calculate unique doctors
-    const doctorsSet = new Set();
-    recentConsultations.forEach(consultation => {
-      if (consultation.NOM_MEDECIN) {
-        doctorsSet.add(consultation.NOM_MEDECIN);
-      }
-    });
-
-    // Calculate monthly revenue (sum of consultation amounts)
-    const monthlyRevenue = recentConsultations.reduce((sum, consultation) => {
-      return sum + (consultation.MONTANT_CONSULTATION || consultation.montant || 0);
-    }, 0);
-
-    // Calculate total prestations amount for period
-    const recentPrestations = prestations.filter(prestation => {
-      const prestationDate = new Date(prestation.DATE_PRESTATION || prestation.created_at);
-      return prestationDate >= startDate && prestationDate <= endDate;
-    });
-
-    const prestationsAmount = recentPrestations.reduce((sum, prestation) => {
-      return sum + (prestation.MONTANT || prestation.montant || 0);
-    }, 0);
-
-    return {
-      totalPatients: beneficiaires.length,
-      totalConsultations: recentConsultations.length,
-      activeDoctors: doctorsSet.size,
-      pendingAppointments: recentConsultations.filter(c => 
-        c.STATUT_PAIEMENT === 'À payer' || c.statut === 'en_attente'
-      ).length,
-      monthlyRevenue: monthlyRevenue + prestationsAmount,
-      patientSatisfaction: Math.floor(Math.random() * 20) + 80 // Simulation
-    };
-  }, []);
-
-  // Calculate remboursement recap from prestations
-  const calculateRemboursementRecap = useCallback((prestations) => {
-    const recentPrestations = prestations.filter(prestation => {
-      const date = new Date(prestation.DATE_PRESTATION || prestation.created_at);
-      const now = new Date();
-      const monthAgo = new Date(now.setMonth(now.getMonth() - 1));
-      return date >= monthAgo;
-    });
-
-    const nbSoumis = recentPrestations.filter(p => 
-      p.STATUT_DECLARATION === 'declare' || p.STATUT === 'soumis'
-    ).length;
-
-    const montantAPayer = recentPrestations.reduce((sum, p) => {
-      if (p.STATUT_PAIEMENT === 'À payer' || p.statut === 'non_paye') {
-        return sum + (p.MONTANT_PRISE_CHARGE || p.montant_prise_charge || 0);
-      }
-      return sum;
-    }, 0);
-
-    const payesMois = recentPrestations.reduce((sum, p) => {
-      if (p.STATUT_PAIEMENT === 'Payé' || p.statut === 'paye') {
-        return sum + (p.MONTANT_PRISE_CHARGE || p.montant_prise_charge || 0);
-      }
-      return sum;
-    }, 0);
-
-    const ticketMoyen = nbSoumis > 0 ? payesMois / nbSoumis : 0;
-
-    return {
-      nbSoumis,
-      montantAPayer,
-      payesMois,
-      ticketMoyen
-    };
-  }, []);
-
-  // Fetch dashboard data
-  const fetchDashboardData = useCallback(async () => {
-    try {
-      setRefreshing(true);
-      setDashboardData(prev => ({ ...prev, loading: true, error: null }));
-      
-      // Fetch all data in parallel
-      const [consultationsResponse, beneficiairesResponse, prestationsResponse] = await Promise.allSettled([
-        consultationsAPI.getAllConsultations({ limit: 100 }),
-        beneficiairesAPI.getAll({ limit: 50 }),
-        prestationsAPI.getAllPrestations({ limit: 100 })
-      ]);
-
-      // Process consultations
-      let consultations = [];
-      if (consultationsResponse.status === 'fulfilled' && consultationsResponse.value?.success) {
-        consultations = consultationsResponse.value.consultations || [];
-      }
-
-      // Process beneficiaires
-      let beneficiaires = [];
-      if (beneficiairesResponse.status === 'fulfilled' && beneficiairesResponse.value?.success) {
-        beneficiaires = beneficiairesResponse.value.beneficiaires || [];
-      }
-
-      // Process prestations
-      let prestations = [];
-      if (prestationsResponse.status === 'fulfilled' && prestationsResponse.value?.success) {
-        prestations = prestationsResponse.value.prestations || [];
-      }
-
-      // Calculate statistics
-      const stats = calculateStats(consultations, beneficiaires, prestations, activePeriod);
-      
-      // Calculate remboursement recap
-      const recapRemboursement = calculateRemboursementRecap(prestations);
-
-      // Generate recent activities
-      const activities = generateRealActivities(consultations, stats);
-      setRecentActivities(activities);
-
-      // Update dashboard data
-      setDashboardData({
-        consultations,
-        beneficiaires,
-        prestations,
-        stats,
-        loading: false,
-        error: null
-      });
-
-      // Update system stats (simulation)
-      setSystemStats({
-        serverLoad: Math.floor(Math.random() * 40) + 30,
-        memoryUsage: Math.floor(Math.random() * 30) + 60
-      });
-
-      setLastUpdate(new Date());
-      
-    } catch (error) {
-      console.error('Erreur lors du chargement du dashboard:', error);
-      setDashboardData({
-        consultations: [],
-        beneficiaires: [],
-        prestations: [],
-        stats: generateFallbackStats(),
-        loading: false,
-        error: t('loadError')
-      });
-    } finally {
-      setRefreshing(false);
+  const handleAlertClick = (alert) => {
+    if (alert.action === 'sync') {
+      syncAPI.forceSyncPrestataire('all', {});
+    } else if (alert.action === 'centers') {
+      window.location.href = '/centers';
+    } else if (alert.action === 'billing') {
+      window.location.href = '/consultations?status=unpaid';
     }
-  }, [activePeriod, t, calculateStats, calculateRemboursementRecap]);
+  };
 
-  // Generate real activities from consultations
-  const generateRealActivities = (consultations, stats) => {
-    const activities = [];
-    const now = new Date();
-    
-    // Add recent consultations
-    if (consultations && consultations.length > 0) {
-      consultations.slice(0, 3).forEach((consultation, index) => {
-        activities.push({
-          id: consultation.COD_CONS || `cons-${index}`,
-          icon: Stethoscope,
-          text: `Consultation pour ${consultation.NOM_BEN || 'patient'}`,
-          time: getTimeAgo(consultation.DATE_CONSULTATION || consultation.date),
-          type: 'consultation',
-          urgent: consultation.PRIORITE === 'HAUTE'
-        });
-      });
+  // ==================== CONFIGURATION DES COLONNES ====================
+
+  const consultationColumns = [
+    {
+      title: 'Patient',
+      dataIndex: 'patient',
+      key: 'patient',
+      render: (text) => <Text strong>{text}</Text>
+    },
+    {
+      title: 'Médecin',
+      dataIndex: 'medecin',
+      key: 'medecin'
+    },
+    {
+      title: 'Type',
+      dataIndex: 'type',
+      key: 'type',
+      render: (type) => <Tag color="blue">{type}</Tag>
+    },
+    {
+      title: 'Date',
+      dataIndex: 'date',
+      key: 'date'
+    },
+    {
+      title: 'Montant',
+      dataIndex: 'montant',
+      key: 'montant',
+      render: (montant) => <Text strong>{formatCurrency(montant)}</Text>
+    },
+    {
+      title: 'Statut',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status, record) => (
+        <Tag color={record.color} style={{ textTransform: 'capitalize' }}>
+          {status}
+        </Tag>
+      )
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_, record) => (
+        <Space size="small">
+          <Tooltip title="Voir détails">
+            <Button
+              type="text"
+              icon={<EyeOutlined />}
+              size="small"
+              onClick={() => window.location.href = `/consultations/${record.id}`}
+            />
+          </Tooltip>
+          <Tooltip title="Éditer">
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              size="small"
+              onClick={() => window.location.href = `/consultations/${record.id}/edit`}
+            />
+          </Tooltip>
+        </Space>
+      )
     }
-    
-    // Add pending appointments
-    if (stats?.pendingAppointments > 0) {
-      activities.push({
-        id: 'pending-appointments',
-        icon: Calendar,
-        text: `${stats.pendingAppointments} rendez-vous en attente`,
-        time: getTimeAgo(new Date(now - 30 * 60000)),
-        type: 'appointment',
-        urgent: true
-      });
+  ];
+
+  const beneficiaireColumns = [
+    {
+      title: 'Bénéficiaire',
+      dataIndex: 'nom',
+      key: 'nom',
+      render: (text, record) => (
+        <Space>
+          <Avatar 
+            size="small" 
+            src={record.photo}
+            icon={<UserOutlined />}
+          />
+          <Text strong>{text}</Text>
+        </Space>
+      )
+    },
+    {
+      title: 'Identifiant',
+      dataIndex: 'identifiant',
+      key: 'identifiant'
+    },
+    {
+      title: 'Téléphone',
+      dataIndex: 'telephone',
+      key: 'telephone'
+    },
+    {
+      title: 'Âge',
+      dataIndex: 'age',
+      key: 'age',
+      render: (age) => <Text>{age} ans</Text>
+    },
+    {
+      title: 'Inscription',
+      dataIndex: 'dateInscription',
+      key: 'dateInscription'
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_, record) => (
+        <Space size="small">
+          <Button
+            type="link"
+            size="small"
+            onClick={() => window.location.href = `/patients/${record.id}`}
+          >
+            Voir
+          </Button>
+        </Space>
+      )
     }
-    
-    // Add system activities
-    activities.push(
+  ];
+
+  const prescriptionColumns = [
+    {
+      title: 'N° Prescription',
+      dataIndex: 'numero',
+      key: 'numero',
+      render: (text) => <Text strong style={{ color: '#1890ff' }}>{text}</Text>
+    },
+    {
+      title: 'Patient',
+      dataIndex: 'patient',
+      key: 'patient'
+    },
+    {
+      title: 'Médecin',
+      dataIndex: 'medecin',
+      key: 'medecin'
+    },
+    {
+      title: 'Date',
+      dataIndex: 'date',
+      key: 'date'
+    },
+    {
+      title: 'Médicaments',
+      dataIndex: 'medicaments',
+      key: 'medicaments',
+      render: (count) => (
+        <Badge
+          count={count}
+          style={{ backgroundColor: '#52c41a' }}
+        />
+      )
+    },
+    {
+      title: 'Priorité',
+      dataIndex: 'priorite',
+      key: 'priorite',
+      render: (priorite) => {
+        const color = priorite === 'Urgent' ? 'red' : 
+                     priorite === 'Haute' ? 'orange' : 'blue';
+        return <Tag color={color}>{priorite}</Tag>;
+      }
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_, record) => (
+        <Space size="small">
+          <Button
+            type="primary"
+            size="small"
+            onClick={() => window.location.href = `/prescriptions/${record.id}`}
+          >
+            Traiter
+          </Button>
+        </Space>
+      )
+    }
+  ];
+
+  // ==================== COMPOSANTS RENDU ====================
+
+  const renderStatsCards = () => {
+    if (!stats.general) return null;
+
+    const statCards = [
       {
-        id: 'auto-save',
-        icon: Database,
-        text: 'Sauvegarde automatique effectuée',
-        time: getTimeAgo(new Date(now - 45 * 60000)),
-        type: 'system',
-        urgent: false
+        key: 'patients',
+        title: t('dashboard.totalPatients'),
+        value: formatNumber(stats.general.totalPatients || 0),
+        icon: <TeamOutlined />,
+        color: '#1890ff',
+        trend: stats.general.monthlyGrowth ? `${stats.general.monthlyGrowth}%` : '+12.5%',
+        trendColor: '#52c41a',
+        description: t('dashboard.registeredPatients'),
+        action: () => window.location.href = '/patients'
       },
       {
-        id: 'new-patient',
-        icon: UserPlus,
-        text: 'Nouvelle inscription patient',
-        time: getTimeAgo(new Date(now - 60 * 60000)),
-        type: 'patient',
-        urgent: false
+        key: 'consultations',
+        title: t('dashboard.consultations'),
+        value: formatNumber(stats.general.todayAppointments || 0),
+        icon: <EyeOutlined />,
+        color: '#52c41a',
+        trend: '+8.2%',
+        trendColor: '#52c41a',
+        description: t('dashboard.todayConsultations'),
+        action: () => window.location.href = '/consultations'
+      },
+      {
+        key: 'revenue',
+        title: t('dashboard.todayRevenue'),
+        value: formatCurrency(stats.general.todayRevenue || 0),
+        icon: <DollarOutlined />,
+        color: '#fa8c16',
+        trend: '+15.3%',
+        trendColor: '#52c41a',
+        description: t('dashboard.revenueToday'),
+        action: () => window.location.href = '/facturation'
+      },
+      {
+        key: 'prescriptions',
+        title: t('dashboard.activePrescriptions'),
+        value: formatNumber(stats.general.activePrescriptions || 0),
+        icon: <FileTextOutlined />,
+        color: '#722ed1',
+        trend: '-2.1%',
+        trendColor: '#f5222d',
+        description: t('dashboard.prescriptionsActive'),
+        action: () => window.location.href = '/prescriptions'
+      },
+      {
+        key: 'satisfaction',
+        title: t('dashboard.patientSatisfaction'),
+        value: `${stats.general.patientSatisfaction || 92}%`,
+        icon: <HeartOutlined />,
+        color: '#f5222d',
+        trend: '+3.4%',
+        trendColor: '#52c41a',
+        description: t('dashboard.satisfactionRate'),
+        action: () => window.location.href = '/admin/satisfaction'
+      },
+      {
+        key: 'centers',
+        title: t('dashboard.activeCenters'),
+        value: formatNumber(stats.general.activeCenters || 0),
+        icon: <DatabaseOutlined />,
+        color: '#13c2c2',
+        trend: '+2',
+        trendColor: '#52c41a',
+        description: t('dashboard.centersActive'),
+        action: () => window.location.href = '/centers'
       }
-    );
-    
-    return activities;
-  };
+    ];
 
-  // Generate fallback stats
-  const generateFallbackStats = () => ({
-    totalPatients: 0,
-    totalConsultations: 0,
-    activeDoctors: 0,
-    pendingAppointments: 0,
-    monthlyRevenue: 0,
-    patientSatisfaction: 0
-  });
-
-  // Handle quick action click
-  const handleQuickAction = (path) => {
-    window.location.href = path;
-  };
-
-  // Handle stat card click
-  const handleStatCardClick = (type) => {
-    switch(type) {
-      case 'patients':
-        window.location.href = '/beneficiaires';
-        break;
-      case 'consultations':
-        window.location.href = '/consultations';
-        break;
-      case 'doctors':
-        window.location.href = '/prestataires';
-        break;
-      case 'appointments':
-        window.location.href = '/consultations';
-        break;
-      case 'revenue':
-        window.location.href = '/facturation';
-        break;
-      case 'satisfaction':
-        window.location.href = '/statistiques';
-        break;
-    }
-  };
-
-  // Handle search
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      toast.info(`Recherche pour: ${searchQuery}`);
-      // Implement search functionality
-    }
-  };
-
-  // Toggle dark mode
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-    toast.success(`Mode ${!darkMode ? 'sombre' : 'clair'} activé`);
-  };
-
-  // Handle logout
-  const handleLogout = async () => {
-    try {
-      await logout();
-      window.location.href = '/login';
-    } catch (error) {
-      console.error('Erreur lors de la déconnexion:', error);
-    }
-  };
-
-  // Calculate chart data from real consultations
-  const calculateChartData = useCallback((consultations) => {
-    const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul'];
-    const now = new Date();
-    
-    return months.map((month, index) => {
-      const monthStart = new Date(now.getFullYear(), index, 1);
-      const monthEnd = new Date(now.getFullYear(), index + 1, 0);
-      
-      const monthConsultations = consultations.filter(consultation => {
-        const consultationDate = new Date(consultation.DATE_CONSULTATION || consultation.date);
-        return consultationDate >= monthStart && consultationDate <= monthEnd;
-      });
-      
-      const totalAmount = monthConsultations.reduce((sum, consultation) => {
-        return sum + (consultation.MONTANT_CONSULTATION || consultation.montant || 0);
-      }, 0);
-      
-      // Normalize for chart (0-100%)
-      const maxAmount = Math.max(...months.map((_, i) => {
-        const mStart = new Date(now.getFullYear(), i, 1);
-        const mEnd = new Date(now.getFullYear(), i + 1, 0);
-        const mCons = consultations.filter(c => {
-          const date = new Date(c.DATE_CONSULTATION || c.date);
-          return date >= mStart && date <= mEnd;
-        });
-        return mCons.reduce((s, c) => s + (c.MONTANT_CONSULTATION || c.montant || 0), 0);
-      }));
-      
-      return {
-        label: month,
-        value: maxAmount > 0 ? (totalAmount / maxAmount) * 100 : 0,
-        amount: totalAmount
-      };
-    });
-  }, []);
-
-  // Initialize dashboard data
-  useEffect(() => {
-    fetchDashboardData();
-    
-    // Auto-refresh every 5 minutes
-    const refreshInterval = setInterval(() => {
-      fetchDashboardData();
-    }, 5 * 60 * 1000);
-    
-    return () => clearInterval(refreshInterval);
-  }, [fetchDashboardData]);
-
-  // Prepare stat cards
-  const stats = dashboardData.stats || generateFallbackStats();
-  const statCards = [
-    {
-      id: 1,
-      title: t('totalPatients', 'Total Patients'),
-      value: formatNumber(stats.totalPatients || 0),
-      change: stats.totalPatients > 0 ? 12.5 : 0,
-      icon: Users,
-      color: 'blue',
-      trend: true,
-      onClick: () => handleStatCardClick('patients')
-    },
-    {
-      id: 2,
-      title: t('consultations', 'Consultations'),
-      value: formatNumber(stats.totalConsultations || 0),
-      change: stats.totalConsultations > 0 ? 8.3 : 0,
-      icon: Stethoscope,
-      color: 'green',
-      trend: true,
-      onClick: () => handleStatCardClick('consultations')
-    },
-    {
-      id: 3,
-      title: t('activeDoctors', 'Médecins Actifs'),
-      value: formatNumber(stats.activeDoctors || 0),
-      change: stats.activeDoctors > 0 ? 5.0 : 0,
-      icon: UserPlus,
-      color: 'purple',
-      trend: true,
-      onClick: () => handleStatCardClick('doctors')
-    },
-    {
-      id: 4,
-      title: t('pendingAppointments', 'Rendez-vous en attente'),
-      value: formatNumber(stats.pendingAppointments || 0),
-      change: -3.2,
-      icon: Clock,
-      color: 'yellow',
-      trend: true,
-      onClick: () => handleStatCardClick('appointments')
-    },
-    {
-      id: 5,
-      title: t('monthlyRevenue', 'Revenus Mensuels'),
-      value: formatCurrency(stats.monthlyRevenue || 0),
-      change: stats.monthlyRevenue > 0 ? 15.2 : 0,
-      icon: DollarSign,
-      color: 'emerald',
-      trend: true,
-      onClick: () => handleStatCardClick('revenue')
-    },
-    {
-      id: 6,
-      title: t('patientSatisfaction', 'Satisfaction Patients'),
-      value: `${stats.patientSatisfaction || 0}%`,
-      change: 2.1,
-      icon: Heart,
-      color: 'pink',
-      trend: true,
-      onClick: () => handleStatCardClick('satisfaction')
-    }
-  ];
-
-  // Prepare periods
-  const periods = [
-    { id: 'today', label: t('today', 'Aujourd\'hui') },
-    { id: 'week', label: t('thisWeek', 'Cette Semaine') },
-    { id: 'month', label: t('thisMonth', 'Ce Mois') },
-    { id: 'year', label: t('thisYear', 'Cette Année') }
-  ];
-
-  // Prepare quick actions
-  const quickActions = [
-    { 
-      icon: Stethoscope, 
-      label: t('newConsultationBtn', 'Nouvelle Consultation'), 
-      color: 'blue', 
-      onClick: () => handleQuickAction('/consultations/new') 
-    },
-    { 
-      icon: UserPlus, 
-      label: t('newPatient', 'Nouveau Patient'), 
-      color: 'green', 
-      onClick: () => handleQuickAction('/beneficiaires/new') 
-    },
-    { 
-      icon: FileText, 
-      label: t('prescription', 'Prescription'), 
-      color: 'purple', 
-      onClick: () => handleQuickAction('/Prescriptions/new') 
-    },
-    { 
-      icon: Calendar, 
-      label: t('schedule', 'Agenda'), 
-      color: 'red', 
-      onClick: () => handleQuickAction('/consultations?view=calendar') 
-    },
-    { 
-      icon: DollarSign, 
-      label: t('billing', 'Facturation'), 
-      color: 'yellow', 
-      onClick: () => handleQuickAction('/facturation') 
-    },
-    { 
-      icon: BarChart3, 
-      label: t('reports', 'Rapports'), 
-      color: 'teal', 
-      onClick: () => handleQuickAction('/rapports') 
-    }
-  ];
-
-  // Prepare system status items
-  const systemStatusItems = [
-    { 
-      icon: Server, 
-      label: 'Serveur API', 
-      status: dashboardData.consultations.length > 0 ? 'active' : 'error', 
-      value: dashboardData.consultations.length > 0 ? 'Connecté' : 'Erreur' 
-    },
-    { 
-      icon: Database, 
-      label: 'Base de données', 
-      status: 'active', 
-      value: 'MySQL' 
-    },
-    { 
-      icon: Network, 
-      label: 'Réseau', 
-      status: 'active', 
-      value: '95 Mbps' 
-    },
-    { 
-      icon: Cpu, 
-      label: 'CPU', 
-      status: 'active', 
-      value: `${systemStats.serverLoad}%` 
-    },
-    { 
-      icon: HardDrive, 
-      label: 'Mémoire', 
-      status: 'active', 
-      value: `${systemStats.memoryUsage}%` 
-    },
-    { 
-      icon: ShieldCheck, 
-      label: 'Sécurité', 
-      status: 'active', 
-      value: 'Niveau Max' 
-    }
-  ];
-
-  // Calculate chart data from real consultations
-  const chartData = calculateChartData(dashboardData.consultations);
-
-  if (dashboardData.loading && !refreshing) {
     return (
-      <div className="dashboard-modern-loading">
-        <ParticleSystem particleCount={30} color="#3b82f6" />
-        <div className="loading-container">
-          <motion.div
-            className="loading-spinner"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-          >
-            <Shield size={48} />
-          </motion.div>
-          <h2>Chargement du tableau de bord...</h2>
-          <p>Initialisation des données en temps réel</p>
-        </div>
+      <Row gutter={[16, 16]}>
+        {statCards.map((card, index) => (
+          <Col xs={24} sm={12} md={8} lg={8} xl={4} key={card.key}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+            >
+              <Card
+                hoverable
+                className="stat-card"
+                onClick={card.action}
+                style={{ 
+                  borderLeft: `4px solid ${card.color}`,
+                  cursor: 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+                  <div 
+                    className="stat-icon-wrapper"
+                    style={{ backgroundColor: `${card.color}15` }}
+                  >
+                    {React.cloneElement(card.icon, { 
+                      style: { color: card.color, fontSize: 18 }
+                    })}
+                  </div>
+                  <div style={{ flex: 1, marginLeft: 12 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {card.title}
+                    </Text>
+                    <Title level={3} style={{ margin: '4px 0', color: card.color }}>
+                      {card.value}
+                    </Title>
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: 11 }}>
+                    {card.description}
+                  </Text>
+                  <Tag 
+                    color={card.trendColor === '#52c41a' ? 'success' : 'error'}
+                    style={{ fontSize: 11, margin: 0 }}
+                  >
+                    {card.trend}
+                  </Tag>
+                </div>
+              </Card>
+            </motion.div>
+          </Col>
+        ))}
+      </Row>
+    );
+  };
+
+  const renderQuickActions = () => {
+    const actions = [
+      {
+        key: 'newConsultation',
+        label: t('dashboard.newConsultationBtn'),
+        icon: <PlusOutlined />,
+        color: '#1890ff',
+        description: t('dashboard.createNewConsultation')
+      },
+      {
+        key: 'newPatient',
+        label: t('dashboard.newPatient'),
+        icon: <UserOutlined />,
+        color: '#52c41a',
+        description: t('dashboard.registerNewPatient')
+      },
+      {
+        key: 'newPrescription',
+        label: t('dashboard.prescription'),
+        icon: <FileTextOutlined />,
+        color: '#722ed1',
+        description: t('dashboard.createPrescription')
+      },
+      {
+        key: 'viewReports',
+        label: t('dashboard.reports'),
+        icon: <BarChartOutlined />,
+        color: '#fa8c16',
+        description: t('dashboard.viewReports')
+      },
+      {
+        key: 'billing',
+        label: t('dashboard.billing'),
+        icon: <DollarOutlined />,
+        color: '#f5222d',
+        description: t('dashboard.manageBilling')
+      },
+      {
+        key: 'schedule',
+        label: t('dashboard.schedule'),
+        icon: <CalendarOutlined />,
+        color: '#13c2c2',
+        description: t('dashboard.manageSchedule')
+      }
+    ];
+
+    return (
+      <Card
+        title={
+          <Space>
+            <RocketOutlined />
+            <Text strong>{t('dashboard.quickActions')}</Text>
+          </Space>
+        }
+        className="quick-actions-card"
+      >
+        <Row gutter={[16, 16]}>
+          {actions.map((action, index) => (
+            <Col xs={24} sm={12} md={8} lg={6} xl={4} key={action.key}>
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Button
+                  type="primary"
+                  className="quick-action-btn"
+                  style={{ 
+                    backgroundColor: action.color,
+                    borderColor: action.color,
+                    width: '100%',
+                    height: 100
+                  }}
+                  onClick={() => handleQuickAction(action.key)}
+                >
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 24, marginBottom: 8 }}>
+                      {action.icon}
+                    </div>
+                    <Text strong style={{ color: '#fff', fontSize: 12 }}>
+                      {action.label}
+                    </Text>
+                    <div style={{ 
+                      fontSize: 10, 
+                      color: 'rgba(255,255,255,0.8)',
+                      marginTop: 4 
+                    }}>
+                      {action.description}
+                    </div>
+                  </div>
+                </Button>
+              </motion.div>
+            </Col>
+          ))}
+        </Row>
+      </Card>
+    );
+  };
+
+  const renderSystemStatus = () => {
+    const statusItems = [
+      {
+        key: 'api',
+        label: t('dashboard.apiStatus'),
+        status: true,
+        icon: <CloudOutlined />,
+        color: '#52c41a'
+      },
+      {
+        key: 'database',
+        label: t('dashboard.database'),
+        status: true,
+        icon: <DatabaseOutlined />,
+        color: '#1890ff'
+      },
+      {
+        key: 'sync',
+        label: t('dashboard.syncStatus'),
+        status: true,
+        icon: <SyncOutlined />,
+        color: '#fa8c16'
+      },
+      {
+        key: 'security',
+        label: t('dashboard.security'),
+        status: true,
+        icon: <SafetyOutlined />,
+        color: '#722ed1'
+      },
+      {
+        key: 'backup',
+        label: t('dashboard.backup'),
+        status: true,
+        icon: <DatabaseOutlined />,
+        color: '#13c2c2'
+      }
+    ];
+
+    return (
+      <Card
+        title={
+          <Space>
+            <DashboardOutlined />
+            <Text strong>{t('dashboard.systemStatus')}</Text>
+          </Space>
+        }
+        className="system-status-card"
+      >
+        <Row gutter={[16, 16]}>
+          {statusItems.map((item) => (
+            <Col span={24} key={item.key}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                padding: '8px 0'
+              }}>
+                <div style={{ 
+                  width: 40, 
+                  height: 40,
+                  borderRadius: '50%',
+                  backgroundColor: `${item.color}15`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 12
+                }}>
+                  {React.cloneElement(item.icon, { 
+                    style: { color: item.color, fontSize: 18 }
+                  })}
+                </div>
+                
+                <div style={{ flex: 1 }}>
+                  <Text strong>{item.label}</Text>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <Tag 
+                      color={item.status ? 'success' : 'error'}
+                      style={{ marginRight: 8 }}
+                    >
+                      {item.status ? t('dashboard.online') : t('dashboard.offline')}
+                    </Tag>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {item.status ? t('dashboard.operational') : t('dashboard.issues')}
+                    </Text>
+                  </div>
+                </div>
+                
+                {item.status ? (
+                  <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                ) : (
+                  <WarningOutlined style={{ color: '#f5222d' }} />
+                )}
+              </div>
+            </Col>
+          ))}
+        </Row>
+      </Card>
+    );
+  };
+
+  // ==================== RENDU PRINCIPAL ====================
+
+  if (loading.stats && !stats.general) {
+    return (
+      <div style={{ padding: 24 }}>
+        <Row gutter={[24, 24]}>
+          <Col span={24}>
+            <Skeleton active paragraph={{ rows: 2 }} />
+          </Col>
+          <Col span={24}>
+            <Row gutter={[16, 16]}>
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <Col span={4} key={i}>
+                  <Skeleton active />
+                </Col>
+              ))}
+            </Row>
+          </Col>
+        </Row>
       </div>
     );
   }
 
   return (
-    <div className={`dashboard-modern ${darkMode ? 'dark-mode' : 'light-mode'}`}>
-      {/* Particle Background */}
-      <ParticleSystem particleCount={80} color={darkMode ? '#3b82f6' : '#60a5fa'} />
-      
-      {/* Animated Background Elements */}
-      <div className="background-elements">
-        <motion.div 
-          className="bg-element-1"
-          animate={{ y: [0, 20, 0] }}
-          transition={{ duration: 4, repeat: Infinity }}
-        />
-        <motion.div 
-          className="bg-element-2"
-          animate={{ x: [0, 15, 0] }}
-          transition={{ duration: 5, repeat: Infinity, delay: 1 }}
-        />
-        <motion.div 
-          className="bg-element-3"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-        />
+    <div className="dashboard-container">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <Card className="dashboard-header-card">
+          <Row gutter={[16, 16]} align="middle">
+            <Col flex="auto">
+              <Space>
+                <Avatar 
+                  size={48}
+                  icon={<DashboardOutlined />}
+                  style={{ 
+                    backgroundColor: '#1890ff',
+                    color: '#fff'
+                  }}
+                />
+                <div>
+                  <Title level={2} style={{ margin: 0 }}>
+                    {t('dashboard.title')}
+                  </Title>
+                  <Text type="secondary">
+                    {t('dashboard.welcome')}, <Text strong>{user?.username || user?.prenom || t('dashboard.user')}</Text>
+                    {user?.role && ` | ${t('dashboard.role')}: ${user.role}`}
+                  </Text>
+                </div>
+              </Space>
+            </Col>
+            
+            <Col>
+              <Space>
+                <RangePicker
+                  value={dateRange}
+                  onChange={handleDateRangeChange}
+                  style={{ width: 250 }}
+                />
+                
+                <Select
+                  value={filters.period}
+                  onChange={(value) => handleFilterChange('period', value)}
+                  style={{ width: 120 }}
+                >
+                  <Option value="today">{t('dashboard.today')}</Option>
+                  <Option value="week">{t('dashboard.week')}</Option>
+                  <Option value="month">{t('dashboard.month')}</Option>
+                  <Option value="year">{t('dashboard.year')}</Option>
+                </Select>
+                
+                <Tooltip title={t('dashboard.refresh')}>
+                  <Button
+                    type="primary"
+                    icon={<SyncOutlined spin={loading.stats} />}
+                    onClick={handleRefresh}
+                    loading={loading.stats}
+                  />
+                </Tooltip>
+                
+                <Tooltip title={t('dashboard.settings')}>
+                  <Button
+                    icon={<SettingOutlined />}
+                    onClick={() => window.location.href = '/admin/settings'}
+                  />
+                </Tooltip>
+              </Space>
+            </Col>
+          </Row>
+        </Card>
+      </motion.div>
+
+      {/* Stats Cards */}
+      <div style={{ margin: '24px 0' }}>
+        {renderStatsCards()}
       </div>
 
-      {/* Header with Parallax */}
-      <motion.header 
-        className="dashboard-header-modern"
-        style={{ opacity: headerOpacity, scale: headerScale }}
-      >
-        <div className="header-content">
-          <div className="header-left">
-            <motion.div 
-              className="logo-wrapper"
-              whileHover={{ rotate: 10 }}
-            >
-              <Shield className="header-logo" size={32} />
-              <div className="logo-glow" />
-            </motion.div>
-            
-            <div className="header-title">
-              <h1>
-                <motion.span
-                  initial={{ opacity: 0, y: -20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  HealthCenterSoft Dashboard
-                </motion.span>
-              </h1>
-              <p className="header-subtitle">
-                {t('welcome', 'Bienvenue')}, <span className="user-name">{user?.username || t('user', 'Utilisateur')}</span>
-                <span className="user-role"> • {user?.role || 'Administrateur'}</span>
-              </p>
-            </div>
-          </div>
-
-          <div className="header-center">
-            <div className="period-navigation">
-              {periods.map(period => (
-                <motion.button
-                  key={period.id}
-                  className={`period-btn ${activePeriod === period.id ? 'active' : ''}`}
-                  onClick={() => setActivePeriod(period.id)}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  {period.label}
-                </motion.button>
-              ))}
-            </div>
-          </div>
-
-          <div className="header-right">
-            <form className="search-bar-modern" onSubmit={handleSearch}>
-              <Search size={18} />
-              <input
-                type="text"
-                placeholder={t('search', 'Rechercher') + '...'}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="modern-input"
-              />
-            </form>
-
-            <div className="header-actions-modern">
-              <motion.button
-                className="theme-toggle"
-                onClick={toggleDarkMode}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                title={darkMode ? 'Mode clair' : 'Mode sombre'}
-              >
-                {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-              </motion.button>
-
-              <motion.button
-                className="refresh-btn-modern"
-                onClick={fetchDashboardData}
-                disabled={refreshing}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                title="Actualiser"
-              >
-                <RefreshCw className={refreshing ? 'spinning' : ''} size={20} />
-              </motion.button>
-
-              <motion.button
-                className="notifications-btn"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                title="Notifications"
-              >
-                <Bell size={20} />
-                <span className="notification-badge">3</span>
-              </motion.button>
-
-              <UserProfile user={user} onLogout={handleLogout} />
-            </div>
-          </div>
-        </div>
-      </motion.header>
-
       {/* Main Content */}
-      <main className="dashboard-main-modern">
-        {/* Stats Overview */}
-        <section className="stats-overview">
-          <div className="section-header">
-            <h2>Vue d'ensemble</h2>
-            <div className="section-actions">
-              <motion.button
-                className={`view-btn ${activeView === 'overview' ? 'active' : ''}`}
-                onClick={() => setActiveView('overview')}
+      <Row gutter={[24, 24]}>
+        {/* Left Column - 2/3 width */}
+        <Col xs={24} lg={16}>
+          {/* Quick Actions */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+          >
+            {renderQuickActions()}
+          </motion.div>
+
+          {/* Tabs Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            style={{ marginTop: 24 }}
+          >
+            <Card className="tabs-card">
+              <Tabs
+                activeKey={activeTab}
+                onChange={setActiveTab}
+                type="card"
               >
-                Vue générale
-              </motion.button>
-              <motion.button
-                className={`view-btn ${activeView === 'detailed' ? 'active' : ''}`}
-                onClick={() => setActiveView('detailed')}
-              >
-                Vue détaillée
-              </motion.button>
-            </div>
-          </div>
-
-          <div className="stats-grid-modern">
-            {statCards.map((card) => (
-              <AnimatedStatCard
-                key={card.id}
-                {...card}
-                loading={dashboardData.loading}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* Charts and Analytics */}
-        <section className="analytics-section">
-          <div className="analytics-grid">
-            {/* Revenue Chart */}
-            <GlassCard intensity="high" className="chart-card-modern">
-              <div className="chart-header">
-                <div className="chart-title">
-                  <h3>Revenus mensuels</h3>
-                  <p className="chart-subtitle">Évolution sur 6 mois</p>
-                </div>
-                <div className="chart-actions">
-                  <button className="chart-action-btn" onClick={() => toast.info('Téléchargement démarré')}>
-                    <Download size={16} />
-                  </button>
-                  <button className="chart-action-btn" onClick={() => toast.info('Plein écran activé')}>
-                    <Maximize2 size={16} />
-                  </button>
-                  <button className="chart-action-btn" onClick={() => window.location.href = '/statistiques'}>
-                    <Settings size={16} />
-                  </button>
-                </div>
-              </div>
-              
-              <div className="chart-container">
-                <div className="chart-grid">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className="chart-grid-line" />
-                  ))}
-                </div>
-                
-                <div className="chart-bars">
-                  {chartData.map((item, index) => (
-                    <motion.div
-                      key={index}
-                      className="chart-bar"
-                      initial={{ height: 0 }}
-                      animate={{ height: `${item.value}%` }}
-                      transition={{ delay: index * 0.1, type: "spring" }}
-                      whileHover={{ scale: 1.1 }}
-                    >
-                      <div className="chart-bar-fill" />
-                      <div className="chart-bar-label">{item.label}</div>
-                      <div className="chart-bar-tooltip">
-                        {formatCurrency(item.amount)}
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="chart-footer">
-                <div className="chart-stat">
-                  <span className="stat-label">Revenu total</span>
-                  <span className="stat-value">{formatCurrency(stats.monthlyRevenue || 0)}</span>
-                </div>
-                <div className="chart-stat">
-                  <span className="stat-label">Croissance</span>
-                  <span className="stat-value positive">+15.2%</span>
-                </div>
-                <div className="chart-stat">
-                  <span className="stat-label">Objectif</span>
-                  <span className="stat-value">94%</span>
-                </div>
-              </div>
-            </GlassCard>
-
-            {/* Activity Feed */}
-            <GlassCard intensity="medium" className="activity-card-modern">
-              <div className="activity-header">
-                <h3>Activité récente</h3>
-                <button 
-                  className="view-all-btn"
-                  onClick={() => window.location.href = '/consultations'}
+                <TabPane 
+                  tab={
+                    <Space>
+                      <EyeOutlined />
+                      {t('dashboard.recentConsultations')}
+                    </Space>
+                  } 
+                  key="consultations"
                 >
-                  Voir tout <ChevronRight size={14} />
-                </button>
-              </div>
-              
-              <div className="activity-list-modern">
-                {recentActivities.map((activity, index) => (
-                  <ActivityItem key={activity.id} activity={activity} index={index} />
+                  <Table
+                    columns={consultationColumns}
+                    dataSource={recentConsultations}
+                    loading={loading.consultations}
+                    pagination={false}
+                    size="middle"
+                    scroll={{ x: 800 }}
+                  />
+                </TabPane>
+                
+                <TabPane 
+                  tab={
+                    <Space>
+                      <UserOutlined />
+                      {t('dashboard.recentPatients')}
+                    </Space>
+                  } 
+                  key="patients"
+                >
+                  <Table
+                    columns={beneficiaireColumns}
+                    dataSource={recentBeneficiaires}
+                    loading={loading.beneficiaires}
+                    pagination={false}
+                    size="middle"
+                  />
+                </TabPane>
+                
+                <TabPane 
+                  tab={
+                    <Space>
+                      <FileTextOutlined />
+                      {t('dashboard.pendingPrescriptions')}
+                      <Badge 
+                        count={pendingPrescriptions.length} 
+                        style={{ backgroundColor: '#f5222d' }}
+                      />
+                    </Space>
+                  } 
+                  key="prescriptions"
+                >
+                  <Table
+                    columns={prescriptionColumns}
+                    dataSource={pendingPrescriptions}
+                    loading={loading.prescriptions}
+                    pagination={false}
+                    size="middle"
+                  />
+                </TabPane>
+              </Tabs>
+            </Card>
+          </motion.div>
+
+          {/* Revenue Chart */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            style={{ marginTop: 24 }}
+          >
+            <Card
+              title={
+                <Space>
+                  <LineChartOutlined />
+                  <Text strong>{t('dashboard.revenueTrend')}</Text>
+                </Space>
+              }
+              className="chart-card"
+            >
+              {revenueData.length > 0 ? (
+                <div style={{ height: 300 }}>
+                  {/* Simple bar chart using divs */}
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'flex-end', 
+                    height: 200,
+                    marginTop: 40,
+                    gap: 20,
+                    justifyContent: 'center'
+                  }}>
+                    {revenueData.map((item, index) => {
+                      const maxRevenue = Math.max(...revenueData.map(d => d.revenue));
+                      const height = (item.revenue / maxRevenue) * 160;
+                      return (
+                        <div key={index} style={{ textAlign: 'center' }}>
+                          <div style={{ 
+                            height: height,
+                            width: 40,
+                            backgroundColor: '#1890ff',
+                            borderRadius: '4px 4px 0 0',
+                            position: 'relative'
+                          }}>
+                            <div style={{
+                              position: 'absolute',
+                              top: -25,
+                              left: '50%',
+                              transform: 'translateX(-50%)',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              <Text strong>{formatCurrency(item.revenue)}</Text>
+                            </div>
+                          </div>
+                          <div style={{ marginTop: 8 }}>
+                            <Text strong>{item.month}</Text>
+                          </div>
+                          <div>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              {item.consultations} {t('dashboard.consultations')}
+                            </Text>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <Skeleton active />
+                </div>
+              )}
+            </Card>
+          </motion.div>
+        </Col>
+
+        {/* Right Column - 1/3 width */}
+        <Col xs={24} lg={8}>
+          {/* System Status */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+          >
+            {renderSystemStatus()}
+          </motion.div>
+
+          {/* System Alerts */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.1 }}
+            style={{ marginTop: 24 }}
+          >
+            <Card
+              title={
+                <Space>
+                  <BellOutlined />
+                  <Text strong>{t('dashboard.systemAlerts')}</Text>
+                  {systemAlerts.length > 0 && (
+                    <Badge count={systemAlerts.length} />
+                  )}
+                </Space>
+              }
+              className="alerts-card"
+            >
+              {systemAlerts.length > 0 ? (
+                <List
+                  dataSource={systemAlerts}
+                  renderItem={(alert, index) => (
+                    <List.Item
+                      key={index}
+                      style={{ 
+                        padding: '12px 0',
+                        borderBottom: '1px solid #f0f0f0',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => handleAlertClick(alert)}
+                    >
+                      <List.Item.Meta
+                        avatar={
+                          <Avatar 
+                            size="small"
+                            style={{ 
+                              backgroundColor: alert.type === 'error' ? '#f5222d' :
+                                            alert.type === 'warning' ? '#fa8c16' :
+                                            alert.type === 'info' ? '#1890ff' : '#52c41a'
+                            }}
+                            icon={
+                              alert.type === 'error' ? <WarningOutlined /> :
+                              alert.type === 'warning' ? <WarningOutlined /> :
+                              <InfoCircleOutlined />
+                            }
+                          />
+                        }
+                        title={<Text strong>{alert.title}</Text>}
+                        description={
+                          <div>
+                            <Text type="secondary">{alert.message}</Text>
+                            <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                              {alert.time}
+                            </div>
+                          </div>
+                        }
+                      />
+                    </List.Item>
+                  )}
+                />
+              ) : (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <CheckCircleOutlined style={{ fontSize: 48, color: '#52c41a' }} />
+                  <div style={{ marginTop: 16 }}>
+                    <Text strong>{t('dashboard.noAlerts')}</Text>
+                  </div>
+                  <Text type="secondary">
+                    {t('dashboard.systemNormal')}
+                  </Text>
+                </div>
+              )}
+            </Card>
+          </motion.div>
+
+          {/* Activity Timeline */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+            style={{ marginTop: 24 }}
+          >
+            <Card
+              title={
+                <Space>
+                  <ClockCircleOutlined />
+                  <Text strong>{t('dashboard.recentActivity')}</Text>
+                </Space>
+              }
+              className="timeline-card"
+            >
+              <Timeline>
+                {activityTimeline.map((activity, index) => (
+                  <Timeline.Item
+                    key={index}
+                    color={activity.color}
+                    dot={activity.icon}
+                  >
+                    <div>
+                      <Text strong>{activity.title}</Text>
+                      <div>
+                        <Text type="secondary">{activity.content}</Text>
+                      </div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {activity.time}
+                      </Text>
+                    </div>
+                  </Timeline.Item>
                 ))}
-              </div>
-            </GlassCard>
-          </div>
-        </section>
-
-        {/* System and Remboursement */}
-        <section className="system-remboursement-section">
-          <div className="system-remboursement-grid">
-            {/* System Status */}
-            <SystemStatus 
-              status={dashboardData.consultations.length > 0 ? 'active' : 'error'}
-              items={systemStatusItems}
-              loading={dashboardData.loading}
-            />
-
-            {/* Remboursement Stats */}
-            <GlassCard intensity="high" className="remboursement-card-modern" glow>
-              <div className="remboursement-header">
-                <h3>Remboursements</h3>
-                <div className="remboursement-status">
-                  <span className="status-dot active" />
-                  <span className="status-text">En traitement</span>
-                </div>
-              </div>
+              </Timeline>
               
-              <div className="remboursement-stats-modern">
-                <div className="remboursement-stat-modern">
-                  <div className="stat-icon">
-                    <FileText size={20} />
-                  </div>
-                  <div className="stat-content">
-                    <h4>{formatNumber(dashboardData.prestations.filter(p => 
-                      p.STATUT_DECLARATION === 'declare' || p.STATUT === 'soumis'
-                    ).length)}</h4>
-                    <p>Déclarations soumises</p>
-                  </div>
+              {activityTimeline.length === 0 && (
+                <div style={{ textAlign: 'center', padding: 20 }}>
+                  <Text type="secondary">{t('dashboard.noRecentActivity')}</Text>
                 </div>
-                
-                <div className="remboursement-stat-modern">
-                  <div className="stat-icon">
-                    <DollarSign size={20} />
-                  </div>
-                  <div className="stat-content">
-                    <h4>{formatCurrency(dashboardData.prestations.reduce((sum, p) => {
-                      if (p.STATUT_PAIEMENT === 'À payer' || p.statut === 'non_paye') {
-                        return sum + (p.MONTANT_PRISE_CHARGE || p.montant_prise_charge || 0);
-                      }
-                      return sum;
-                    }, 0))}</h4>
-                    <p>Montant à payer</p>
-                  </div>
-                </div>
-                
-                <div className="remboursement-stat-modern">
-                  <div className="stat-icon">
-                    <CheckCircle size={20} />
-                  </div>
-                  <div className="stat-content">
-                    <h4>{formatCurrency(dashboardData.prestations.reduce((sum, p) => {
-                      if (p.STATUT_PAIEMENT === 'Payé' || p.statut === 'paye') {
-                        return sum + (p.MONTANT_PRISE_CHARGE || p.montant_prise_charge || 0);
-                      }
-                      return sum;
-                    }, 0))}</h4>
-                    <p>Payés ce mois</p>
-                  </div>
-                </div>
-              </div>
-              
-              <motion.div 
-                className="remboursement-progress"
-                initial={{ width: 0 }}
-                animate={{ width: '75%' }}
-                transition={{ duration: 1.5 }}
-              >
-                <div className="progress-bar">
-                  <div className="progress-fill" />
-                </div>
-                <div className="progress-label">
-                  <span>Progression: 75%</span>
-                  <span>{formatCurrency(3375000)}</span>
-                </div>
-              </motion.div>
-              
-              <button 
-                className="view-remboursements-btn"
-                onClick={() => window.location.href = '/remboursements'}
-              >
-                Gérer les remboursements
-                <ChevronRight size={16} />
-              </button>
-            </GlassCard>
-          </div>
-        </section>
+              )}
+            </Card>
+          </motion.div>
 
-        {/* Quick Actions */}
-        <section className="quick-actions-section-modern">
-          <div className="section-header">
-            <h2>Actions rapides</h2>
-            <p className="section-subtitle">Accédez rapidement aux fonctionnalités principales</p>
-          </div>
-          
-          <div className="actions-grid-modern">
-            {quickActions.map((action, index) => (
-              <QuickActionButton
-                key={index}
-                icon={action.icon}
-                label={action.label}
-                color={action.color}
-                onClick={action.onClick}
-                index={index}
-              />
-            ))}
-          </div>
-        </section>
-      </main>
+          {/* Center Distribution */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.3 }}
+            style={{ marginTop: 24 }}
+          >
+            <Card
+              title={
+                <Space>
+                  <PieChartOutlined />
+                  <Text strong>{t('dashboard.centerDistribution')}</Text>
+                </Space>
+              }
+              className="distribution-card"
+            >
+              {centerDistribution.length > 0 ? (
+                <div>
+                  {centerDistribution.map((item, index) => (
+                    <div 
+                      key={index} 
+                      style={{ 
+                        marginBottom: 16,
+                        padding: '8px 0'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Space>
+                          <div style={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: '50%',
+                            backgroundColor: item.color
+                          }} />
+                          <Text>{item.type}</Text>
+                        </Space>
+                        <Text strong>{item.count} ({item.percent}%)</Text>
+                      </div>
+                      <Progress
+                        percent={item.percent}
+                        strokeColor={item.color}
+                        size="small"
+                        showInfo={false}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: 20 }}>
+                  <Skeleton active />
+                </div>
+              )}
+            </Card>
+          </motion.div>
+        </Col>
+      </Row>
 
       {/* Footer */}
-      <footer className="dashboard-footer-modern">
-        <div className="footer-content-modern">
-          <div className="footer-info-modern">
-            <div className="update-info-modern">
-              <span className="update-label">Dernière mise à jour:</span>
-              <span className="update-time">{formatDate(lastUpdate)}</span>
-            </div>
-            
-            <div className="system-info-modern">
-              <div className="system-item">
-                <Wifi size={12} />
-                <span>Connecté • Ping: 42ms</span>
-              </div>
-              <div className="system-item">
-                <Database size={12} />
-                <span>Base de données: Active</span>
-              </div>
-              <div className="system-item">
-                <Shield size={12} />
-                <span>Sécurité: Niveau Max</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="footer-meta-modern">
-            <span className="version">HealthCenterSoft v2.0 • Production</span>
-            <span className="language">Langue: Français</span>
-            <span className="copyright">© {new Date().getFullYear()} Tous droits réservés</span>
-          </div>
-        </div>
-      </footer>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        style={{ marginTop: 24 }}
+      >
+        <Card className="dashboard-footer-card">
+          <Row align="middle">
+            <Col flex="auto">
+              <Space>
+                <Text type="secondary">
+                  © {new Date().getFullYear()} HealthCenterSoft • v2.0.0 • 
+                  {t('dashboard.environment')}: {import.meta.env.VITE_NODE_ENV || 'développement'} • 
+                  {t('dashboard.user')}: {user?.username || 'N/A'}
+                </Text>
+              </Space>
+            </Col>
+            <Col>
+              <Space>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<FileTextOutlined />}
+                  onClick={() => window.open('/docs', '_blank')}
+                >
+                  {t('dashboard.documentation')}
+                </Button>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<InfoCircleOutlined />}
+                  onClick={() => window.open('/support', '_blank')}
+                >
+                  {t('dashboard.support')}
+                </Button>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  onClick={() => exportPDFAPI.exportDashboard()}
+                >
+                  {t('dashboard.export')}
+                </Button>
+              </Space>
+            </Col>
+          </Row>
+        </Card>
+      </motion.div>
     </div>
   );
 };
 
-export default DashboardModern;
+// Ajouter l'icône manquante
+import { RocketOutlined } from '@ant-design/icons';
+
+export default Dashboard;

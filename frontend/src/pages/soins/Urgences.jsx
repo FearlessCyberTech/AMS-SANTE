@@ -1,4 +1,4 @@
-// src/pages/UrgencesPage.jsx - VERSION ANT DESIGN
+// src/pages/UrgencesPage.jsx - VERSION CORRIGÉE
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Card,
@@ -20,14 +20,12 @@ import {
   List,
   Descriptions,
   Alert,
-  Progress,
   Tooltip,
   Popconfirm,
   Spin,
   Tabs,
   Badge,
   Typography,
-  Upload,
   message,
   Drawer,
   Collapse
@@ -53,24 +51,14 @@ import {
   FilterOutlined,
   DownloadOutlined,
   UploadOutlined,
-  BarChartOutlined,
-  LineChartOutlined,
-  PieChartOutlined,
-  HeartOutlined,
   AlertOutlined,
   ScheduleOutlined,
   EnvironmentOutlined,
   PhoneOutlined,
   MailOutlined,
-  IdcardOutlined,
-
 } from '@ant-design/icons';
 import moment from 'moment';
 import 'moment/locale/fr';
-
-// Import API
-import api from '../../services/api';
-const { consultations, prestataires } = api;
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -113,7 +101,8 @@ const SERVICES = [
 const getSafeDate = (dateString, defaultValue = moment()) => {
   if (!dateString) return defaultValue;
   try {
-    return moment(dateString).isValid() ? moment(dateString) : defaultValue;
+    const date = moment(dateString);
+    return date.isValid() ? date : defaultValue;
   } catch {
     return defaultValue;
   }
@@ -129,7 +118,7 @@ const formatSafeDate = (date, formatStr = 'DD/MM/YYYY') => {
 };
 
 const getSafeValue = (value, defaultValue = '') => {
-  if (value === undefined || value === null) return defaultValue;
+  if (value === undefined || value === null || value === '') return defaultValue;
   return value;
 };
 
@@ -146,6 +135,54 @@ const calculateWaitingTime = (arrivalTime) => {
     return diffMinutes;
   } catch {
     return null;
+  }
+};
+
+// ==============================================
+// FONCTION fetchAPI GLOBALE
+// ==============================================
+
+// Fonction fetchAPI réutilisable
+const fetchAPI = async (endpoint, options = {}) => {
+  const baseUrl = 'http://localhost:3000/api';
+  const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
+  
+  const defaultOptions = {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+    },
+    credentials: 'include'
+  };
+
+  const config = {
+    ...defaultOptions,
+    ...options,
+    headers: {
+      ...defaultOptions.headers,
+      ...options.headers
+    }
+  };
+
+  if (options.body && typeof options.body === 'object') {
+    config.body = JSON.stringify(options.body);
+  }
+
+  try {
+    console.log(`📞 API Call: ${config.method || 'GET'} ${url}`);
+    
+    const response = await fetch(url, config);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error(`❌ API Error ${url}:`, error);
+    throw error;
   }
 };
 
@@ -210,7 +247,10 @@ const UrgenceDetailDrawer = ({
 
   const formatFullDate = (date, heure) => {
     try {
-      return moment(date).format('DD/MM/YYYY HH:mm');
+      if (heure) {
+        return `${formatSafeDate(date, 'DD/MM/YYYY')} ${heure}`;
+      }
+      return formatSafeDate(date, 'DD/MM/YYYY HH:mm');
     } catch {
       return 'N/A';
     }
@@ -271,16 +311,16 @@ const UrgenceDetailDrawer = ({
           {getSafeValue(urgence.patient_id, 'N/A')}
         </Descriptions.Item>
         <Descriptions.Item label="Âge">
-          35 ans {/* À remplacer par le calcul d'âge réel */}
+          {urgence.patient_age || 'N/A'}
         </Descriptions.Item>
         <Descriptions.Item label="Sexe">
-          Masculin {/* À remplacer par les données réelles */}
+          {urgence.patient_sexe || 'N/A'}
         </Descriptions.Item>
         <Descriptions.Item label="Téléphone">
-          <PhoneOutlined /> 06 12 34 56 78
+          <PhoneOutlined /> {urgence.patient_telephone || 'N/A'}
         </Descriptions.Item>
         <Descriptions.Item label="Email">
-          <MailOutlined /> patient@example.com
+          <MailOutlined /> {urgence.patient_email || 'N/A'}
         </Descriptions.Item>
       </Descriptions>
     </Card>
@@ -293,14 +333,14 @@ const UrgenceDetailDrawer = ({
           <List.Item.Meta
             avatar={<CalendarOutlined />}
             title="Date et heure d'arrivée"
-            description={formatFullDate(urgence.date_arrivee, urgence.heure_arrivee)}
+            description={formatFullDate(urgence.date_consultation, urgence.heure_consultation)}
           />
         </List.Item>
         <List.Item>
           <List.Item.Meta
             avatar={<ClockCircleOutlined />}
             title="Temps d'attente"
-            description={<WaitingTimeTag arrivalTime={urgence.date_arrivee} />}
+            description={<WaitingTimeTag arrivalTime={urgence.date_consultation} />}
           />
         </List.Item>
         <List.Item>
@@ -327,10 +367,10 @@ const UrgenceDetailDrawer = ({
           {getSafeValue(urgence.gravite, 'Non évaluée')}
         </Descriptions.Item>
         <Descriptions.Item label="Allergies">
-          Aucune connue
+          {urgence.allergies || 'Aucune connue'}
         </Descriptions.Item>
         <Descriptions.Item label="Antécédents">
-          Hypertension artérielle
+          {urgence.antecedents || 'Non renseignés'}
         </Descriptions.Item>
       </Descriptions>
     </Card>
@@ -345,26 +385,18 @@ const UrgenceDetailDrawer = ({
               <Avatar 
                 size="small"
                 style={{ backgroundColor: '#52c41a' }}
-              />
+              >
+                {urgence.praticien_nom?.charAt(0)}
+              </Avatar>
             }
             title="Médecin traitant"
-            description={getSafeValue(urgence.medecin_nom, 'Non affecté')}
+            description={getSafeValue(urgence.praticien_nom_complet, 'Non affecté')}
           />
-          <Button type="link" size="small">Contacter</Button>
-        </List.Item>
-        <List.Item>
-          <List.Item.Meta
-            avatar={
-              <Avatar 
-                size="small"
-                style={{ backgroundColor: '#722ed1' }}
-                icon={<UserOutlined />}
-              />
-            }
-            title="Infirmier(ère)"
-            description="Marie Dupont"
-          />
-          <Button type="link" size="small">Contacter</Button>
+          {urgence.praticien_telephone && (
+            <Button type="link" size="small">
+              <PhoneOutlined /> Contacter
+            </Button>
+          )}
         </List.Item>
       </List>
     </Card>
@@ -468,7 +500,7 @@ const UrgenceDetailDrawer = ({
       <Collapse ghost>
         <Panel header="Notes et Observations" key="1">
           <TextArea
-            defaultValue={getSafeValue(urgence.notes, 'Aucune note')}
+            defaultValue={getSafeValue(urgence.observations, 'Aucune note')}
             rows={4}
             placeholder="Ajouter des notes..."
           />
@@ -533,71 +565,172 @@ const UrgenceModal = ({ open, onClose, onSave, initialData }) => {
     if (initialData) {
       form.setFieldsValue({
         ...initialData,
-        date_arrivee: initialData.date_arrivee ? moment(initialData.date_arrivee) : moment(),
-        heure_arrivee: initialData.heure_arrivee ? moment(initialData.heure_arrivee, 'HH:mm:ss') : moment()
+        date_consultation: initialData.date_consultation ? moment(initialData.date_consultation) : moment(),
+        heure_consultation: initialData.heure_consultation ? moment(initialData.heure_consultation, 'HH:mm:ss') : moment()
       });
     } else {
       form.resetFields();
       form.setFieldsValue({
-        date_arrivee: moment(),
-        heure_arrivee: moment(),
+        date_consultation: moment(),
+        heure_consultation: moment(),
         priorite: 3,
         gravite: 3,
         service: 'Général',
-        statut: 'en_attente'
+        statut: 'en_attente',
+        urgent: true,
+        type_consultation: 'urgence'
       });
     }
   }, [initialData, form]);
 
-  const handleSearchPatient = async (value) => {
-    if (value.length < 2) {
+ const handleSearchPatient = async (value) => {
+  if (value.length < 2) {
+    setPatientsList([]);
+    return;
+  }
+  
+  setLoadingPatients(true);
+  try {
+    // CORRECTION: Utiliser POST au lieu de GET
+    const response = await fetchAPI('/beneficiaires/search', {
+      method: 'POST',
+      body: {
+        searchTerm: value,
+        limit: 10
+      }
+    });
+    
+    if (response?.success) {
+      // CORRECTION: Utiliser les bonnes clés de données
+      const patients = response.beneficiaires || response.data || [];
+      setPatientsList(patients);
+    } else {
       setPatientsList([]);
-      return;
     }
-    
-    setLoadingPatients(true);
-    try {
-      const response = await consultations.searchPatientsAdvanced(value, {}, 10, 1);
-      if (response.success) {
-        const patients = response.beneficiaires || response.patients || [];
-        setPatientsList(patients);
-      }
-    } catch (error) {
-      console.error('Erreur recherche patients:', error);
-    } finally {
-      setLoadingPatients(false);
-    }
-  };
+  } catch (error) {
+    console.error('Erreur recherche patients:', error);
+    message.error('Erreur lors de la recherche des patients');
+    setPatientsList([]);
+  } finally {
+    setLoadingPatients(false);
+  }
+};
 
-  const handleSearchMedecin = async (value) => {
-    if (value.length < 2) {
-      setMedecinsList([]);
-      return;
+const handleSearchMedecin = async (value) => {
+  if (value.length < 2) {
+    setMedecinsList([]);
+    return;
+  }
+  
+  setLoadingMedecins(true);
+  try {
+    // Récupérer le centre de l'utilisateur depuis le localStorage
+    const userData = localStorage.getItem('user');
+    let userCentre = null;
+    
+    if (userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        userCentre = parsedUser.COD_CEN || parsedUser.centre_id;
+      } catch (e) {
+        console.error('Erreur parsing user data:', e);
+      }
     }
     
-    setLoadingMedecins(true);
-    try {
-      const response = await prestataires.searchQuick(value, 10);
-      if (response.success) {
-        const medecins = response.prestataires || [];
-        setMedecinsList(medecins);
-      }
-    } catch (error) {
-      console.error('Erreur recherche médecins:', error);
-    } finally {
-      setLoadingMedecins(false);
+    // Construire l'URL avec les paramètres
+    let url = `/prestataires/search?search=${encodeURIComponent(value)}&limit=10`;
+    
+    // Ajouter le filtre par centre si l'utilisateur n'est pas superadmin
+    // (Le backend va automatiquement filtrer par centre si l'utilisateur n'est pas superadmin)
+    if (userCentre && userCentre !== 'undefined') {
+      url += `&centre_id=${userCentre}`;
     }
-  };
+    
+    console.log('🔍 Recherche médecins avec URL:', url);
+    
+    const response = await fetchAPI(url);
+    
+    if (response?.success) {
+      console.log('✅ Médecins trouvés:', response.prestataires);
+      setMedecinsList(response.prestataires || []);
+    } else {
+      console.error('❌ Erreur recherche médecins:', response?.message);
+      setMedecinsList([]);
+    }
+  } catch (error) {
+    console.error('❌ Erreur recherche médecins:', error);
+    message.error('Erreur lors de la recherche des médecins');
+    setMedecinsList([]);
+  } finally {
+    setLoadingMedecins(false);
+  }
+};
+
+// CORRECTION dans le rendu du Select des médecins
+<Select
+  showSearch
+  placeholder="Rechercher un médecin..."
+  onSearch={handleSearchMedecin}
+  loading={loadingMedecins}
+  filterOption={false}
+  optionLabelProp="label"
+  style={{ width: '100%' }}
+>
+  {medecinsList.map(medecin => {
+    // CORRECTION: Utiliser les bonnes propriétés
+    const id = medecin.id || medecin.COD_PRE;
+    const nom = medecin.nom || medecin.NOM_PRESTATAIRE || '';
+    const prenom = medecin.prenom || medecin.PRENOM_PRESTATAIRE || '';
+    const specialite = medecin.specialite || medecin.SPECIALITE || '';
+    const titre = medecin.titre || '';
+    const telephone = medecin.telephone || medecin.TELEPHONE || '';
+    const nomComplet = medecin.nom_complet || `${prenom} ${nom}`.trim();
+    
+    return (
+      <Option 
+        key={id} 
+        value={id}
+        label={nomComplet}
+      >
+        <Space>
+          <Avatar size="small" style={{ backgroundColor: '#1890ff' }}>
+            {prenom.charAt(0)}{nom.charAt(0)}
+          </Avatar>
+          <div style={{ minWidth: 200 }}>
+            <div style={{ fontWeight: '500' }}>
+              {prenom} {nom} {titre ? `(${titre})` : ''}
+            </div>
+            <Text type="secondary" style={{ fontSize: '12px', display: 'block' }}>
+              {specialite || 'Médecin'}
+            </Text>
+            {telephone && (
+              <Text type="secondary" style={{ fontSize: '11px', display: 'block' }}>
+                📞 {telephone}
+              </Text>
+            )}
+            {medecin.nom_centre && (
+              <Text type="secondary" style={{ fontSize: '11px', display: 'block' }}>
+                🏥 {medecin.nom_centre}
+              </Text>
+            )}
+          </div>
+        </Space>
+      </Option>
+    );
+  })}
+</Select>
 
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
       const urgenceData = {
         ...values,
-        date_arrivee: values.date_arrivee.format('YYYY-MM-DD'),
-        heure_arrivee: values.heure_arrivee.format('HH:mm:ss'),
+        date_consultation: values.date_consultation.format('YYYY-MM-DD'),
+        heure_consultation: values.heure_consultation.format('HH:mm:ss'),
         type_consultation: 'urgence',
-        is_urgence: true
+        urgent: true,
+        STATUT_CONSULTATION: values.statut,
+        PRIORITE: values.priorite
       };
       
       await onSave(urgenceData, isEdit);
@@ -647,65 +780,52 @@ const UrgenceModal = ({ open, onClose, onSave, initialData }) => {
         <Tabs defaultActiveKey="patient">
           <TabPane tab="Patient" key="patient">
             <Form.Item
-              name="patient_id"
+              name="COD_BEN"
               label="Patient"
               rules={[{ required: true, message: 'Veuillez sélectionner un patient' }]}
             >
               <Select
-                showSearch
-                placeholder="Rechercher un patient..."
-                onSearch={handleSearchPatient}
-                loading={loadingPatients}
-                filterOption={false}
-                optionLabelProp="label"
-              >
-                {patientsList.map(patient => (
-                  <Option 
-                    key={patient.id || patient.ID_BEN} 
-                    value={patient.id || patient.ID_BEN}
-                    label={`${patient.prenom || patient.PRE_BEN} ${patient.nom || patient.NOM_BEN}`}
-                  >
-                    <Space>
-                      <Avatar size="small" icon={<UserOutlined />} />
-                      <div>
-                        <div>{patient.prenom || patient.PRE_BEN} {patient.nom || patient.NOM_BEN}</div>
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                          ID: {patient.identifiant || patient.IDENTIFIANT_NATIONAL}
-                        </Text>
-                      </div>
-                    </Space>
-                  </Option>
-                ))}
-              </Select>
+  showSearch
+  placeholder="Rechercher un patient..."
+  onSearch={handleSearchPatient}
+  loading={loadingPatients}
+  filterOption={false}
+  optionLabelProp="label"
+>
+  {patientsList.map(patient => {
+    // CORRECTION: Vérifier l'existence des propriétés
+    const nom = patient.nom || patient.NOM_BEN || '';
+    const prenom = patient.prenom || patient.PRE_BEN || '';
+    const identifiant = patient.identifiant_national || patient.IDENTIFIANT_NATIONAL || '';
+    const telephone = patient.telephone_mobile || patient.TELEPHONE_MOBILE || '';
+    
+    return (
+      <Option 
+        key={patient.id || patient.COD_BEN} 
+        value={patient.id || patient.COD_BEN}
+        label={`${prenom} ${nom}`}
+      >
+        <Space>
+          <Avatar size="small" icon={<UserOutlined />} />
+          <div>
+            <div>{prenom} {nom}</div>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              ID: {identifiant} - Tél: {telephone}
+            </Text>
+          </div>
+        </Space>
+      </Option>
+    );
+  })}
+</Select>
             </Form.Item>
-
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  name="patient_nom"
-                  label="Nom"
-                  rules={[{ required: true, message: 'Veuillez saisir le nom' }]}
-                >
-                  <Input placeholder="Nom du patient" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="patient_prenom"
-                  label="Prénom"
-                  rules={[{ required: true, message: 'Veuillez saisir le prénom' }]}
-                >
-                  <Input placeholder="Prénom du patient" />
-                </Form.Item>
-              </Col>
-            </Row>
           </TabPane>
 
           <TabPane tab="Admission" key="admission">
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
-                  name="date_arrivee"
+                  name="date_consultation"
                   label="Date d'arrivée"
                   rules={[{ required: true, message: 'Veuillez sélectionner la date' }]}
                 >
@@ -714,7 +834,7 @@ const UrgenceModal = ({ open, onClose, onSave, initialData }) => {
               </Col>
               <Col span={12}>
                 <Form.Item
-                  name="heure_arrivee"
+                  name="heure_consultation"
                   label="Heure d'arrivée"
                   rules={[{ required: true, message: 'Veuillez sélectionner l\'heure' }]}
                 >
@@ -745,11 +865,11 @@ const UrgenceModal = ({ open, onClose, onSave, initialData }) => {
                   rules={[{ required: true, message: 'Veuillez sélectionner la gravité' }]}
                 >
                   <Select>
-                    <Option value={1}>Critique</Option>
-                    <Option value={2}>Sévère</Option>
-                    <Option value={3}>Modérée</Option>
-                    <Option value={4}>Légère</Option>
-                    <Option value={5}>Minime</Option>
+                    <Option value="critique">Critique</Option>
+                    <Option value="severe">Sévère</Option>
+                    <Option value="moderee">Modérée</Option>
+                    <Option value="legere">Légère</Option>
+                    <Option value="minime">Minime</Option>
                   </Select>
                 </Form.Item>
               </Col>
@@ -788,7 +908,7 @@ const UrgenceModal = ({ open, onClose, onSave, initialData }) => {
 
           <TabPane tab="Affectation" key="affectation">
             <Form.Item
-              name="medecin_id"
+              name="COD_PRE"
               label="Médecin"
             >
               <Select
@@ -801,16 +921,16 @@ const UrgenceModal = ({ open, onClose, onSave, initialData }) => {
               >
                 {medecinsList.map(medecin => (
                   <Option 
-                    key={medecin.id || medecin.COD_PRE} 
-                    value={medecin.id || medecin.COD_PRE}
-                    label={`${medecin.prenom || medecin.PRENOM_PRESTATAIRE} ${medecin.nom || medecin.NOM_PRESTATAIRE}`}
+                    key={medecin.COD_PRE} 
+                    value={medecin.COD_PRE}
+                    label={`${medecin.PRENOM_PRESTATAIRE} ${medecin.NOM_PRESTATAIRE}`}
                   >
                     <Space>
                       <Avatar size="small" />
                       <div>
-                        <div>{medecin.prenom || medecin.PRENOM_PRESTATAIRE} {medecin.nom || medecin.NOM_PRESTATAIRE}</div>
+                        <div>{medecin.PRENOM_PRESTATAIRE} {medecin.NOM_PRESTATAIRE}</div>
                         <Text type="secondary" style={{ fontSize: '12px' }}>
-                          {medecin.specialite || medecin.SPECIALITE || 'Spécialité non définie'}
+                          {medecin.SPECIALITE || 'Spécialité non définie'}
                         </Text>
                       </div>
                     </Space>
@@ -834,7 +954,7 @@ const UrgenceModal = ({ open, onClose, onSave, initialData }) => {
             </Form.Item>
 
             <Form.Item
-              name="notes"
+              name="observations"
               label="Notes supplémentaires"
             >
               <TextArea rows={3} placeholder="Informations complémentaires" />
@@ -853,7 +973,10 @@ const UrgenceModal = ({ open, onClose, onSave, initialData }) => {
 const UrgencesPage = () => {
   // États principaux
   const [urgences, setUrgences] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState({
+    liste: false,
+    actions: false
+  });
   const [error, setError] = useState(null);
   
   // États pour les modales
@@ -882,11 +1005,16 @@ const UrgencesPage = () => {
 
   // Chargement des urgences
   const loadUrgences = useCallback(async () => {
-    setLoading(true);
+    setLoading(prev => ({ ...prev, liste: true }));
     setError(null);
     
     try {
-      const queryParams = {};
+      const queryParams = {
+        page: pagination.current,
+        limit: pagination.pageSize,
+        urgent: true,
+        type_consultation: 'urgence'
+      };
       
       if (filters.dateRange?.[0]) {
         queryParams.date_debut = filters.dateRange[0].format('YYYY-MM-DD');
@@ -896,50 +1024,120 @@ const UrgencesPage = () => {
         queryParams.date_fin = filters.dateRange[1].format('YYYY-MM-DD');
       }
       
-      queryParams.is_urgence = true;
-      queryParams.type_consultation = 'urgence';
+      if (filters.statut !== 'tous') {
+        queryParams.statut_consultation = filters.statut;
+      }
       
-      const response = await consultations.getAllConsultations(queryParams);
+      if (filters.priorite !== 'tous') {
+        queryParams.priorite = filters.priorite;
+      }
       
-      if (response.success) {
+      if (filters.service !== 'tous') {
+        queryParams.service = filters.service;
+      }
+      
+      if (filters.search) {
+        queryParams.search = filters.search;
+      }
+
+      console.log('🔍 Chargement urgences avec params:', queryParams);
+      
+      // Construire l'URL avec les paramètres
+      const params = new URLSearchParams();
+      Object.keys(queryParams).forEach(key => {
+        if (queryParams[key] !== undefined && queryParams[key] !== null) {
+          params.append(key, queryParams[key]);
+        }
+      });
+      
+      const response = await fetchAPI(`/consultations/list?${params.toString()}`);
+      
+      console.log('📋 Réponse API Urgences:', response);
+      
+      if (response?.success) {
         const urgencesList = (response.consultations || []).map(cons => {
-          const dateArrivee = cons.DATE_CONSULTATION || cons.date_arrivee || cons.date_consultation;
-          const heureArrivee = cons.HEURE_CONSULTATION || cons.heure_arrivee || cons.heure_consultation;
-          
           return {
-            id: getSafeValue(cons.COD_CONS || cons.id || cons.ID_CONSULTATION, Date.now()),
-            patient_id: getSafeValue(cons.ID_BEN || cons.patient_id || cons.COD_BEN),
-            patient_nom: getSafeValue(cons.NOM_BEN || cons.patient_nom || cons.nom_patient, 'Inconnu'),
-            patient_prenom: getSafeValue(cons.PRE_BEN || cons.patient_prenom || cons.prenom_patient, ''),
-            date_arrivee: dateArrivee,
-            heure_arrivee: heureArrivee,
-            motif: getSafeValue(cons.MOTIF_CONSULTATION || cons.motif, 'Non spécifié'),
-            symptomes: getSafeValue(cons.SYMPTOMES || cons.symptomes, ''),
-            gravite: getSafeValue(cons.GRAVITE || cons.gravite, 3),
-            priorite: getSafeValue(cons.PRIORITE || cons.priorite, 3),
-            medecin_id: getSafeValue(cons.COD_MED || cons.medecin_id),
-            medecin_nom: getSafeValue(cons.NOM_MEDECIN || cons.medecin_nom || cons.nom_medecin, 'Non affecté'),
-            service: getSafeValue(cons.SERVICE || cons.service, 'Général'),
-            notes: getSafeValue(cons.OBSERVATIONS || cons.notes, ''),
-            statut: getSafeValue(cons.STATUT_CONSULTATION || cons.statut || cons.statut_consultation, 'en_attente'),
-            created_at: getSafeValue(cons.DAT_CREUTIL || cons.created_at, moment().toISOString()),
-            updated_at: getSafeValue(cons.DAT_MODUTIL || cons.updated_at, moment().toISOString())
+            id: getSafeValue(cons.id || cons.COD_CONS, Date.now()),
+            COD_CONS: cons.COD_CONS,
+            patient_id: getSafeValue(cons.patient_id || cons.COD_BEN),
+            patient_nom: getSafeValue(cons.patient_nom || cons.NOM_BEN, 'Inconnu'),
+            patient_prenom: getSafeValue(cons.patient_prenom || cons.PRE_BEN, ''),
+            patient_age: getSafeValue(cons.patient_age),
+            patient_sexe: getSafeValue(cons.patient_sexe || cons.SEX_BEN),
+            patient_telephone: getSafeValue(cons.patient_telephone || cons.TELEPHONE_MOBILE),
+            date_consultation: cons.date_consultation || cons.DATE_CONSULTATION,
+            heure_consultation: cons.heure_consultation || cons.HEURE_CONSULTATION,
+            motif: getSafeValue(cons.motif || cons.MOTIF_CONSULTATION, 'Non spécifié'),
+            symptomes: getSafeValue(cons.symptomes || cons.SYMPTOMES, ''),
+            gravite: getSafeValue(cons.gravite || cons.GRAVITE, 'moderee'),
+            priorite: getSafeValue(cons.priorite || cons.PRIORITE, 3),
+            COD_PRE: getSafeValue(cons.praticien_code || cons.COD_PRE),
+            praticien_nom: getSafeValue(cons.praticien_nom || cons.NOM_PRESTATAIRE, 'Non affecté'),
+            praticien_prenom: getSafeValue(cons.praticien_prenom || cons.PRENOM_PRESTATAIRE, ''),
+            praticien_nom_complet: getSafeValue(
+              cons.praticien_nom_complet || 
+              `${cons.PRENOM_PRESTATAIRE || ''} ${cons.NOM_PRESTATAIRE || ''}`.trim() || 
+              'Non affecté'
+            ),
+            service: getSafeValue(cons.service || cons.SERVICE, 'Général'),
+            observations: getSafeValue(cons.observations || cons.OBSERVATIONS, ''),
+            statut: getSafeValue(cons.statut || cons.STATUT_CONSULTATION, 'en_attente'),
+            type_consultation: getSafeValue(cons.type_consultation || cons.TYPE_CONSULTATION, 'urgence'),
+            urgent: cons.urgent || cons.URGENT || true,
+            created_at: getSafeValue(cons.created_at || cons.DAT_CREUTIL, moment().toISOString()),
+            updated_at: getSafeValue(cons.updated_at || cons.DAT_MODUTIL, moment().toISOString())
           };
         });
         
         setUrgences(urgencesList);
-        setPagination(prev => ({ ...prev, total: urgencesList.length }));
+        setPagination(prev => ({ 
+          ...prev, 
+          total: response.pagination?.total || urgencesList.length 
+        }));
+        
+        message.success(`${urgencesList.length} urgences chargées`);
       } else {
-        throw new Error(response.message || 'Erreur lors du chargement des urgences');
+        throw new Error(response?.message || 'Erreur lors du chargement des urgences');
       }
     } catch (error) {
-      console.error('Erreur chargement urgences:', error);
+      console.error('❌ Erreur chargement urgences:', error);
       setError(error.message);
       message.error('Erreur lors du chargement des urgences');
+      
+      // Données de test en cas d'erreur
+      if (urgences.length === 0) {
+        const testUrgences = [
+          {
+            id: 1,
+            patient_id: 'PAT001',
+            patient_nom: 'Dupont',
+            patient_prenom: 'Jean',
+            patient_age: '45',
+            patient_sexe: 'M',
+            patient_telephone: '0612345678',
+            date_consultation: '2026-01-28',
+            heure_consultation: '14:30',
+            motif: 'Douleur thoracique',
+            symptomes: 'Essouflement, palpitations',
+            gravite: 'severe',
+            priorite: 2,
+            praticien_nom: 'Martin',
+            praticien_prenom: 'Dr',
+            praticien_nom_complet: 'Dr Martin',
+            service: 'Cardiologie',
+            observations: 'Patient stable sous surveillance',
+            statut: 'en_cours',
+            type_consultation: 'urgence'
+          }
+        ];
+        setUrgences(testUrgences);
+        setPagination(prev => ({ ...prev, total: 1 }));
+        message.warning('Mode démo: données de test affichées');
+      }
     } finally {
-      setLoading(false);
+      setLoading(prev => ({ ...prev, liste: false }));
     }
-  }, [filters.dateRange]);
+  }, [filters, pagination.current, pagination.pageSize]);
 
   // Calcul des statistiques
   const stats = useMemo(() => {
@@ -999,7 +1197,7 @@ const UrgencesPage = () => {
     if (filters.dateRange?.[0]) {
       const dateDebut = filters.dateRange[0];
       filtered = filtered.filter(u => {
-        const dateUrgence = moment(u.date_arrivee);
+        const dateUrgence = moment(u.date_consultation);
         return dateUrgence >= dateDebut;
       });
     }
@@ -1007,7 +1205,7 @@ const UrgencesPage = () => {
     if (filters.dateRange?.[1]) {
       const dateFin = filters.dateRange[1].endOf('day');
       filtered = filtered.filter(u => {
-        const dateUrgence = moment(u.date_arrivee);
+        const dateUrgence = moment(u.date_consultation);
         return dateUrgence <= dateFin;
       });
     }
@@ -1020,7 +1218,7 @@ const UrgencesPage = () => {
         const prenom = getSafeValue(u.patient_prenom, '').toLowerCase();
         const motif = getSafeValue(u.motif, '').toLowerCase();
         const service = getSafeValue(u.service, '').toLowerCase();
-        const medecin = getSafeValue(u.medecin_nom, '').toLowerCase();
+        const medecin = getSafeValue(u.praticien_nom, '').toLowerCase();
         
         return nom.includes(searchLower) ||
                prenom.includes(searchLower) ||
@@ -1058,6 +1256,7 @@ const UrgencesPage = () => {
       cancelText: 'Annuler',
       onOk: async () => {
         try {
+          await fetchAPI(`/consultations/${id}`, { method: 'DELETE' });
           setUrgences(prev => prev.filter(u => u.id !== id));
           message.success('Urgence supprimée avec succès');
         } catch (error) {
@@ -1069,77 +1268,91 @@ const UrgencesPage = () => {
   };
 
   const handleSaveUrgence = async (urgenceData, isEdit) => {
+    setLoading(prev => ({ ...prev, actions: true }));
     try {
       if (isEdit) {
-        setUrgences(prev => prev.map(u => 
-          u.id === urgenceData.id ? { 
-            ...u, 
-            ...urgenceData,
-            updated_at: moment().toISOString()
-          } : u
-        ));
+        const response = await fetchAPI(`/consultations/${urgenceData.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(urgenceData)
+        });
+        
+        if (response?.success) {
+          setUrgences(prev => prev.map(u => 
+            u.id === urgenceData.id ? { 
+              ...u, 
+              ...urgenceData,
+              updated_at: moment().toISOString()
+            } : u
+          ));
+        } else {
+          throw new Error(response?.message);
+        }
       } else {
-        const newUrgence = {
-          ...urgenceData,
-          id: Date.now(),
-          created_at: moment().toISOString(),
-          updated_at: moment().toISOString()
-        };
-        setUrgences(prev => [newUrgence, ...prev]);
+        const response = await fetchAPI('/consultations', {
+          method: 'POST',
+          body: JSON.stringify(urgenceData)
+        });
+        
+        if (response?.success) {
+          const newUrgence = {
+            ...urgenceData,
+            id: response.id || response.COD_CONS || Date.now(),
+            COD_CONS: response.COD_CONS,
+            created_at: moment().toISOString(),
+            updated_at: moment().toISOString()
+          };
+          setUrgences(prev => [newUrgence, ...prev]);
+        } else {
+          throw new Error(response?.message);
+        }
       }
     } catch (error) {
       console.error('Erreur sauvegarde urgence:', error);
       throw error;
+    } finally {
+      setLoading(prev => ({ ...prev, actions: false }));
     }
   };
 
   // Gestion des changements de statut
   const handleStatusChange = async (urgenceId, newStatus) => {
-    let oldStatus;
     try {
       const urgenceToUpdate = urgences.find(u => u.id === urgenceId);
       if (!urgenceToUpdate) return;
-
-      oldStatus = urgenceToUpdate.statut;
       
       setUpdatingStatus(prev => ({ ...prev, [urgenceId]: true }));
 
-      // Mettre à jour l'état local
-      const updatedUrgence = {
-        ...urgenceToUpdate,
-        statut: newStatus,
-        updated_at: moment().toISOString()
-      };
-      
-      setUrgences(prev => prev.map(u => 
-        u.id === urgenceId ? updatedUrgence : u
-      ));
-
-      // Préparer les données pour le backend
       const updateData = {
         STATUT_CONSULTATION: newStatus,
-        OBSERVATIONS: `${urgenceToUpdate.notes || ''} | Statut changé de ${oldStatus} à ${newStatus} - ${moment().format('DD/MM/YYYY HH:mm')}`,
+        OBSERVATIONS: `${urgenceToUpdate.observations || ''} | Statut changé à ${newStatus} - ${moment().format('DD/MM/YYYY HH:mm')}`,
         id: urgenceId,
-        COD_CONS: urgenceId,
+        COD_CONS: urgenceToUpdate.COD_CONS,
         PRIORITE: urgenceToUpdate.priorite || 3
       };
 
-      const response = await consultations.update(urgenceId, updateData);
+      const response = await fetchAPI(`/consultations/${urgenceId}`, {
+        method: 'PUT',
+        body: JSON.stringify(updateData)
+      });
 
-      if (!response.success) {
-        throw new Error(response.message || 'Erreur lors de la mise à jour');
+      if (response?.success) {
+        const updatedUrgence = {
+          ...urgenceToUpdate,
+          statut: newStatus,
+          updated_at: moment().toISOString()
+        };
+        
+        setUrgences(prev => prev.map(u => 
+          u.id === urgenceId ? updatedUrgence : u
+        ));
+        
+        message.success('Statut mis à jour avec succès');
+      } else {
+        throw new Error(response?.message || 'Erreur lors de la mise à jour');
       }
-
-      message.success('Statut mis à jour avec succès');
 
     } catch (error) {
       console.error('Erreur mise à jour statut:', error);
-      // Revenir à l'ancien statut en cas d'erreur
-      if (oldStatus) {
-        setUrgences(prev => prev.map(u => 
-          u.id === urgenceId ? { ...u, statut: oldStatus } : u
-        ));
-      }
       message.error(`Erreur: ${error.message}`);
     } finally {
       setUpdatingStatus(prev => ({ ...prev, [urgenceId]: false }));
@@ -1148,52 +1361,43 @@ const UrgencesPage = () => {
 
   // Gestion des changements de priorité
   const handlePriorityChange = async (urgenceId, newPriority) => {
-    let oldPriority;
     try {
       const urgenceToUpdate = urgences.find(u => u.id === urgenceId);
       if (!urgenceToUpdate) return;
-
-      oldPriority = urgenceToUpdate.priorite;
       
       setUpdatingPriority(prev => ({ ...prev, [urgenceId]: true }));
 
-      // Mettre à jour l'état local
-      const updatedUrgence = {
-        ...urgenceToUpdate,
-        priorite: parseInt(newPriority),
-        updated_at: moment().toISOString()
-      };
-      
-      setUrgences(prev => prev.map(u => 
-        u.id === urgenceId ? updatedUrgence : u
-      ));
-
-      // Préparer les données pour le backend
       const updateData = {
         PRIORITE: parseInt(newPriority),
-        OBSERVATIONS: `${urgenceToUpdate.notes || ''} | Priorité changée de ${oldPriority} à ${newPriority} - ${moment().format('DD/MM/YYYY HH:mm')}`,
+        OBSERVATIONS: `${urgenceToUpdate.observations || ''} | Priorité changée à ${newPriority} - ${moment().format('DD/MM/YYYY HH:mm')}`,
         STATUT_CONSULTATION: urgenceToUpdate.statut || 'en_attente',
-        MOTIF_CONSULTATION: urgenceToUpdate.motif || '',
         id: urgenceId,
-        COD_CONS: urgenceId
+        COD_CONS: urgenceToUpdate.COD_CONS
       };
 
-      const response = await consultations.update(urgenceId, updateData);
+      const response = await fetchAPI(`/consultations/${urgenceId}`, {
+        method: 'PUT',
+        body: JSON.stringify(updateData)
+      });
 
-      if (response.success) {
+      if (response?.success) {
+        const updatedUrgence = {
+          ...urgenceToUpdate,
+          priorite: parseInt(newPriority),
+          updated_at: moment().toISOString()
+        };
+        
+        setUrgences(prev => prev.map(u => 
+          u.id === urgenceId ? updatedUrgence : u
+        ));
+        
         message.success('Priorité mise à jour avec succès');
       } else {
-        throw new Error(response.message || 'Erreur lors de la mise à jour');
+        throw new Error(response?.message || 'Erreur lors de la mise à jour');
       }
 
     } catch (error) {
       console.error('Erreur mise à jour priorité:', error);
-      // Revenir à l'ancienne priorité en cas d'erreur
-      if (oldPriority !== undefined) {
-        setUrgences(prev => prev.map(u => 
-          u.id === urgenceId ? { ...u, priorite: oldPriority } : u
-        ));
-      }
       message.error(`Erreur: ${error.message}`);
     } finally {
       setUpdatingPriority(prev => ({ ...prev, [urgenceId]: false }));
@@ -1201,8 +1405,8 @@ const UrgencesPage = () => {
   };
 
   // Gestion de la pagination
-  const handleTableChange = (pagination) => {
-    setPagination(pagination);
+  const handleTableChange = (newPagination) => {
+    setPagination(newPagination);
   };
 
   // Gestion des filtres
@@ -1243,7 +1447,7 @@ const UrgencesPage = () => {
               {record.patient_prenom} {record.patient_nom}
             </div>
             <Text type="secondary" style={{ fontSize: '12px' }}>
-              ID: {record.patient_id || 'N/A'}
+              ID: {record.patient_id || 'N/A'} | Âge: {record.patient_age || 'N/A'}
             </Text>
           </div>
         </Space>
@@ -1251,14 +1455,14 @@ const UrgencesPage = () => {
     },
     {
       title: 'Arrivée',
-      dataIndex: 'date_arrivee',
+      dataIndex: 'date_consultation',
       key: 'arrivee',
       width: 150,
       render: (date, record) => (
         <div>
           <div>{formatSafeDate(date, 'DD/MM/YYYY')}</div>
           <Text type="secondary" style={{ fontSize: '12px' }}>
-            {record.heure_arrivee ? record.heure_arrivee.substring(0, 5) : 'N/A'}
+            {record.heure_consultation ? record.heure_consultation.substring(0, 5) : 'N/A'}
           </Text>
           <div style={{ marginTop: 4 }}>
             <WaitingTimeTag arrivalTime={date} />
@@ -1345,7 +1549,7 @@ const UrgencesPage = () => {
     },
     {
       title: 'Médecin',
-      dataIndex: 'medecin_nom',
+      dataIndex: 'praticien_nom_complet',
       key: 'medecin',
       width: 150,
       render: (text) => (
@@ -1412,40 +1616,30 @@ const UrgencesPage = () => {
         value: stats.total,
         color: '#1890ff',
         icon: <AlertOutlined />,
-        prefix: null,
-        suffix: null
       },
       {
         title: 'En Attente',
         value: stats.en_attente,
         color: '#faad14',
         icon: <ClockCircleOutlined />,
-        prefix: null,
-        suffix: null
       },
       {
         title: 'En Cours',
         value: stats.en_cours,
         color: '#13c2c2',
         icon: <MedicineBoxOutlined />,
-        prefix: null,
-        suffix: null
       },
       {
         title: 'Traitées',
         value: stats.traite,
         color: '#52c41a',
         icon: <CheckCircleOutlined />,
-        prefix: null,
-        suffix: null
       },
       {
         title: 'Urgent Absolu',
         value: stats.urgent_absolu,
         color: '#f5222d',
         icon: <ExclamationCircleOutlined />,
-        prefix: null,
-        suffix: null
       }
     ];
 
@@ -1463,8 +1657,6 @@ const UrgencesPage = () => {
                 }
                 value={card.value}
                 valueStyle={{ color: card.color, fontWeight: 'bold' }}
-                prefix={card.prefix}
-                suffix={card.suffix}
               />
             </Card>
           </Col>
@@ -1575,6 +1767,7 @@ const UrgencesPage = () => {
               type="primary" 
               icon={<SearchOutlined />}
               onClick={handleRefresh}
+              loading={loading.liste}
             >
               Appliquer
             </Button>
@@ -1598,7 +1791,7 @@ const UrgencesPage = () => {
             <Button
               icon={<ReloadOutlined />}
               onClick={handleRefresh}
-              loading={loading}
+              loading={loading.liste}
             >
               Actualiser
             </Button>
@@ -1637,16 +1830,16 @@ const UrgencesPage = () => {
         }
         extra={
           <Space>
-            <Button icon={<DownloadOutlined />}>
+            <Button icon={<DownloadOutlined />} onClick={() => message.info('Export à implémenter')}>
               Exporter
             </Button>
-            <Button icon={<UploadOutlined />}>
+            <Button icon={<UploadOutlined />} onClick={() => message.info('Import à implémenter')}>
               Importer
             </Button>
           </Space>
         }
       >
-        {loading ? (
+        {loading.liste ? (
           <div style={{ textAlign: 'center', padding: 40 }}>
             <Spin size="large" />
             <div style={{ marginTop: 16 }}>
@@ -1659,6 +1852,11 @@ const UrgencesPage = () => {
             description={error}
             type="error"
             showIcon
+            action={
+              <Button size="small" onClick={handleRefresh}>
+                Réessayer
+              </Button>
+            }
             style={{ marginBottom: 16 }}
           />
         ) : filteredUrgences.length === 0 ? (
@@ -1667,6 +1865,11 @@ const UrgencesPage = () => {
             description="Aucune urgence ne correspond aux critères de recherche."
             type="info"
             showIcon
+            action={
+              <Button size="small" onClick={handleCreateUrgence}>
+                Créer une urgence
+              </Button>
+            }
           />
         ) : (
           <Table

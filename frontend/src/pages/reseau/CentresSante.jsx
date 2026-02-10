@@ -89,7 +89,19 @@ const GestionCentresSante = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await centresAPI.getAll();
+      // Si l'utilisateur est lié à un centre, ne charger que celui-ci
+      const user = (window && window.localStorage && localStorage.getItem('user')) ? JSON.parse(localStorage.getItem('user')) : null;
+      const userCentreId = user?.centre_id || user?.COD_CEN || user?.prestataire?.centre_id || null;
+      
+      let response;
+      if (user && !user.super_admin && userCentreId) {
+        const centreResult = await centresAPI.getById(userCentreId);
+        response = { success: centreResult.success, centres: centreResult.centre ? [centreResult.centre] : (centreResult.centres || []) };
+      } else {
+        response = await centresAPI.getAll();
+      }
+      
+      console.log('✅ Centers fetched for CentresSante:', response);
       
       if (response.success) {
         // Gérer différents formats de réponse de l'API

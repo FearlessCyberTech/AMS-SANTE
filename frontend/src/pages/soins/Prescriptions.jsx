@@ -2,1968 +2,690 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card, Row, Col, Button, Modal, Form,
   Select, Input, Table, Tag, Space, message, Tabs,
-  Descriptions, Tooltip, Spin, Divider, Typography,
-  Checkbox, Alert, Radio, Statistic, Badge, InputNumber,
-  DatePicker, Upload, Popconfirm, Empty, notification,
-  Steps, Result, Collapse, List, Avatar, AutoComplete
+  Descriptions, Alert, Typography,
+  InputNumber, DatePicker, AutoComplete,
+  Spin, Empty, Divider, Steps, Result, Statistic,
+  Checkbox, Radio, Upload, Drawer, Popover, Tooltip,
+  Badge, Progress, TimePicker, List, Avatar,
+  Timeline, Switch, Cascader
 } from 'antd';
 import {
   FileTextOutlined, MedicineBoxOutlined, SearchOutlined,
   PlusOutlined, DeleteOutlined, EyeOutlined,
   PrinterOutlined, CheckCircleOutlined, SyncOutlined,
-  WarningOutlined, UserOutlined, CloseCircleOutlined,
-  DownloadOutlined, HistoryOutlined, CalculatorOutlined,
-  DollarOutlined, ScheduleOutlined, InfoCircleOutlined,
-  LineChartOutlined, FileExcelOutlined, LoadingOutlined,
-  FilePdfOutlined, ClockCircleOutlined, QuestionCircleOutlined,
-  UserAddOutlined, TeamOutlined, MedicineBoxTwoTone,
-  SwapOutlined, UserSwitchOutlined
+  UserOutlined, CloseCircleOutlined, DownloadOutlined,
+  HistoryOutlined, CalculatorOutlined, DollarOutlined,
+  TeamOutlined, HeartOutlined, DatabaseOutlined,
+  PercentageOutlined, InfoCircleOutlined, LoadingOutlined,
+  EditOutlined, InfoCircleFilled, AppstoreAddOutlined,
+  PlayCircleOutlined, StopOutlined, ClockCircleOutlined,
+  CheckOutlined, CloseOutlined, FilterOutlined,
+  FilePdfOutlined, FileExcelOutlined, ShareAltOutlined,
+  CalendarOutlined, ArrowRightOutlined, ReloadOutlined,
+  BellOutlined, SettingOutlined, ProfileOutlined,
+  SafetyCertificateOutlined, QrcodeOutlined, BarcodeOutlined,
+  CheckCircleFilled
 } from '@ant-design/icons';
 import moment from 'moment';
 import 'moment/locale/fr';
-import { prescriptionsAPI, beneficiairesAPI, consultationsAPI, prestatairesAPI, centresAPI } from '../../services/api';
+import {
+  prestationsAPI, beneficiairesAPI, prescriptionsAPI,
+  prestatairesAPI, centresAPI, affectionsAPI, baremesAPI
+} from '../../services/api'; 
+import AMSlogo from "../../assets/AMS-logo.png";
 
 const { Option } = Select;
 const { TextArea } = Input;
-const { Text } = Typography;
+const { Text, Title } = Typography;
 const { TabPane } = Tabs;
 const { Step } = Steps;
-const { Panel } = Collapse;
+const { RangePicker } = DatePicker;
 
 const Prescriptions = () => {
-  // États principaux
+  // ==================== ÉTATS PRINCIPAUX ====================
   const [activeTab, setActiveTab] = useState('saisie');
   const [loading, setLoading] = useState({
     patient: false,
-    medicaments: false,
-    prescrire: false,
-    execution: false,
-    impression: false,
     prestations: false,
+    prescrire: false,
+    impression: false,
     prestataires: false,
-    consultations: false,
-    centres: false
+    centres: false,
+    actes: false,
+    affections: false,
+    execution: false,
+    historique: false,
+    details: false
   });
 
   // États pour la saisie de prescription
   const [patient, setPatient] = useState(null);
   const [prescriptionForm] = Form.useForm();
-  const [selectedMedicaments, setSelectedMedicaments] = useState([]);
+  const [selectedPrestations, setSelectedPrestations] = useState([]);
   const [typePrestation, setTypePrestation] = useState('PHARMACIE');
-  const [searchMedicament, setSearchMedicament] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
+  const [searchPrestation, setSearchPrestation] = useState('');
+  
+  // États pour les affections avec COD_PAY = 'CMF' par défaut
   const [affectionCode, setAffectionCode] = useState('');
+  const [affectionLibelle, setAffectionLibelle] = useState('');
   const [affectionDetails, setAffectionDetails] = useState(null);
-  const [consultationInfo, setConsultationInfo] = useState(null);
-  const [centreId, setCentreId] = useState(localStorage.getItem('selectedCentre') || '1');
+  const [affectionOptions, setAffectionOptions] = useState([]);
+  const [searchingAffections, setSearchingAffections] = useState(false);
+  const COD_PAY_DEFAULT = 'CMF';
+  
+  // Gestion des centres
+  const [centreId, setCentreId] = useState(() => {
+    const savedCentre = localStorage.getItem('selectedCentre');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userCentreId = user?.centre_id || user?.COD_CEN || user?.prestataire?.centre_id;
+    return userCentreId || savedCentre || null;
+  });
+  
   const [centres, setCentres] = useState([]);
   const [centreNom, setCentreNom] = useState('');
+  const [loadingCentres, setLoadingCentres] = useState(false);
+  const [centreDetails, setCentreDetails] = useState(null);
+
+  // États pour les actes médicaux
+  const [actesMedicaux, setActesMedicaux] = useState([]);
+  const [searchResults, setSearchResults] = useState([]);
+  const [loadingActes, setLoadingActes] = useState(false);
   
   // États pour les prestataires (médecins)
   const [prestataires, setPrestataires] = useState([]);
-  const [searchPrestataire, setSearchPrestataire] = useState('');
-  const [searchPrestataireResults, setSearchPrestataireResults] = useState([]);
   const [selectedPrestataire, setSelectedPrestataire] = useState(null);
   const [modalPrestataires, setModalPrestataires] = useState(false);
-  const [medecinConsultation, setMedecinConsultation] = useState(null);
-  const [showMedecinChangeAlert, setShowMedecinChangeAlert] = useState(false);
+  const [loadingPrestataires, setLoadingPrestataires] = useState(false);
 
-  // États pour l'exécution de prescription
+  // États pour la saisie manuelle
+  const [manualEntryModal, setManualEntryModal] = useState(false);
+  const [manualForm] = Form.useForm();
+  const [manualEntryType, setManualEntryType] = useState('MEDICAMENT');
+  
+  // États pour l'impression
+  const [validationModalVisible, setValidationModalVisible] = useState(false);
+  const [printModalVisible, setPrintModalVisible] = useState(false);
+  const [ordonnanceToPrint, setOrdonnanceToPrint] = useState(null);
+  const [printingOrdonnance, setPrintingOrdonnance] = useState(false);
+  
+  // ==================== ONGLET EXÉCUTION ====================
   const [prescriptionNumero, setPrescriptionNumero] = useState('');
   const [selectedPrescription, setSelectedPrescription] = useState(null);
   const [actesExecutes, setActesExecutes] = useState([]);
-  const [prescriptionDetails, setPrescriptionDetails] = useState(null);
   const [totalFacture, setTotalFacture] = useState(0);
-
-  // États pour la gestion des données
+  
+  // ==================== ONGLET HISTORIQUE ====================
   const [mesPrescriptions, setMesPrescriptions] = useState([]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [validationModalVisible, setValidationModalVisible] = useState(false);
-
-  // ==================== ORDONNANCE MÉDICALE ====================
-  const [ordonnanceToPrint, setOrdonnanceToPrint] = useState(null);
-  const [printingOrdonnance, setPrintingOrdonnance] = useState(false);
-  const [printModalVisible, setPrintModalVisible] = useState(false);
-
+  const [detailsModalVisible, setDetailsModalVisible] = useState(false);
+  const [selectedPrescriptionDetails, setSelectedPrescriptionDetails] = useState(null);
+  
   // ==================== FONCTIONS UTILITAIRES ====================
+  
   const getTypeLabel = (type) => {
     const typeMap = {
-      'PHARMACIE': 'Pharmacie',
-      'BIOLOGIE': 'Biologie',
-      'IMAGERIE': 'Imagerie Médicale',
-      'HOSPITALISATION': 'Hospitalisation',
-      'CONSULTATION': 'Consultation Spécialisée',
-      'KINESITHERAPIE': 'Kinésithérapie',
-      'INFIRMIER': 'Soins infirmiers'
+      'PHARMACIE': 'PHARMACIE',
+      'BIOLOGIE': 'BIOLOGIE',
+      'IMAGERIE': 'IMAGERIE',
+      'HOSPITALISATION': 'HOSPITALISATION',
+      'CONSULTATION': 'CONSULTATION',
+      'KINESITHERAPIE': 'KINÉSITHÉRAPIE',
+      'INFIRMIER': 'SOINS INFIRMIERS',
+      'MEDICAMENT': 'MÉDICAMENT',
+      'EXAMEN': 'EXAMEN',
+      'ACTE': 'ACTE MÉDICAL'
     };
-    return typeMap[type] || type;
+    return typeMap[type] || 'PRESCRIPTION MÉDICALE';
   };
 
-  const getExecutantLabel = (type) => {
-    const executantMap = {
-      'PHARMACIE': 'Pharmacien',
-      'BIOLOGIE': 'Biologiste',
-      'IMAGERIE': 'Radiologue',
-      'CONSULTATION': 'Médecin',
-      'HOSPITALISATION': 'Chef de Service',
-      'KINESITHERAPIE': 'Kinésithérapeute',
-      'INFIRMIER': 'Infirmier'
+  const getTypeColor = (type) => {
+    const colorMap = {
+      'PHARMACIE': '#1890ff',
+      'BIOLOGIE': '#722ed1',
+      'IMAGERIE': '#13c2c2',
+      'HOSPITALISATION': '#f5222d',
+      'CONSULTATION': '#52c41a',
+      'KINESITHERAPIE': '#fa8c16',
+      'INFIRMIER': '#faad14',
+      'MEDICAMENT': '#2f54eb',
+      'EXAMEN': '#eb2f96',
+      'ACTE': '#08979c'
     };
-    return executantMap[type] || 'Exécutant';
+    return colorMap[type] || '#1890ff';
   };
 
-  // Fonction pour générer un numéro de prescription unique
   const generatePrescriptionNumber = () => {
     const date = moment().format('YYMMDD');
     const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-    return `PRES-${date}-${random}`;
+    const prefix = typePrestation.substring(0, 3);
+    return `${prefix}-${date}-${random}`;
   };
 
-  // Fonction pour récupérer le nom du centre depuis les informations de consultation
-  const getCentreNameFromConsultation = useCallback(async (consultationData) => {
+  const calculateAge = (dateOfBirth) => {
+    if (!dateOfBirth) return 'N/A';
     try {
-      if (!consultationData || !consultationData.COD_CEN) return null;
-      
-      const centre = centres.find(c => 
-        c.id === consultationData.COD_CEN || 
-        c.cod_cen === consultationData.COD_CEN
-      );
-      
-      if (centre) {
-        return centre.nom || centre.NOM_CENTRE || `Centre ${consultationData.COD_CEN}`;
-      }
-      
-      // Si non trouvé dans le cache, faire un appel API
-      const response = await centresAPI.getById(consultationData.COD_CEN);
-      if (response.success && response.centre) {
-        return response.centre.nom || response.centre.NOM_CENTRE;
-      }
-      
-      return null;
+      const birthDate = moment(dateOfBirth);
+      const age = moment().diff(birthDate, 'years');
+      return age;
     } catch (error) {
-      console.error('Erreur récupération centre:', error);
-      return null;
-    }
-  }, [centres]);
-
-  // ==================== ÉTATS POUR LA SAISIE MANUELLE ====================
-  const [saisieManuelleMode, setSaisieManuelleMode] = useState(false);
-  const [acteManuel, setActeManuel] = useState({
-    LIBELLE: '',
-    QUANTITE: 1,
-    POSOLOGIE: 'À déterminer',
-    DUREE: '7',
-    PRIX_UNITAIRE: 0,
-    TYPE_ELEMENT: 'MEDICAMENT',
-    UNITE: 'boîte(s)'
-  });
-  const [formSaisieManuelle] = Form.useForm();
-
-  // Fonction pour basculer entre le mode recherche et le mode manuel
-  const toggleSaisieManuelleMode = () => {
-    setSaisieManuelleMode(!saisieManuelleMode);
-    setSearchMedicament('');
-    setSearchResults([]);
-    
-    if (!saisieManuelleMode) {
-      message.info('Mode saisie manuelle activé');
-    } else {
-      message.info('Mode recherche activé');
+      return 'N/A';
     }
   };
 
-  // Fonction pour ajouter un acte saisi manuellement
-  const ajouterActeManuel = () => {
-    if (!acteManuel.LIBELLE || acteManuel.LIBELLE.trim() === '') {
-      message.error('Veuillez saisir un libellé pour l\'acte');
-      return;
+  // Fonction pour obtenir le nom du centre à partir de son ID
+  const getCentreNameById = (centreId) => {
+    if (!centreId) return 'Centre inconnu';
+    
+    const centre = centres.find(c => 
+      (c.id && c.id.toString() === centreId.toString()) || 
+      (c.COD_CEN && c.COD_CEN.toString() === centreId.toString())
+    );
+    
+    if (centre) {
+      return centre.nom || centre.LIB_CEN || centre.NOM_CENTRE || `Centre ${centreId}`;
     }
     
-    const prix = parseFloat(acteManuel.PRIX_UNITAIRE) || 0;
-    const quantite = parseInt(acteManuel.QUANTITE) || 1;
-    
-    if (prix < 0) {
-      message.error('Le prix unitaire ne peut pas être négatif');
-      return;
-    }
-    
-    if (quantite <= 0) {
-      message.error('La quantité doit être supérieure à 0');
-      return;
-    }
-    
-    const nouvelActe = {
-      ...acteManuel,
-      COD_ELEMENT: `MANUEL_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      COD_MED: `MANUEL_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      LIBELLE: acteManuel.LIBELLE.trim(),
-      QUANTITE: quantite,
-      POSOLOGIE: acteManuel.POSOLOGIE || 'À déterminer',
-      DUREE: acteManuel.DUREE || '7',
-      PRIX_UNITAIRE: prix,
-      TYPE_ELEMENT: 'ACTE_MANUEL',
-      REMBOURSABLE: 0,
-      key: `manuel_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      estManuel: true
-    };
-    
-    setSelectedMedicaments([...selectedMedicaments, nouvelActe]);
-    message.success(`${nouvelActe.LIBELLE} ajouté à la prescription (saisie manuelle)`);
-    
-    // Réinitialiser le formulaire de saisie manuelle
-    setActeManuel({
-      LIBELLE: '',
-      QUANTITE: 1,
-      POSOLOGIE: 'À déterminer',
-      DUREE: '7',
-      PRIX_UNITAIRE: 0,
-      TYPE_ELEMENT: 'MEDICAMENT',
-      UNITE: 'boîte(s)'
-    });
-    formSaisieManuelle.resetFields();
+    return `Centre ${centreId}`;
   };
 
-  // Fonction pour vérifier si un acte est manuel
-const estActeManuel = (acte) => {
-  if (!acte) return false;
+  // ==================== CHARGEMENT DES DONNÉES RÉELLES ====================
   
-  // Vérifier si l'acte a le flag manuel
-  if (acte.estManuel || acte.TYPE_ELEMENT === 'ACTE_MANUEL') {
-    return true;
-  }
-  
-  // Vérifier si le code commence par 'MANUEL_'
-  const codeElement = acte.COD_ELEMENT;
-  if (codeElement && typeof codeElement === 'string') {
-    return codeElement.startsWith('MANUEL_');
-  }
-  
-  return false;
-};
-
-// ==================== IMPRESSION D'ORDONNANCE PROFESSIONNELLE ====================
-const handlePrintOrdonnance = () => {
-  if (!ordonnanceToPrint) return;
-  
-  setPrintingOrdonnance(true);
-  
-  const printWindow = window.open('', '_blank');
-  
-  if (!printWindow) {
-    message.error('Veuillez autoriser les fenêtres pop-up pour l\'impression');
-    setPrintingOrdonnance(false);
-    return;
-  }
-  
-  const { patient, selectedPrestataire, selectedMedicaments, centreId, centres, typePrestation, affectionCode, numero, observations, urgent } = ordonnanceToPrint;
-  
-  // Trouver le centre actuel
-  const currentCentre = centres.find(c => c.id === centreId || c.cod_cen === centreId) || {};
-  
-  // Calculer le total de la prescription
-  const totalPrescription = selectedMedicaments?.reduce((sum, med) => {
-    const prix = parseFloat(med.PRIX_UNITAIRE) || 0;
-    const quantite = parseInt(med.QUANTITE) || 1;
-    return sum + (prix * quantite);
-  }, 0) || 0;
-  
-  // Générer le numéro de prescription si non fourni
-  const prescriptionNum = numero || generatePrescriptionNumber();
-  
-  // Données par défaut pour le design
-  const defaultData = {
-    patientNom: patient?.nom_complet || 'Abangana Jean',
-    patientAge: patient?.age || '60 ans',
-    patientId: patient?.numero_carte || patient?.identifiant_national || 'CM455321',
-    centreNom: currentCentre.nom || currentCentre.NOM_CENTRE || 'Hôpital Central de Yaoundé',
-    medecinNom: selectedPrestataire?.nom_complet || 'Dr. Escamba Marie',
-    medecinRPPS: selectedPrestataire?.id || '24',
-    datePrescription: moment().format('DD/MM/YYYY'),
-    dateValidite: moment().add(30, 'days').format('DD/MM/YYYY')
-  };
-  
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html lang="fr">
-    <head>
-      <title>Ordonnance Médicale - ${prescriptionNum}</title>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <style>
-        @page {
-          size: A4;
-          margin: 15mm 20mm;
-        }
-        
-        body {
-          font-family: 'Arial', 'Helvetica Neue', 'Helvetica', sans-serif;
-          margin: 0;
-          padding: 0;
-          color: #2c3e50;
-          line-height: 1.5;
-          font-size: 11pt;
-          background-color: #ffffff;
-          width: 210mm;
-          min-height: 297mm;
-        }
-        
-        .ordonnance-container {
-          position: relative;
-          width: 100%;
-          min-height: 297mm;
-          padding: 5mm;
-          box-sizing: border-box;
-          border: 2px solid #3498db;
-          border-radius: 8px;
-          background: linear-gradient(to bottom, #ffffff, #f8fafc);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        }
-        
-        /* En-tête élégant avec dégradé */
-        .header {
-          text-align: center;
-          margin-bottom: 25px;
-          padding-bottom: 15px;
-          border-bottom: 3px double #3498db;
-          position: relative;
-        }
-        
-        .header:after {
-          content: '';
-          position: absolute;
-          bottom: -3px;
-          left: 10%;
-          width: 80%;
-          height: 1px;
-          background: #3498db;
-        }
-        
-        .main-title {
-          font-size: 24pt;
-          font-weight: 800;
-          margin: 0 0 5px 0;
-          color: #2c3e50;
-          text-transform: uppercase;
-          letter-spacing: 1.5px;
-          background: linear-gradient(135deg, #3498db, #2c3e50);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-        
-        .subtitle {
-          font-size: 12pt;
-          color: #7f8c8d;
-          margin: 0 0 15px 0;
-          font-weight: 500;
-          letter-spacing: 1px;
-        }
-        
-        /* Badge numéro de prescription */
-        .prescription-badge {
-          display: inline-block;
-          background: linear-gradient(135deg, #3498db, #2980b9);
-          color: white;
-          padding: 8px 20px;
-          border-radius: 25px;
-          font-size: 12pt;
-          font-weight: 600;
-          margin: 10px auto;
-          box-shadow: 0 3px 6px rgba(52, 152, 219, 0.2);
-          border: 2px solid white;
-          position: relative;
-          overflow: hidden;
-        }
-        
-        .prescription-badge:before {
-          content: '';
-          position: absolute;
-          top: -10px;
-          right: -10px;
-          width: 40px;
-          height: 40px;
-          background: rgba(255, 255, 255, 0.1);
-          border-radius: 50%;
-        }
-        
-        /* Grille d'informations professionnelle */
-        .info-grid-container {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 20px;
-          margin-bottom: 25px;
-        }
-        
-        .info-card {
-          background: white;
-          border-radius: 8px;
-          padding: 15px;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-          border-left: 4px solid #3498db;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        
-        .info-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-        
-        .card-title {
-          font-size: 12pt;
-          font-weight: 700;
-          color: #2c3e50;
-          margin: 0 0 12px 0;
-          padding-bottom: 8px;
-          border-bottom: 2px solid #ecf0f1;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          display: flex;
-          align-items: center;
-        }
-        
-        .card-title:before {
-          content: '•';
-          color: #3498db;
-          margin-right: 8px;
-          font-size: 16pt;
-        }
-        
-        .info-row {
-          display: flex;
-          margin-bottom: 10px;
-          padding: 6px 0;
-          border-bottom: 1px dashed #ecf0f1;
-          align-items: center;
-        }
-        
-        .info-row:last-child {
-          border-bottom: none;
-        }
-        
-        .info-label {
-          font-weight: 600;
-          color: #34495e;
-          min-width: 140px;
-          flex-shrink: 0;
-          font-size: 10.5pt;
-        }
-        
-        .info-value {
-          flex: 1;
-          color: #2c3e50;
-          font-weight: 500;
-          padding-left: 10px;
-          border-left: 2px solid #ecf0f1;
-        }
-        
-        /* Tableau de prescription amélioré */
-        .prescription-section {
-          margin: 30px 0;
-          background: white;
-          border-radius: 8px;
-          overflow: hidden;
-          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
-          border: 1px solid #e0e6ed;
-        }
-        
-        .section-header {
-          background: linear-gradient(135deg, #3498db, #2980b9);
-          color: white;
-          padding: 15px 20px;
-          font-size: 13pt;
-          font-weight: 700;
-          letter-spacing: 1px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        
-        .badge-count {
-          background: rgba(255, 255, 255, 0.2);
-          padding: 3px 10px;
-          border-radius: 12px;
-          font-size: 10pt;
-          font-weight: 600;
-        }
-        
-        .prescription-table {
-          width: 100%;
-          border-collapse: separate;
-          border-spacing: 0;
-          font-size: 10.5pt;
-        }
-        
-        .prescription-table thead th {
-          background: #f8fafc;
-          color: #34495e;
-          font-weight: 700;
-          padding: 14px 12px;
-          text-align: left;
-          border-bottom: 2px solid #3498db;
-          text-transform: uppercase;
-          font-size: 10pt;
-          letter-spacing: 0.5px;
-        }
-        
-        .prescription-table tbody tr {
-          transition: background-color 0.2s ease;
-        }
-        
-        .prescription-table tbody tr:nth-child(even) {
-          background-color: #f8fafc;
-        }
-        
-        .prescription-table tbody tr:hover {
-          background-color: #e8f4fc;
-        }
-        
-        .prescription-table td {
-          padding: 12px;
-          border-bottom: 1px solid #ecf0f1;
-          vertical-align: top;
-          color: #2c3e50;
-        }
-        
-        .medicament-name {
-          font-weight: 600;
-          color: #2c3e50;
-        }
-        
-        .medicament-details {
-          font-size: 9.5pt;
-          color: #7f8c8d;
-          margin-top: 4px;
-        }
-        
-        .prescription-table tfoot {
-          background: linear-gradient(135deg, #2c3e50, #34495e);
-          color: white;
-        }
-        
-        .prescription-table tfoot td {
-          padding: 16px 12px;
-          font-size: 11pt;
-          font-weight: 700;
-          border: none;
-        }
-        
-        .total-amount {
-          font-size: 14pt;
-          color: #fff;
-          text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
-        }
-        
-        /* Section observations */
-        .observations-card {
-          background: #fff9e6;
-          border-radius: 8px;
-          padding: 20px;
-          margin: 25px 0;
-          border-left: 4px solid #f39c12;
-          box-shadow: 0 2px 8px rgba(243, 156, 18, 0.1);
-        }
-        
-        .observations-title {
-          font-size: 12pt;
-          font-weight: 700;
-          color: #d35400;
-          margin: 0 0 12px 0;
-          display: flex;
-          align-items: center;
-        }
-        
-        .observations-title:before {
-          content: '📌';
-          margin-right: 8px;
-          font-size: 12pt;
-        }
-        
-        .observations-content {
-          color: #7d6608;
-          line-height: 1.6;
-          font-size: 10.5pt;
-          padding: 10px;
-          background: rgba(255, 255, 255, 0.7);
-          border-radius: 4px;
-        }
-        
-        /* Section signatures */
-        .signatures-section {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 30px;
-          margin: 40px 0 30px 0;
-          padding-top: 30px;
-          border-top: 2px dashed #bdc3c7;
-        }
-        
-        .signature-block {
-          text-align: center;
-          padding: 20px;
-          background: white;
-          border-radius: 8px;
-          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
-          transition: transform 0.2s ease;
-        }
-        
-        .signature-block:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
-        }
-        
-        .signature-line {
-          width: 180px;
-          border-bottom: 2px solid #3498db;
-          margin: 0 auto 15px;
-          height: 30px;
-          position: relative;
-        }
-        
-        .signature-line:after {
-          content: '';
-          position: absolute;
-          bottom: -3px;
-          left: 0;
-          right: 0;
-          height: 1px;
-          background: repeating-linear-gradient(
-            to right,
-            transparent,
-            transparent 5px,
-            #bdc3c7 5px,
-            #bdc3c7 10px
-          );
-        }
-        
-        .signature-label {
-          font-size: 11pt;
-          font-weight: 700;
-          color: #2c3e50;
-          margin: 15px 0 8px 0;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-        }
-        
-        .signature-details {
-          font-size: 9.5pt;
-          color: #7f8c8d;
-          line-height: 1.4;
-        }
-        
-        .signature-badge {
-          display: inline-block;
-          background: #ecf0f1;
-          color: #7f8c8d;
-          padding: 4px 10px;
-          border-radius: 12px;
-          font-size: 8.5pt;
-          margin-top: 8px;
-          font-weight: 600;
-        }
-        
-        /* Pied de page professionnel */
-        .footer {
-          margin-top: 40px;
-          padding-top: 20px;
-          border-top: 1px solid #ecf0f1;
-          text-align: center;
-          font-size: 9pt;
-          color: #95a5a6;
-          background: #f8fafc;
-          padding: 20px;
-          border-radius: 8px;
-        }
-        
-        .footer-title {
-          font-size: 10pt;
-          font-weight: 700;
-          color: #7f8c8d;
-          margin-bottom: 10px;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-        }
-        
-        .security-info {
-          display: inline-flex;
-          align-items: center;
-          gap: 15px;
-          margin-top: 15px;
-          padding: 10px 20px;
-          background: white;
-          border-radius: 20px;
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-        }
-        
-        .qr-code-placeholder {
-          width: 60px;
-          height: 60px;
-          background: linear-gradient(135deg, #ecf0f1, #bdc3c7);
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #7f8c8d;
-          font-size: 8pt;
-          font-weight: 600;
-        }
-        
-        .watermark {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%) rotate(-45deg);
-          font-size: 60pt;
-          font-weight: 900;
-          color: rgba(52, 152, 219, 0.03);
-          z-index: 0;
-          white-space: nowrap;
-          pointer-events: none;
-          letter-spacing: 10px;
-          text-transform: uppercase;
-        }
-        
-        .urgent-stamp {
-          position: absolute;
-          top: 100px;
-          right: 50px;
-          background: #e74c3c;
-          color: white;
-          padding: 15px 25px;
-          border-radius: 50%;
-          font-size: 12pt;
-          font-weight: 900;
-          transform: rotate(15deg);
-          box-shadow: 0 5px 15px rgba(231, 76, 60, 0.3);
-          border: 4px solid white;
-          z-index: 1;
-          animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-          0% { transform: rotate(15deg) scale(1); }
-          50% { transform: rotate(15deg) scale(1.05); }
-          100% { transform: rotate(15deg) scale(1); }
-        }
-        
-        .logo-container {
-          text-align: center;
-          margin-bottom: 20px;
-          padding: 15px;
-          background: linear-gradient(135deg, #f8fafc, #ecf0f1);
-          border-radius: 12px;
-          border: 2px dashed #3498db;
-        }
-        
-        .logo-placeholder {
-          display: inline-block;
-          width: 120px;
-          height: 120px;
-          background: linear-gradient(135deg, #3498db, #2c3e50);
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-size: 16pt;
-          font-weight: 900;
-          margin: 0 auto 15px;
-          box-shadow: 0 8px 20px rgba(52, 152, 219, 0.2);
-        }
-        
-        .hospital-name {
-          font-size: 18pt;
-          font-weight: 800;
-          color: #2c3e50;
-          margin: 0;
-          background: linear-gradient(135deg, #2c3e50, #3498db);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-        
-        .hospital-slogan {
-          font-size: 10pt;
-          color: #7f8c8d;
-          margin: 5px 0 0 0;
-          font-weight: 500;
-          letter-spacing: 1px;
-        }
-        
-        @media print {
-          body {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-            margin: 0;
-            padding: 0;
-          }
-          
-          .ordonnance-container {
-            border: none;
-            box-shadow: none;
-            padding: 0;
-          }
-          
-          .watermark {
-            opacity: 0.05;
-          }
-          
-          .urgent-stamp {
-            animation: none;
-          }
-        }
-        
-        .text-right {
-          text-align: right;
-        }
-        
-        .text-center {
-          text-align: center;
-        }
-        
-        .text-bold {
-          font-weight: 700;
-        }
-        
-        .color-primary {
-          color: #3498db;
-        }
-        
-        .color-success {
-          color: #27ae60;
-        }
-        
-        .mb-20 {
-          margin-bottom: 20px;
-        }
-        
-        .mt-30 {
-          margin-top: 30px;
-        }
-        
-        .p-20 {
-          padding: 20px;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="ordonnance-container">
-        <!-- Filigrane de sécurité -->
-        <div class="watermark">VALIDE</div>
-        
-        <!-- Timbre urgent si nécessaire -->
-        ${urgent ? '<div class="urgent-stamp">URGENT</div>' : ''}
-        
-        <!-- Logo et informations de l'établissement -->
-        <div class="logo-container">
-          <div class="logo-placeholder">HCY</div>
-          <h2 class="hospital-name">${defaultData.centreNom}</h2>
-          <p class="hospital-slogan">Excellence Médicale • Soins de Qualité • Innovation</p>
-        </div>
-        
-        <!-- En-tête principal -->
-        <div class="header">
-          <h1 class="main-title">Ordonnance Médicale</h1>
-          <p class="subtitle">Prescription Officielle • Document Médical Légal</p>
-          <div class="prescription-badge">
-            N° Prescription: ${prescriptionNum}
-          </div>
-        </div>
-        
-        <!-- Grille d'informations -->
-        <div class="info-grid-container">
-          <!-- Carte Informations Patient -->
-          <div class="info-card">
-            <h3 class="card-title">Informations du Patient</h3>
-            <div class="info-row">
-              <span class="info-label">Nom complet:</span>
-              <span class="info-value text-bold color-primary">${defaultData.patientNom}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Âge:</span>
-              <span class="info-value">${defaultData.patientAge}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Identifiant:</span>
-              <span class="info-value text-bold">${defaultData.patientId}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Date prescription:</span>
-              <span class="info-value text-bold">${defaultData.datePrescription}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Validité:</span>
-              <span class="info-value color-success text-bold">${defaultData.dateValidite}</span>
-            </div>
-          </div>
-          
-          <!-- Carte Informations Médicales -->
-          <div class="info-card">
-            <h3 class="card-title">Informations Médicales</h3>
-            <div class="info-row">
-              <span class="info-label">Centre de santé:</span>
-              <span class="info-value">${defaultData.centreNom}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Médecin prescripteur:</span>
-              <span class="info-value text-bold color-primary">${defaultData.medecinNom}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Type de prescription:</span>
-              <span class="info-value">${getTypeLabel(typePrestation) || 'Pharmacie'}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">N° RPPS:</span>
-              <span class="info-value">${defaultData.medecinRPPS}</span>
-            </div>
-          </div>
-          
-          <!-- Carte Diagnostic -->
-          <div class="info-card">
-            <h3 class="card-title">Diagnostic / Affection</h3>
-            <div class="info-row">
-              <span class="info-label">Code CIM:</span>
-              <span class="info-value text-bold">${affectionCode || 'J00 - J99'}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Libellé:</span>
-              <span class="info-value">${affectionDetails?.libelle || 'Affections des voies respiratoires supérieures'}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Gravité:</span>
-              <span class="info-value">
-                <span style="color: #e74c3c; font-weight: 600;">● Moyenne</span>
-              </span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Remboursable:</span>
-              <span class="info-value color-success text-bold">OUI</span>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Section Prescription -->
-        <div class="prescription-section">
-          <div class="section-header">
-            <span>Détails de la Prescription</span>
-            <span class="badge-count">${selectedMedicaments?.length || 0} actes prescrits</span>
-          </div>
-          
-          <table class="prescription-table">
-            <thead>
-              <tr>
-                <th style="width: 5%">N°</th>
-                <th style="width: 30%">Désignation</th>
-                <th style="width: 12%">Quantité</th>
-                <th style="width: 23%">Posologie</th>
-                <th style="width: 15%">Prix unitaire</th>
-                <th style="width: 15%">Montant</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${selectedMedicaments?.length > 0 ? selectedMedicaments.map((med, index) => {
-                const prixUnitaire = parseFloat(med.PRIX_UNITAIRE) || 0;
-                const quantite = parseInt(med.QUANTITE) || 1;
-                const montant = prixUnitaire * quantite;
-                const isGeneric = med.NOM_GENERIQUE || med.nom_generique;
-                
-                return `
-                  <tr>
-                    <td class="text-center">${index + 1}</td>
-                    <td>
-                      <div class="medicament-name">${med.LIBELLE || med.libelle || 'Médicament'}</div>
-                      ${isGeneric ? `<div class="medicament-details">Générique: ${isGeneric}</div>` : ''}
-                      ${med.FORME_PHARMACEUTIQUE ? `<div class="medicament-details">Forme: ${med.FORME_PHARMACEUTIQUE}</div>` : ''}
-                    </td>
-                    <td class="text-center">
-                      <strong>${quantite}</strong><br>
-                      <span style="font-size: 9pt; color: #7f8c8d;">${med.UNITE || 'boîte(s)'}</span>
-                    </td>
-                    <td>
-                      ${med.POSOLOGIE || 'À déterminer'}<br>
-                      ${med.DUREE ? `<span style="font-size: 9.5pt; color: #3498db;">Durée: ${med.DUREE} jours</span>` : ''}
-                    </td>
-                    <td class="text-right text-bold">
-                      ${prixUnitaire.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA
-                    </td>
-                    <td class="text-right text-bold color-primary">
-                      ${montant.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA
-                    </td>
-                  </tr>
-                `;
-              }).join('') : `
-                <tr>
-                  <td colspan="6" class="text-center p-20" style="color: #95a5a6;">
-                    Aucun médicament prescrit
-                  </td>
-                </tr>
-              `}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colspan="5" class="text-right text-bold">
-                  TOTAL DE LA PRESCRIPTION
-                </td>
-                <td class="text-right">
-                  <span class="total-amount">
-                    ${totalPrescription.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA
-                  </span>
-                </td>
-              </tr>
-              <tr>
-                <td colspan="5" class="text-right">
-                  Mode de remboursement:
-                </td>
-                <td class="text-right text-bold color-success">
-                  Sécurité Sociale + Assurance
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        
-        <!-- Section Observations -->
-        <div class="observations-card">
-          <h3 class="observations-title">Observations Médicales</h3>
-          <div class="observations-content">
-            ${observations || `
-              • Suivre scrupuleusement la posologie indiquée<br>
-              • Ne pas interrompre le traitement avant la fin<br>
-              • Consulter en cas d'effets secondaires<br>
-              • Tenir hors de portée des enfants
-            `}
-          </div>
-        </div>
-        
-        <!-- Section Signatures -->
-        <div class="signatures-section">
-          <div class="signature-block">
-            <div class="signature-line"></div>
-            <h4 class="signature-label">Médecin Prescripteur</h4>
-            <p class="signature-details">
-              ${defaultData.medecinNom}<br>
-              <span style="color: #3498db; font-weight: 600;">Médecin Généraliste</span><br>
-              N° RPPS: ${defaultData.medecinRPPS}
-            </p>
-            <div class="signature-badge">Signature et cachet</div>
-          </div>
-          
-          <div class="signature-block">
-            <div class="signature-line"></div>
-            <h4 class="signature-label">Pharmacien Exécutant</h4>
-            <p class="signature-details">
-              Pharmacie du Centre<br>
-              <span style="color: #27ae60; font-weight: 600;">Pharmacien Titulaire</span><br>
-              N° d'agrément: PH12345678
-            </p>
-            <div class="signature-badge">Signature et date d'exécution</div>
-          </div>
-          
-          <div class="signature-block">
-            <div class="signature-line"></div>
-            <h4 class="signature-label">Service Comptabilité</h4>
-            <p class="signature-details">
-              Pour remboursement<br>
-              <span style="color: #e74c3c; font-weight: 600;">Document à conserver</span><br>
-              Valable 30 jours
-            </p>
-            <div class="signature-badge">Cachet administratif</div>
-          </div>
-        </div>
-        
-        <!-- Pied de page -->
-        <div class="footer">
-          <h4 class="footer-title">Informations Légales et Sécurité</h4>
-          <p>
-            Document électronique sécurisé généré par le Système de Gestion Médicale AMS Pro v3.0<br>
-            Référence unique: ${prescriptionNum} • Date de génération: ${moment().format('DD/MM/YYYY HH:mm')}
-          </p>
-          <div class="security-info">
-            <div class="qr-code-placeholder">QR CODE</div>
-            <div style="text-align: left;">
-              <div style="font-weight: 600; color: #2c3e50;">Document Authentique</div>
-              <div style="font-size: 8pt;">Scannez pour vérifier la validité<br>© ${new Date().getFullYear()} AMS Healthcare Solutions</div>
-            </div>
-          </div>
-          <p style="margin-top: 15px; font-size: 8.5pt; color: #bdc3c7;">
-            Tout document falsifié est passible de poursuites judiciaires • Conservation: 5 ans
-          </p>
-        </div>
-      </div>
-      
-      <script>
-        window.onload = function() {
-          setTimeout(function() {
-            window.print();
-          }, 800);
-        };
-        
-        window.onafterprint = function() {
-          window.close();
-        };
-      </script>
-    </body>
-    </html>
-  `);
-  
-  printWindow.document.close();
-  
-  // Fermer la fenêtre après impression
-  printWindow.onafterprint = () => {
-    printWindow.close();
-    setPrintingOrdonnance(false);
-    setOrdonnanceToPrint(null);
-  };
-  
-  // Fermeture de sécurité après 3 secondes
-  setTimeout(() => {
-    if (!printWindow.closed) {
-      printWindow.close();
-      setPrintingOrdonnance(false);
-      setOrdonnanceToPrint(null);
-    }
-  }, 3000);
-};
-
-  // ==================== CHARGEMENT DES DONNÉES ====================
-  const cleanPrescriptionData = (data) => {
-    const cleanedData = { ...data };
-    
-    // Nettoyer les détails
-    if (cleanedData.details && Array.isArray(cleanedData.details)) {
-      cleanedData.details = cleanedData.details.map(detail => ({
-        TYPE_ELEMENT: detail.TYPE_ELEMENT || 'MEDICAMENT',
-        COD_ELEMENT: detail.COD_ELEMENT 
-          ? String(detail.COD_ELEMENT).trim() 
-          : detail.COD_MED 
-            ? String(detail.COD_MED).trim() 
-            : `MED${Math.floor(Math.random() * 10000)}`,
-        LIBELLE: detail.LIBELLE || 'Médicament non spécifié',
-        QUANTITE: parseInt(detail.QUANTITE) || 1,
-        POSOLOGIE: detail.POSOLOGIE || 'À déterminer',
-        DUREE_TRAITEMENT: parseInt(detail.DUREE) || 7,
-        PRIX_UNITAIRE: parseFloat(detail.PRIX_UNITAIRE) || 0,
-        REMBOURSABLE: detail.REMBOURSABLE || 0
-      }));
-    }
-    
-    // S'assurer que tous les champs requis sont présents
-    if (!cleanedData.COD_PRESCRIPTEUR) {
-      cleanedData.COD_PRESCRIPTEUR = selectedPrestataire?.id || null;
-    }
-    
-    if (!cleanedData.COD_CEN) {
-      cleanedData.COD_CEN = centreId;
-    }
-    
-    return cleanedData;
-  };
-
   // Charger les centres de santé
   const loadCentres = useCallback(async () => {
     try {
-      console.log('🔍 Chargement des centres de santé...');
-      const response = await centresAPI.getAll();
-      console.log('📊 Réponse centres:', response);
+      setLoadingCentres(true);
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const userCentreId = user?.centre_id || user?.COD_CEN || user?.prestataire?.centre_id;
+      
+      let response;
+      
+      if (user && !user.super_admin && userCentreId) {
+        response = await centresAPI.getById(userCentreId);
+        
+        if (response.success && response.centre) {
+          setCentres([response.centre]);
+          const centreIdToSet = response.centre.id || response.centre.COD_CEN;
+          setCentreId(centreIdToSet?.toString());
+          localStorage.setItem('selectedCentre', centreIdToSet?.toString());
+          setCentreNom(response.centre.nom || response.centre.LIB_CEN || `Centre ${centreIdToSet}`);
+          setCentreDetails(response.centre);
+        } else {
+          response = await centresAPI.getAll();
+        }
+      } else {
+        response = await centresAPI.getAll();
+      }
       
       if (response.success && Array.isArray(response.centres)) {
-        setCentres(response.centres);
-        console.log(`✅ ${response.centres.length} centres chargés`);
-      } else if (Array.isArray(response)) {
-        setCentres(response);
-        console.log(`✅ ${response.length} centres chargés (format tableau)`);
-      } else {
-        console.warn('⚠️ Aucun centre trouvé ou format de réponse inattendu');
-        setCentres([{ id: '1', nom: 'Centre Principal', cod_cen: '1' }]);
+        const validCentres = response.centres.filter(centre => centre && (centre.id || centre.COD_CEN));
+        setCentres(validCentres);
+        
+        if (validCentres.length > 0 && !centreId) {
+          const firstCentre = validCentres[0];
+          const newCentreId = firstCentre.id || firstCentre.COD_CEN;
+          setCentreId(newCentreId.toString());
+          localStorage.setItem('selectedCentre', newCentreId.toString());
+          setCentreNom(firstCentre.nom || firstCentre.LIB_CEN || `Centre ${newCentreId}`);
+          setCentreDetails(firstCentre);
+        }
+      } else if (response.success && response.centre) {
+        setCentres([response.centre]);
+        const centreIdToSet = response.centre.id || response.centre.COD_CEN;
+        setCentreId(centreIdToSet?.toString());
+        setCentreNom(response.centre.nom || response.centre.LIB_CEN || `Centre ${centreIdToSet}`);
+        setCentreDetails(response.centre);
       }
+      
     } catch (error) {
-      console.error('❌ Erreur chargement centres:', error);
+      console.error('Erreur chargement centres:', error);
       message.error('Erreur lors du chargement des centres de santé');
-      setCentres([{ id: '1', nom: 'Centre Principal', cod_cen: '1' }]);
+    } finally {
+      setLoadingCentres(false);
     }
-  }, []);
+  }, [centreId]);
+
+  // Mettre à jour le nom du centre
+  useEffect(() => {
+    if (centreId && centres.length > 0) {
+      const centre = centres.find(c => 
+        (c.id && c.id.toString() === centreId.toString()) || 
+        (c.COD_CEN && c.COD_CEN.toString() === centreId.toString())
+      );
+      if (centre) {
+        setCentreNom(centre.nom || centre.LIB_CEN || centre.NOM_CENTRE || `Centre ${centreId}`);
+        setCentreDetails(centre);
+      }
+    }
+  }, [centreId, centres]);
 
   // Charger les prestataires du centre
-  const loadPrestataires = useCallback(async (searchTerm = '') => {
+  const loadPrestataires = useCallback(async () => {
     try {
-      setLoading(prev => ({ ...prev, prestataires: true }));
-      console.log(`🔍 Chargement des médecins pour le centre: ${centreId}`);
+      if (!centreId || centreId === 'null' || centreId === 'undefined') {
+        return;
+      }
       
-      const filters = {
-        page: 1,
-        limit: 100,
+      setLoadingPrestataires(true);
+      
+      const response = await centresAPI.getPrestatairesByCentre(centreId, {
         type_prestataire: 'MEDECIN',
         actif: '1',
         affectation_active: '1',
-        search: searchTerm
-      };
-      
-      const response = await centresAPI.getPrestatairesByCentre(centreId, filters);
-      
-      console.log('📊 Réponse API getPrestatairesByCentre:', response);
-      
-      if (response && response.success && response.prestataires) {
-        const formattedPrestataires = response.prestataires.map(p => {
-          const specialite = p.SPECIALITE || p.specialite || '';
-          const prestataireData = {
-            id: p.id || p.COD_PRE || p.COD_PRESCRIPTEUR || `prest-${Date.now()}`,
-            COD_PRE: p.COD_PRE || p.id || p.COD_PRESCRIPTEUR,
-            NOM_PRESTATAIRE: p.NOM_PRESTATAIRE || p.nom || p.nom_prestataire || 'Nom non spécifié',
-            PRENOM_PRESTATAIRE: p.PRENOM_PRESTATAIRE || p.prenom || p.prenom_prestataire || '',
-            SPECIALITE: specialite,
-            specialite: specialite,
-            TELEPHONE: p.TELEPHONE || p.telephone || p.telephone_prestataire || '',
-            EMAIL: p.EMAIL || p.email || p.email_prestataire || '',
-            COD_CEN: centreId,
-            ACTIF: p.ACTIF !== undefined ? p.ACTIF : (p.actif || (p.statut_actif === 'Actif' ? 1 : 0)),
-            statut_actif: p.statut_actif || (p.ACTIF === 1 ? 'Actif' : 'Inactif'),
-            titre: p.titre || p.TITRE || p.titre_prestataire || 'Dr.',
-            cod_cen: p.cod_cen || p.COD_CEN || p.cod_cen_prestataire || centreId,
-            statut_affectation: p.statut_affectation || p.STATUT_AFFECTATION || 'Actif',
-            date_debut_affectation: p.date_debut_affectation || p.DATE_DEBUT_AFFECTATION,
-            date_fin_affectation: p.date_fin_affectation || p.DATE_FIN_AFFECTATION
-          };
-          
-          prestataireData.nom_complet = `${prestataireData.PRENOM_PRESTATAIRE} ${prestataireData.NOM_PRESTATAIRE}`.trim();
-          
-          if (!prestataireData.nom_complet || prestataireData.nom_complet.trim() === '') {
-            prestataireData.nom_complet = `${prestataireData.titre} ${prestataireData.PRENOM_PRESTATAIRE} ${prestataireData.NOM_PRESTATAIRE}`.trim();
-          }
-          
-          return prestataireData;
-        }).filter(p => {
-          const isActive = p.ACTIF === 1 || p.statut_actif === 'Actif';
-          const hasId = p.id && p.id.toString().trim() !== '';
-          return hasId && isActive;
-        });
-        
-        console.log(`✅ ${formattedPrestataires.length} médecins formatés pour le centre ${centreId}`);
-        
-        setPrestataires(formattedPrestataires);
-        setSearchPrestataireResults(formattedPrestataires);
-        
-        // Si nous avons un médecin de consultation, essayons de le trouver d'abord
-        if (medecinConsultation && formattedPrestataires.length > 0) {
-          const medecinConsultationTrouve = formattedPrestataires.find(p => {
-            if (p.nom_complet && medecinConsultation.nom) {
-              return p.nom_complet.toLowerCase().includes(medecinConsultation.nom.toLowerCase()) ||
-                     medecinConsultation.nom.toLowerCase().includes(p.nom_complet.toLowerCase());
-            }
-            return false;
-          });
-          
-          if (medecinConsultationTrouve && !selectedPrestataire) {
-            setSelectedPrestataire(medecinConsultationTrouve);
-            prescriptionForm.setFieldValue('COD_PRESCRIPTEUR', medecinConsultationTrouve.id);
-            console.log(`👨‍⚕️ Médecin de consultation sélectionné: ${medecinConsultationTrouve.nom_complet}`);
-          }
-        }
-        
-        // Vérifier si le médecin sélectionné appartient à ce centre
-        if (selectedPrestataire && formattedPrestataires.length > 0) {
-          const currentPrestataire = formattedPrestataires.find(p => 
-            p.id.toString() === selectedPrestataire.id.toString() || 
-            (p.COD_PRE && p.COD_PRE.toString() === selectedPrestataire.COD_PRE?.toString())
-          );
-          
-          if (!currentPrestataire) {
-            setSelectedPrestataire(null);
-            prescriptionForm.setFieldValue('COD_PRESCRIPTEUR', null);
-            message.info('Le médecin sélectionné a été réinitialisé car il n\'est pas affecté à ce centre');
-          }
-        }
-        
-        // Sélectionner le premier prestataire par défaut si aucun n'est sélectionné
-        if (formattedPrestataires.length > 0 && !selectedPrestataire) {
-          const prestataireActif = formattedPrestataires[0];
-          setSelectedPrestataire(prestataireActif);
-          prescriptionForm.setFieldValue('COD_PRESCRIPTEUR', prestataireActif.id);
-          console.log(`👨‍⚕️ Prestataire par défaut sélectionné: ${prestataireActif.nom_complet}`);
-        } else if (formattedPrestataires.length === 0) {
-          console.warn('⚠️ Aucun médecin trouvé pour ce centre');
-          message.warning('Aucun médecin actif disponible pour ce centre.');
-          
-          setSelectedPrestataire(null);
-          prescriptionForm.setFieldValue('COD_PRESCRIPTEUR', null);
-        }
-        
-      } else {
-        console.error('❌ Erreur API centresAPI.getPrestatairesByCentre:', response?.message);
-        setPrestataires([]);
-        setSearchPrestataireResults([]);
-        message.error(response?.message || 'Erreur lors du chargement des médecins');
-      }
-    } catch (error) {
-      console.error('❌ Erreur chargement médecins par centre:', error);
-      message.error('Erreur réseau lors du chargement des médecins');
-      setPrestataires([]);
-      setSearchPrestataireResults([]);
-      setSelectedPrestataire(null);
-    } finally {
-      setLoading(prev => ({ ...prev, prestataires: false }));
-    }
-  }, [centreId, selectedPrestataire, prescriptionForm, medecinConsultation]);
-
-  // Rechercher des prestataires avec filtrage local
-  const searchPrestataires = useCallback((searchTerm) => {
-    setSearchPrestataire(searchTerm);
-    
-    if (!searchTerm || searchTerm.trim().length < 1) {
-      setSearchPrestataireResults(prestataires);
-      return;
-    }
-    
-    try {
-      const searchLower = searchTerm.toLowerCase();
-      const filtered = prestataires.filter(p => {
-        const nomComplet = (p.nom_complet || '').toLowerCase();
-        const nom = (p.nom || '').toLowerCase();
-        const prenom = (p.prenom || '').toLowerCase();
-        const specialite = (p.specialite || '').toLowerCase();
-        const telephone = (p.telephone || '');
-        const titre = (p.titre || '').toLowerCase();
-        
-        return (
-          nomComplet.includes(searchLower) ||
-          nom.includes(searchLower) ||
-          prenom.includes(searchLower) ||
-          specialite.includes(searchLower) ||
-          telephone.includes(searchTerm) ||
-          titre.includes(searchLower) ||
-          `${prenom} ${nom}`.includes(searchLower) ||
-          `${titre} ${prenom} ${nom}`.includes(searchLower)
-        );
+        limit: 100
       });
       
-      setSearchPrestataireResults(filtered);
+      if (response.success && Array.isArray(response.prestataires)) {
+        const formattedPrestataires = response.prestataires.map(p => ({
+          id: p.id || p.COD_PRE,
+          COD_PRE: p.COD_PRE || p.id,
+          NOM_PRESTATAIRE: p.NOM_PRESTATAIRE || p.nom || 'Nom non spécifié',
+          PRENOM_PRESTATAIRE: p.PRENOM_PRESTATAIRE || p.prenom || '',
+          SPECIALITE: p.SPECIALITE || p.specialite || '',
+          TELEPHONE: p.TELEPHONE || p.telephone || '',
+          EMAIL: p.EMAIL || p.email || '',
+          MATRICULE: p.MATRICULE || p.matricule || '',
+          SEXE: p.SEXE || p.sexe || '',
+          GRADE: p.GRADE || p.grade || '',
+          nom_complet: `${p.PRENOM_PRESTATAIRE || ''} ${p.NOM_PRESTATAIRE || ''}`.trim(),
+          specialite: p.SPECIALITE || p.specialite || '',
+          telephone: p.TELEPHONE || p.telephone || ''
+        }));
+        
+        setPrestataires(formattedPrestataires);
+        
+        if (formattedPrestataires.length > 0 && !selectedPrestataire) {
+          const user = JSON.parse(localStorage.getItem('user') || '{}');
+          const userPrestataireId = user?.prestataire_id || user?.COD_PRE;
+          
+          let defaultPrestataire = formattedPrestataires[0];
+          
+          if (userPrestataireId) {
+            const userPrestataire = formattedPrestataires.find(p => 
+              p.id === userPrestataireId || p.COD_PRE === userPrestataireId
+            );
+            if (userPrestataire) {
+              defaultPrestataire = userPrestataire;
+            }
+          }
+          
+          setSelectedPrestataire(defaultPrestataire);
+          prescriptionForm.setFieldValue('COD_PRESCRIPTEUR', defaultPrestataire.id);
+        }
+      } else {
+        setPrestataires([]);
+      }
     } catch (error) {
-      console.error('❌ Erreur recherche prestataires:', error);
-      setSearchPrestataireResults(prestataires);
+      console.error('Erreur chargement prestataires:', error);
+      message.error('Erreur lors du chargement des médecins');
+    } finally {
+      setLoadingPrestataires(false);
     }
-  }, [prestataires]);
+  }, [centreId, selectedPrestataire, prescriptionForm]);
 
-  // Sélectionner un prestataire
-  const selectPrestataire = (prestataire, fromConsultation = false) => {
-    if (!prestataire || !prestataire.id) {
-      message.error('Prestataire invalide');
+  // Charger les actes médicaux selon le type
+  const loadActesMedicaux = useCallback(async (searchTerm = '') => {
+    try {
+      if (!typePrestation) return;
+      
+      setLoadingActes(true);
+      
+      let actesData = [];
+      
+      // Récupérer les actes selon le type
+      if (typePrestation === 'PHARMACIE' || typePrestation === 'MEDICAMENT') {
+        // Charger les médicaments du barème CMF
+        const response = await baremesAPI.getActesMedicaux(COD_PAY_DEFAULT, { 
+          search: searchTerm, 
+          limit: 100 
+        });
+        
+        if (response.success && Array.isArray(response.actes)) {
+          actesData = response.actes;
+        }
+      } else if (typePrestation === 'BIOLOGIE') {
+        // Charger les examens biologiques
+        const response = await prestationsAPI.getAllPrestations(
+          { type: 'BIOLOGIE', search: searchTerm },
+          { limit: 100 }
+        );
+        
+        if (response.success && Array.isArray(response.prestations)) {
+          actesData = response.prestations;
+        }
+      } else if (typePrestation === 'CONSULTATION') {
+        // Charger les consultations
+        const response = await prestationsAPI.getAllPrestations(
+          { type: 'CONSULTATION', search: searchTerm },
+          { limit: 100 }
+        );
+        
+        if (response.success && Array.isArray(response.prestations)) {
+          actesData = response.prestations;
+        }
+      } else {
+        // Pour les autres types, charger depuis l'API générale
+        const response = await prestationsAPI.getAllPrestations(
+          { type: typePrestation, search: searchTerm },
+          { limit: 100 }
+        );
+        
+        if (response.success && Array.isArray(response.prestations)) {
+          actesData = response.prestations;
+        }
+      }
+      
+      // Formater les actes pour l'affichage
+      const formattedActes = actesData.map((item, index) => ({
+        key: `acte_${item.COD_PREST || item.COD_ACTE || item.id || index}_${Date.now()}`,
+        id: item.id || item.COD_PREST || item.COD_ACTE,
+        CODE_ACTE: item.COD_PREST || item.COD_ACTE || item.CODE || item.id,
+        LIBELLE: item.LIB_PREST || item.LIB_ACTE || item.LIBELLE_PRESTATION || item.nom || item.LIB || `Acte ${typePrestation}`,
+        PRIX: item.MONTANT || item.prix_unitaire || item.MLT_PRE || item.PRIX || item.tarif || item.PRIX_UNITAIRE || 0,
+        UNITE: item.UNITE || item.unite || 'unité',
+        CATEGORIE: item.CATEGORIE || typePrestation,
+        REMBOURSABLE: item.REMBOURSABLE || 1,
+        TYPE_ELEMENT: 'PRESTATION',
+        DESCRIPTION: item.DESCRIPTION || item.OBSERVATIONS || item.OBS_PRE || '',
+        TAUX_PRISE_EN_CHARGE: item.TAUX_PRISE_CHARGE || item.TAUX_PRISE_EN_CHARGE || 80,
+        PRIX_PRISE_EN_CHARGE: item.MONTANT_PRISE_CHARGE || item.PRIX_PRISE_EN_CHARGE || 0
+      }));
+      
+      setActesMedicaux(formattedActes);
+      
+      // Filtrer les résultats si un terme de recherche est fourni
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        const filtered = formattedActes.filter(acte =>
+          (acte.LIBELLE || '').toLowerCase().includes(searchLower) ||
+          (acte.CODE_ACTE || '').toLowerCase().includes(searchLower) ||
+          (acte.DESCRIPTION || '').toLowerCase().includes(searchLower)
+        );
+        setSearchResults(filtered);
+      } else {
+        setSearchResults(formattedActes);
+      }
+    } catch (error) {
+      console.error('Erreur chargement actes:', error);
+      message.error(`Erreur lors du chargement des ${getTypeLabel(typePrestation)}`);
+      setActesMedicaux([]);
+      setSearchResults([]);
+    } finally {
+      setLoadingActes(false);
+    }
+  }, [typePrestation]);
+
+  // Rechercher des affections avec COD_PAY = 'CMF'
+  const searchAffections = async (searchText) => {
+    if (!searchText || searchText.trim().length < 2) {
+      setAffectionOptions([]);
       return;
     }
     
-    if (!fromConsultation && medecinConsultation && prestataire.id !== medecinConsultation.id) {
-      setShowMedecinChangeAlert(true);
-    }
-    
-    setSelectedPrestataire(prestataire);
-    prescriptionForm.setFieldValue('COD_PRESCRIPTEUR', prestataire.id);
-    
-    if (!fromConsultation) {
-      setModalPrestataires(false);
-      message.success(`Médecin sélectionné: ${prestataire.nom_complet}`);
-    }
-    
-    if (activeTab === 'historique') {
-      loadMesPrescriptions();
-    }
-  };
-
-  // Charger les prescriptions du prestataire
-const loadMesPrescriptions = useCallback(async () => {
-  if (!selectedPrestataire) {
-    console.warn('⚠️ Aucun prestataire sélectionné pour charger les prescriptions');
-    return;
-  }
-  
-  try {
-    setLoading(prev => ({ ...prev, prestations: true }));
-    console.log(`📋 Chargement prescriptions pour le prestataire: ${selectedPrestataire.id}`);
-    
-    const response = await prescriptionsAPI.getAll({
-      medecin_id: selectedPrestataire.id,
-      centre_id: centreId,
-      limit: 50,
-      sortBy: 'DATE_PRESCRIPTION',
-      sortOrder: 'DESC',
-      include_details: true
-    });
-    
-    console.log('📊 Réponse prescriptions:', response);
-    
-    if (response.success && Array.isArray(response.prescriptions)) {
-      const prescriptionsWithDetails = await Promise.all(
-        response.prescriptions.map(async (prescription) => {
-          try {
-            let details = [];
-            
-            // Si les détails ne sont pas inclus, les récupérer
-            if (!prescription.details || prescription.details.length === 0) {
-              const idToUse = prescription.COD_PRES || prescription.id || prescription.NUMERO_PRESCRIPTION;
-              if (idToUse) {
-                const detailResponse = await prescriptionsAPI.getByNumeroOrId(idToUse);
-                if (detailResponse.success && detailResponse.prescription) {
-                  details = detailResponse.prescription.details || [];
-                }
-              }
-            } else {
-              details = prescription.details;
-            }
-            
-            // Calculer le total et nombre d'actes
-            const total = details.reduce((sum, detail) => {
-              const prix = parseFloat(detail.PRIX_UNITAIRE) || 0;
-              const quantite = parseInt(detail.QUANTITE) || 1;
-              return sum + (prix * quantite);
-            }, 0);
-            
-            const nombreActes = details.length;
-            
-            // Normaliser la prescription
-            return normalizePrescription({
-              ...prescription,
-              details: details,
-              total: total,
-              nombreActes: nombreActes
-            });
-            
-          } catch (error) {
-            console.error(`❌ Erreur chargement détails prescription ${prescription.COD_PRES}:`, error);
-            return normalizePrescription({
-              ...prescription,
-              details: [],
-              total: 0,
-              nombreActes: 0
-            });
-          }
-        })
-      );
-      
-      setMesPrescriptions(prescriptionsWithDetails);
-      console.log(`✅ ${prescriptionsWithDetails.length} prescriptions chargées avec détails`);
-    } else {
-      console.warn('⚠️ Aucune prescription trouvée ou format de réponse inattendu');
-      setMesPrescriptions([]);
-    }
-  } catch (error) {
-    console.error('❌ Erreur chargement prescriptions:', error);
-    message.error('Erreur lors du chargement des prescriptions');
-    setMesPrescriptions([]);
-  } finally {
-    setLoading(prev => ({ ...prev, prestations: false }));
-  }
-}, [selectedPrestataire, centreId]);
-
-
-  const loadPrescriptionDetails = async (prescriptionId) => {
     try {
-      console.log(`🔍 Chargement des détails pour la prescription: ${prescriptionId}`);
+      setSearchingAffections(true);
       
-      let details = [];
+      const response = await affectionsAPI.search(searchText, 10);
       
-      // Méthode 1: Utiliser l'API getPrescriptionDetails
-      try {
-        const response = await prescriptionsAPI.getPrescriptionDetails(prescriptionId);
-        if (response.success && response.details) {
-          details = response.details;
-        } else if (Array.isArray(response)) {
-          details = response;
-        }
-      } catch (error1) {
-        console.warn('⚠️ Méthode getPrescriptionDetails échouée:', error1.message);
+      if (response.success && Array.isArray(response.affections)) {
+        const options = response.affections.map(aff => {
+          const id = aff.id || aff.COD_AFF || aff.CODE_AFF || aff.cod_aff;
+          const code = aff.CODE_AFF || aff.COD_AFF || aff.id;
+          const libelle = aff.LIBELLE_AFF || aff.LIB_AFF || aff.libelle || '';
+          
+          return {
+            value: id,
+            key: id,
+            label: (
+              <div>
+                <div><strong>{code}</strong> - {libelle}</div>
+                {aff.TYPE_AFFECTION && (
+                  <div style={{ fontSize: '11px', color: '#666' }}>
+                    Type: {aff.TYPE_AFFECTION}
+                  </div>
+                )}
+              </div>
+            ),
+            code: code,
+            libelle: libelle,
+            data: aff
+          };
+        });
         
-        // Méthode 2: Utiliser getByNumeroOrId
-        try {
-          const response = await prescriptionsAPI.getByNumeroOrId(prescriptionId);
-          if (response.success && response.prescription) {
-            details = response.prescription.details || [];
-          }
-        } catch (error2) {
-          console.warn('⚠️ Méthode getByNumeroOrId échouée:', error2.message);
-        }
+        setAffectionOptions(options);
+      } else {
+        setAffectionOptions([]);
       }
-      
-      console.log(`✅ ${details.length} actes trouvés pour la prescription ${prescriptionId}`);
-      return details;
     } catch (error) {
-      console.error('❌ Erreur chargement détails:', error);
-      return [];
+      console.error('Erreur recherche affections:', error);
+      message.error('Erreur lors de la recherche des affections');
+      setAffectionOptions([]);
+    } finally {
+      setSearchingAffections(false);
     }
   };
-// Normaliser les données de prescription
-// Normaliser les données de prescription
-const normalizePrescription = (prescription) => {
-  if (!prescription) return null;
-  
-  // Extraire les champs avec plusieurs noms possibles
-  const numeroPrescription = 
-    prescription.NUMERO_PRESCRIPTION || 
-    prescription.numero_prescription || 
-    prescription.numero || 
-    prescription.NUMERO || 
-    prescription.prescription_number ||
-    `PRES-${prescription.id || prescription.COD_PRES}`;
-  
-  const nomBeneficiaire = 
-    prescription.NOM_BEN || 
-    prescription.nom_beneficiaire || 
-    prescription.patient_nom || 
-    prescription.nom || 
-    'Inconnu';
-  
-  const nomMedecin = 
-    prescription.NOM_MEDECIN || 
-    prescription.nom_medecin || 
-    prescription.medecin_nom || 
-    prescription.medecin || 
-    'Non spécifié';
-  
-  const typePrestation = 
-    prescription.TYPE_PRESTATION || 
-    prescription.type_prestation || 
-    prescription.type || 
-    'Non spécifié';
-  
-  const statut = 
-    prescription.STATUT || 
-    prescription.statut || 
-    'Inconnu';
-  
-  const datePrescription = 
-    prescription.DATE_PRESCRIPTION || 
-    prescription.date_prescription || 
-    prescription.date || 
-    null;
-  
-  return {
-    id: prescription.id || prescription.COD_PRES,
-    COD_PRES: prescription.COD_PRES || prescription.id,
-    NUMERO_PRESCRIPTION: numeroPrescription,
-    NOM_BEN: nomBeneficiaire,
-    PRE_BEN: prescription.PRE_BEN || prescription.prenom,
-    NOM_MEDECIN: nomMedecin,
-    TYPE_PRESTATION: typePrestation,
-    STATUT: statut,
-    DATE_PRESCRIPTION: datePrescription,
-    COD_AFF: prescription.COD_AFF || prescription.code_affection,
-    ORIGINE: prescription.ORIGINE || prescription.origine,
-    COD_CEN: prescription.COD_CEN || prescription.centre_id,
-    details: prescription.details || prescription.actes || [],
-    total: prescription.total || 0,
-    nombreActes: prescription.nombreActes || (prescription.details ? prescription.details.length : 0) || 0,
-    // Ajouter d'autres champs si nécessaire
-    AGE: prescription.AGE || prescription.age,
-    SEX_BEN: prescription.SEX_BEN || prescription.sexe,
-    IDENTIFIANT_NATIONAL: prescription.IDENTIFIANT_NATIONAL || prescription.identifiant_national,
-    URGENT: prescription.URGENT || prescription.urgent,
-    OBSERVATIONS: prescription.OBSERVATIONS || prescription.observations
-  };
-};
 
-// Normaliser les détails d'actes
-const normalizeActe = (acte) => {
-  if (!acte) return null;
-  
-  return {
-    id: acte.id || acte.COD_ELEMENT,
-    COD_ELEMENT: acte.COD_ELEMENT || acte.code || acte.id,
-    LIBELLE: acte.LIBELLE || acte.libelle || acte.nom || 'Acte non spécifié',
-    QUANTITE: parseInt(acte.QUANTITE || acte.quantite || 1),
-    POSOLOGIE: acte.POSOLOGIE || acte.posologie || 'À déterminer',
-    PRIX_UNITAIRE: parseFloat(acte.PRIX_UNITAIRE || acte.prix || 0),
-    REMBOURSABLE: acte.REMBOURSABLE || acte.remboursable || 0,
-    TYPE_ELEMENT: acte.TYPE_ELEMENT || acte.type_element || 'MEDICAMENT',
-    DUREE: acte.DUREE || acte.duree || '7',
-    UNITE: acte.UNITE || acte.unite || 'boîte(s)'
-  };
-};
-
-const handleViewPrescriptionDetails = async (prescription) => {
-  try {
-    setLoading(prev => ({ ...prev, prestations: true }));
+  // Gérer la sélection d'une affection
+  const handleSelectAffection = (value, option) => {
+    if (!option) return;
     
-    console.log('🔍 Prescription originale:', prescription);
+    const selectedAffection = option.data;
+    const code = option.code || value;
+    const libelle = option.libelle || '';
     
-    // Charger les détails
-    const details = await loadDetailsForPrescription(prescription);
-    console.log('📋 Détails chargés:', details);
-    
-    // Normaliser la prescription
-    const normalizedPrescription = normalizePrescription(prescription);
-    console.log('📊 Prescription normalisée:', normalizedPrescription);
-    
-    normalizedPrescription.details = details.map(normalizeActe);
-    normalizedPrescription.total = details.reduce((sum, detail) => {
-      const prix = parseFloat(detail.PRIX_UNITAIRE || detail.prix || 0);
-      const quantite = parseInt(detail.QUANTITE || detail.quantite || 1);
-      return sum + (prix * quantite);
-    }, 0);
-    normalizedPrescription.nombreActes = details.length;
-    
-    console.log('✅ Prescription finale avec détails:', normalizedPrescription);
-    
-    setSelectedPrescription(normalizedPrescription);
-    setPrescriptionDetails(normalizedPrescription);
-    setActiveTab('execution');
-    
-    // Préparer les actes pour l'exécution
-    const initialActes = details.map((detail, index) => {
-      const normalizedActe = normalizeActe(detail);
-      return {
-        ...normalizedActe,
-        execute: false,
-        quantite_executee: normalizedActe.QUANTITE,
-        prix_execute: normalizedActe.PRIX_UNITAIRE,
-        key: normalizedActe.id || `${normalizedActe.COD_ELEMENT}_${index}`
-      };
-    });
-    
-    setActesExecutes(initialActes);
-    calculerTotalExecution();
-    
-    message.success(`Détails de la prescription chargés: ${details.length} actes - Numéro: ${normalizedPrescription.NUMERO_PRESCRIPTION}`);
-  } catch (error) {
-    console.error('❌ Erreur chargement détails prescription:', error);
-    message.error('Erreur lors du chargement des détails de la prescription');
-  } finally {
-    setLoading(prev => ({ ...prev, prestations: false }));
-  }
-};
-
-  const handlePrintPrescriptionFromHistory = async (prescription) => {
-    try {
-      setLoading(prev => ({ ...prev, prestations: true }));
+    if (code && libelle) {
+      setAffectionCode(code);
+      setAffectionLibelle(libelle);
+      setAffectionDetails(selectedAffection);
+    } else {
+      const parts = value?.split(' - ') || [];
+      const fallbackCode = parts[0] || value || '';
+      const fallbackLibelle = parts.slice(1).join(' - ') || '';
       
-      // Charger les détails si non présents
-      let details = prescription.details || [];
-      if (details.length === 0) {
-        details = await loadPrescriptionDetails(
-          prescription.COD_PRES || prescription.id || prescription.NUMERO_PRESCRIPTION
-        );
-      }
-      
-      // Trouver le centre
-      const prescriptionCentreId = prescription.COD_CEN || centreId;
-      const currentCentre = centres.find(c => 
-        c.id === prescriptionCentreId || 
-        c.cod_cen === prescriptionCentreId
-      ) || {};
-      
-      // Préparer les données pour l'ordonnance
-      const ordonnanceData = {
-        numero: prescription.NUMERO_PRESCRIPTION || prescription.id,
-        patient: {
-          nom_complet: `${prescription.PRE_BEN || ''} ${prescription.NOM_BEN || ''}`.trim() || 
-                     `${prescription.prenom || ''} ${prescription.nom || ''}`.trim(),
-          age: prescription.AGE || calculateAge(prescription.DATE_NAISSANCE || prescription.date_naissance),
-          sexe: prescription.SEX_BEN || prescription.sexe,
-          numero_carte: prescription.IDENTIFIANT_NATIONAL || prescription.numero_carte,
-          identifiant_national: prescription.IDENTIFIANT_NATIONAL
-        },
-        selectedPrestataire: {
-          nom_complet: prescription.NOM_MEDECIN || prescription.medecin_nom,
-          specialite: prescription.SPECIALITE || prescription.medecin_specialite,
-          titre: prescription.TITRE || 'Dr.'
-        },
-        selectedMedicaments: details.map(detail => ({
-          ...detail,
-          estManuel: estActeManuel(detail),
-          // S'assurer que tous les champs nécessaires sont présents
-          LIBELLE: detail.LIBELLE || detail.libelle || 'Acte non spécifié',
-          QUANTITE: detail.QUANTITE || 1,
-          POSOLOGIE: detail.POSOLOGIE || 'À déterminer',
-          PRIX_UNITAIRE: detail.PRIX_UNITAIRE || 0,
-          UNITE: detail.UNITE || 'boîte(s)'
-        })),
-        centreId: prescriptionCentreId,
-        centres: centres,
-        typePrestation: prescription.TYPE_PRESTATION,
-        affectionCode: prescription.COD_AFF,
-        urgent: prescription.URGENT || false,
-        dateValidite: prescription.DATE_VALIDITE,
-        statut: prescription.STATUT,
-        observations: prescription.OBSERVATIONS,
-        modeRemboursement: prescription.MODE_REMBOURSEMENT,
-        delaiValidite: prescription.DELAI_VALIDITE,
-        nombreActes: details.length,
-        total: details.reduce((sum, med) => {
-          const prix = parseFloat(med.PRIX_UNITAIRE) || 0;
-          const quantite = parseInt(med.QUANTITE) || 1;
-          return sum + (prix * quantite);
-        }, 0)
-      };
-      
-      setOrdonnanceToPrint(ordonnanceData);
-      setPrintModalVisible(true);
-      
-    } catch (error) {
-      console.error('❌ Erreur préparation ordonnance:', error);
-      message.error('Erreur lors de la préparation de l\'ordonnance');
-    } finally {
-      setLoading(prev => ({ ...prev, prestations: false }));
+      setAffectionCode(fallbackCode);
+      setAffectionLibelle(fallbackLibelle);
     }
   };
 
   // Rechercher le patient par numéro de carte
   const searchPatient = async (cardNumber) => {
     if (!cardNumber || cardNumber.trim().length < 3) {
-      message.warning('Veuillez entrer un numéro de carte valide (min 3 caractères)');
+      message.warning('Veuillez entrer un numéro de carte valide (minimum 3 caractères)');
       return;
     }
     
     setLoading(prev => ({ ...prev, patient: true }));
     try {
-      console.log('🔍 Recherche patient par carte:', cardNumber);
+      let response;
       
-      let patientData = null;
-      
-      try {
-        const response = await consultationsAPI.searchByCard(cardNumber);
-        console.log('📊 Réponse searchByCard:', response);
-        
-        if (response.success && Array.isArray(response.patients) && response.patients.length > 0) {
-          patientData = response.patients[0];
-        } else if (Array.isArray(response) && response.length > 0) {
-          patientData = response[0];
-        }
-      } catch (error1) {
-        console.warn('⚠️ searchByCard a échoué:', error1.message);
-        
-        try {
-          const response = await beneficiairesAPI.searchAdvanced(cardNumber, {}, 1);
-          console.log('📊 Réponse searchAdvanced:', response);
-          
-          if (response.success && Array.isArray(response.beneficiaires) && response.beneficiaires.length > 0) {
-            patientData = response.beneficiaires[0];
-          }
-        } catch (error2) {
-          console.warn('⚠️ searchAdvanced a échoué:', error2.message);
-        }
+      if (beneficiairesAPI.searchAdvanced) {
+        response = await beneficiairesAPI.searchAdvanced(cardNumber, {}, 10, 1);
+      } else if (beneficiairesAPI.getAll) {
+        response = await beneficiairesAPI.getAll({ 
+          NUMERO_CARTE: cardNumber,
+          limit: 1 
+        });
+      } else {
+        throw new Error('API bénéficiaires non disponible');
       }
       
-      if (patientData) {
-        console.log('✅ Patient trouvé:', patientData);
+      if (response.success && Array.isArray(response.beneficiaires) && response.beneficiaires.length > 0) {
+        const patientData = response.beneficiaires[0];
         
         const formattedPatient = {
           id: patientData.ID_BEN || patientData.COD_BEN || patientData.id,
-          COD_BEN: patientData.ID_BEN || patientData.COD_BEN || patientData.id,
-          nom: patientData.NOM_BEN || patientData.nom || patientData.NOM,
-          prenom: patientData.PRE_BEN || patientData.prenom || patientData.PRENOM,
+          COD_BEN: patientData.COD_BEN || patientData.ID_BEN || patientData.id,
+          ID_BEN: patientData.COD_BEN || patientData.ID_BEN || patientData.id,
+          nom: patientData.NOM_BEN || patientData.nom,
+          prenom: patientData.PRE_BEN || patientData.prenom,
           nom_complet: `${patientData.PRE_BEN || patientData.prenom || ''} ${patientData.NOM_BEN || patientData.nom || ''}`.trim(),
-          identifiant_national: patientData.IDENTIFIANT_NATIONAL || patientData.identifiant_national,
-          numero_carte: patientData.NUMERO_CARTE || patientData.numero_carte || cardNumber,
+          identifiant_national: patientData.IDENTIFIANT_NATIONAL,
+          numero_carte: patientData.NUMERO_CARTE || cardNumber,
           date_naissance: patientData.NAI_BEN || patientData.date_naissance,
           age: patientData.AGE || calculateAge(patientData.NAI_BEN || patientData.date_naissance),
           sexe: patientData.SEX_BEN || patientData.sexe,
-          telephone: patientData.TELEPHONE || patientData.telephone || patientData.TELEPHONE_MOBILE,
-          groupe_sanguin: patientData.GROUPE_SANGUIN || patientData.groupe_sanguin,
-          rhesus: patientData.RHESUS || patientData.rhesus
+          telephone: patientData.TELEPHONE || patientData.telephone,
+          groupe_sanguin: patientData.GROUPE_SANGUIN,
+          rhesus: patientData.RHESUS,
+          taux_couverture: patientData.TAUX_COUVERTURE || 80,
+          statut: patientData.STATUT || 'Actif',
+          adresse: patientData.ADRESSE || patientData.adresse,
+          profession: patientData.PROFESSION || patientData.profession,
+          assureur: patientData.ASSUREUR || patientData.assureur,
+          numero_assurance: patientData.NUMERO_ASSURANCE || patientData.numero_assurance
         };
         
         setPatient(formattedPatient);
-        
         prescriptionForm.setFieldsValue({
           COD_BEN: formattedPatient.COD_BEN,
-          NOM_BEN: formattedPatient.nom_complet,
-          IDENTIFIANT_NATIONAL: formattedPatient.identifiant_national
+          NOM_BEN: formattedPatient.nom_complet
         });
-        
-        if (formattedPatient.id) {
-          await checkConsultationRecente(formattedPatient.id);
-        }
         
         message.success(`Patient trouvé: ${formattedPatient.nom_complet}`);
       } else {
         message.warning('Aucun patient trouvé avec ce numéro de carte');
         setPatient(null);
-        setMedecinConsultation(null);
-        setShowMedecinChangeAlert(false);
       }
     } catch (error) {
-      console.error('❌ Erreur recherche patient:', error);
-      message.error('Erreur lors de la recherche du patient');
+      console.error('Erreur recherche patient:', error);
+      message.error('Erreur lors de la recherche du patient: ' + error.message);
       setPatient(null);
-      setMedecinConsultation(null);
-      setShowMedecinChangeAlert(false);
     } finally {
       setLoading(prev => ({ ...prev, patient: false }));
     }
   };
 
-  // Vérifier si le patient a une consultation récente et récupérer le médecin
-  const checkConsultationRecente = async (patientId) => {
-    try {
-      setLoading(prev => ({ ...prev, consultations: true }));
-      const response = await consultationsAPI.getByPatientId(patientId);
-      
-      if (response.success && Array.isArray(response.consultations) && response.consultations.length > 0) {
-        const sortedConsultations = response.consultations.sort((a, b) => 
-          new Date(b.DATE_CONSULTATION || b.date_consultation) - new Date(a.DATE_CONSULTATION || a.date_consultation)
-        );
-        
-        const derniereConsultation = sortedConsultations[0];
-        const nomMedecin = derniereConsultation.NOM_MEDECIN || derniereConsultation.nom_medecin || derniereConsultation.medecin;
-        
-        // Récupérer le nom du centre depuis la consultation
-        if (derniereConsultation.COD_CEN) {
-          const centreNom = await getCentreNameFromConsultation(derniereConsultation);
-          if (centreNom) {
-            setCentreNom(centreNom);
-          }
-        }
-        
-        if (nomMedecin) {
-          const medecinConsultationObj = {
-            nom: nomMedecin,
-            date_consultation: derniereConsultation.DATE_CONSULTATION || derniereConsultation.date_consultation,
-            type_consultation: derniereConsultation.TYPE_CONSULTATION || derniereConsultation.type_consultation
-          };
-          
-          setMedecinConsultation(medecinConsultationObj);
-          
-          if (prestataires.length > 0) {
-            const medecinTrouve = prestataires.find(p => 
-              p.nom_complet && p.nom_complet.toLowerCase().includes(nomMedecin.toLowerCase()) ||
-              (p.nom && p.nom.toLowerCase().includes(nomMedecin.toLowerCase()))
-            );
-            
-            if (medecinTrouve) {
-              selectPrestataire(medecinTrouve, true);
-              message.info(`Médecin de la consultation automatiquement sélectionné: ${medecinTrouve.nom_complet}`);
-            } else {
-              message.warning(`Le médecin de la consultation (${nomMedecin}) n'est pas dans la liste des médecins du centre. Veuillez en sélectionner un manuellement.`);
-            }
-          }
-        }
-        
-        setConsultationInfo({
-          date: derniereConsultation.DATE_CONSULTATION || derniereConsultation.date_consultation,
-          type: derniereConsultation.TYPE_CONSULTATION || derniereConsultation.type_consultation,
-          medecin: nomMedecin,
-          montant: derniereConsultation.MONTANT_CONSULTATION || derniereConsultation.montant
-        });
-      } else {
-        setConsultationInfo(null);
-        setMedecinConsultation(null);
-      }
-    } catch (error) {
-      console.error('❌ Erreur vérification consultation:', error);
-      setConsultationInfo(null);
-      setMedecinConsultation(null);
-    } finally {
-      setLoading(prev => ({ ...prev, consultations: false }));
-    }
-  };
-
-  // Rechercher des médicaments
-  const searchMedicaments = async (searchTerm) => {
-    if (!searchTerm || searchTerm.trim().length < 2) {
-      setSearchResults([]);
+  // ==================== GESTION DES ACTES ====================
+  
+  const handleSearchActes = (value) => {
+    setSearchPrestation(value);
+    
+    if (!value || value.trim().length < 2) {
+      setSearchResults(actesMedicaux);
       return;
     }
     
-    setLoading(prev => ({ ...prev, medicaments: true }));
-    try {
-      const response = await prescriptionsAPI.searchMedicalItems(searchTerm);
-      
-      if (response.success && Array.isArray(response.items)) {
-        setSearchResults(response.items);
-      } else {
-        setSearchResults([]);
-      }
-    } catch (error) {
-      console.error('❌ Erreur recherche médicaments:', error);
-      message.error('Erreur lors de la recherche des médicaments');
-      setSearchResults([]);
-    } finally {
-      setLoading(prev => ({ ...prev, medicaments: false }));
-    }
+    const searchLower = value.toLowerCase();
+    const filtered = actesMedicaux.filter(acte =>
+      (acte.LIBELLE || '').toLowerCase().includes(searchLower) ||
+      (acte.CODE_ACTE || '').toLowerCase().includes(searchLower) ||
+      (acte.DESCRIPTION || '').toLowerCase().includes(searchLower)
+    );
+    
+    setSearchResults(filtered);
   };
 
-  // Rechercher une affection par code
-  const searchAffection = async (code) => {
-    if (!code || code.trim().length === 0) return;
+  const ajouterActe = (acte) => {
+    const nouvelleActe = {
+      ...acte,
+      key: `acte_${acte.CODE_ACTE || acte.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      QUANTITE: 1,
+      UNITE: acte.UNITE || 'unité',
+      POSOLOGIE: (typePrestation === 'PHARMACIE' || typePrestation === 'MEDICAMENT') ? '1 comprimé matin et soir' : '',
+      DUREE: (typePrestation === 'PHARMACIE' || typePrestation === 'MEDICAMENT') ? '7' : '1',
+      PRIX_UNITAIRE: acte.PRIX || 0,
+      TYPE_ELEMENT: 'PRESTATION',
+      TAUX_PRISE_EN_CHARGE: acte.TAUX_PRISE_EN_CHARGE || 80,
+      PRIX_PRISE_EN_CHARGE: Math.round((acte.PRIX || 0) * (acte.TAUX_PRISE_EN_CHARGE || 80) / 100)
+    };
     
+    setSelectedPrestations(prev => [...prev, nouvelleActe]);
+    setSearchPrestation('');
+    setSearchResults(actesMedicaux);
+    message.success(`${acte.LIBELLE} ajouté à la prescription`);
+  };
+
+  // ==================== GESTION DE LA SAISIE MANUELLE ====================
+  
+  const ouvrirSaisieManuelle = (type) => {
+    setManualEntryType(type);
+    manualForm.resetFields();
+    
+    const defaultValues = {
+      quantite: 1,
+      prix_unitaire: 0,
+      duree: type === 'MEDICAMENT' ? '7' : '1'
+    };
+    
+    if (type === 'MEDICAMENT') {
+      defaultValues.posologie = '1 comprimé matin et soir';
+    }
+    
+    manualForm.setFieldsValue(defaultValues);
+    setManualEntryModal(true);
+  };
+
+  const ajouterManuellement = async () => {
     try {
-      if (code.length >= 3) {
-        setAffectionDetails({
-          code: code,
-          libelle: 'Affection diagnostiquée',
-          categorie: 'Maladie',
-          gravite: 'Moyenne',
-          remboursable: true
-        });
-      } else {
-        setAffectionDetails(null);
-      }
+      const values = await manualForm.validateFields();
+      
+      const nouvelleActe = {
+        key: `manuel_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        CODE_ACTE: values.code_acte || `MANUEL_${Date.now()}`,
+        LIBELLE: values.libelle,
+        QUANTITE: values.quantite || 1,
+        UNITE: 'unité',
+        POSOLOGIE: manualEntryType === 'MEDICAMENT' ? values.posologie : '',
+        DUREE: manualEntryType === 'MEDICAMENT' ? values.duree : '1',
+        PRIX_UNITAIRE: values.prix_unitaire || 0,
+        TYPE_ELEMENT: 'MANUEL',
+        CATEGORIE: manualEntryType,
+        REMBOURSABLE: 1,
+        DESCRIPTION: values.description || '',
+        TAUX_PRISE_EN_CHARGE: 80,
+        PRIX_PRISE_EN_CHARGE: Math.round((values.prix_unitaire || 0) * 0.8)
+      };
+      
+      setSelectedPrestations(prev => [...prev, nouvelleActe]);
+      setManualEntryModal(false);
+      message.success('Élément ajouté manuellement avec succès');
     } catch (error) {
-      console.error('❌ Erreur recherche affection:', error);
+      console.error('Erreur validation saisie manuelle:', error);
     }
   };
 
   // ==================== GESTION DES PRESCRIPTIONS ====================
-
-  // Ajouter un médicament à la prescription
-  const ajouterMedicament = (medicament) => {
-    if (!medicament) return;
-    
-    const medicamentExistant = selectedMedicaments.find(m => m.COD_MED === medicament.COD_MED);
-    
-    if (medicamentExistant) {
-      const updatedMedicaments = selectedMedicaments.map(m => 
-        m.COD_MED === medicament.COD_MED 
-          ? { ...m, QUANTITE: (parseInt(m.QUANTITE) || 1) + 1 }
-          : m
-      );
-      setSelectedMedicaments(updatedMedicaments);
-      message.info(`${medicament.libelle || medicament.NOM_COMMERCIAL} - Quantité augmentée`);
-    } else {
-      const nouveauMedicament = {
-        ...medicament,
-        QUANTITE: 1,
-        POSOLOGIE: '1 comprimé matin et soir',
-        DUREE: '7',
-        TYPE_ELEMENT: 'MEDICAMENT',
-        COD_ELEMENT: medicament.COD_MED || medicament.id || `MED${Date.now()}`,
-        COD_MED: medicament.COD_MED || medicament.id || `MED${Date.now()}`,
-        LIBELLE: medicament.libelle || medicament.NOM_COMMERCIAL || 'Médicament non spécifié',
-        PRIX_UNITAIRE: medicament.PRIX_UNITAIRE || medicament.prix || 0,
-        REMBOURSABLE: medicament.REMBOURSABLE || 0,
-        key: `${medicament.COD_MED || medicament.id || `MED${Date.now()}`}_${Date.now()}_${Math.random()}`
-      };
-      
-      setSelectedMedicaments([...selectedMedicaments, nouveauMedicament]);
-      message.success(`${nouveauMedicament.LIBELLE} ajouté à la prescription`);
-    }
-    
-    setSearchMedicament('');
-    setSearchResults([]);
-  };
-
-  // Supprimer un médicament de la prescription
-  const supprimerMedicament = (key) => {
-    const medicament = selectedMedicaments.find(m => m.key === key);
-    if (medicament) {
-      setSelectedMedicaments(selectedMedicaments.filter(m => m.key !== key));
-      message.warning(`${medicament.LIBELLE} retiré de la prescription`);
-    }
-  };
-
-  // Mettre à jour les détails d'un médicament
-  const updateMedicament = (key, field, value) => {
-    setSelectedMedicaments(prev => 
-      prev.map(med => 
-        med.key === key ? { ...med, [field]: value } : med
-      )
-    );
-  };
-
-  // Calculer le total de la prescription
+  
   const calculerTotal = () => {
-    return selectedMedicaments.reduce((total, med) => {
-      const prix = parseFloat(med.PRIX_UNITAIRE) || 0;
-      const quantite = parseInt(med.QUANTITE) || 1;
+    return selectedPrestations.reduce((total, acte) => {
+      const prix = parseFloat(acte.PRIX_UNITAIRE) || 0;
+      const quantite = parseInt(acte.QUANTITE) || 1;
       return total + (prix * quantite);
     }, 0);
   };
 
-  // Valider et créer la prescription
+  const calculerTotalPriseEnCharge = () => {
+    return selectedPrestations.reduce((total, acte) => {
+      const prix = parseFloat(acte.PRIX_UNITAIRE) || 0;
+      const quantite = parseInt(acte.QUANTITE) || 1;
+      const taux = parseInt(acte.TAUX_PRISE_EN_CHARGE) || 80;
+      return total + (prix * quantite * taux / 100);
+    }, 0);
+  };
+
+  const calculerTotalRestant = () => {
+    return calculerTotal() - calculerTotalPriseEnCharge();
+  };
+
+  const updateActe = (key, field, value) => {
+    setSelectedPrestations(prev => 
+      prev.map(acte => {
+        if (acte.key === key) {
+          const updatedActe = { ...acte, [field]: value };
+          if (field === 'PRIX_UNITAIRE' || field === 'TAUX_PRISE_EN_CHARGE') {
+            const prix = parseFloat(updatedActe.PRIX_UNITAIRE) || 0;
+            const taux = parseInt(updatedActe.TAUX_PRISE_EN_CHARGE) || 80;
+            updatedActe.PRIX_PRISE_EN_CHARGE = Math.round(prix * taux / 100);
+          }
+          return updatedActe;
+        }
+        return acte;
+      })
+    );
+  };
+
+  const supprimerActe = (key) => {
+    setSelectedPrestations(prev => prev.filter(acte => acte.key !== key));
+  };
+
   const validerPrescription = async () => {
     try {
       if (!patient) {
@@ -1976,384 +698,765 @@ const handleViewPrescriptionDetails = async (prescription) => {
         return;
       }
       
-      if (selectedMedicaments.length === 0) {
-        message.error('Veuillez ajouter au moins un médicament ou acte');
+      if (selectedPrestations.length === 0) {
+        message.error('Veuillez ajouter au moins un acte');
         return;
       }
       
       if (!affectionCode) {
-        message.error('Le code affectation est obligatoire');
+        message.error('Veuillez sélectionner une affection');
+        return;
+      }
+      
+      if (!centreId) {
+        message.error('Veuillez sélectionner un centre de santé');
         return;
       }
       
       setValidationModalVisible(true);
+      
     } catch (error) {
-      console.error('❌ Erreur validation:', error);
-      message.error('Erreur lors de la validation');
+      console.error('Erreur validation:', error);
+      message.error('Erreur lors de la validation de la prescription');
     }
   };
 
-  // Confirmer la création de la prescription
   const confirmerPrescription = async () => {
     setLoading(prev => ({ ...prev, prescrire: true }));
     
     try {
-      // Générer un numéro de prescription
       const prescriptionNum = generatePrescriptionNumber();
       
-      const rawData = {
-        COD_BEN: patient.COD_BEN,
-        COD_PRESCRIPTEUR: selectedPrestataire.id,
-        NOM_MEDECIN: selectedPrestataire.nom_complet,
-        TYPE_PRESTATION: typePrestation,
-        COD_AFF: affectionCode,
-        ORIGINE: 'Electronique',
-        STATUT: 'En attente',
-        DATE_VALIDITE: moment().add(30, 'days').format('YYYY-MM-DD'),
+      // Préparer les données pour l'API
+      const prescriptionData = {
+        COD_BEN: patient.COD_BEN || patient.ID_BEN || patient.id,
+        COD_PRE: selectedPrestataire.COD_PRE || selectedPrestataire.id,
         COD_CEN: centreId,
-        NUMERO_PRESCRIPTION: prescriptionNum,
-        details: selectedMedicaments
+        TYPE_PRESTATION: typePrestation,
+        COD_AFF: affectionCode || null,
+        OBSERVATIONS: `Affection: ${affectionLibelle || 'Non spécifiée'}`,
+        ORIGINE: 'Electronique',
+        DATE_VALIDITE: moment().add(30, 'days').format('YYYY-MM-DD'),
+        MONTANT_TOTAL: calculerTotal(),
+        MONTANT_PRISE_EN_CHARGE: calculerTotalPriseEnCharge(),
+        MONTANT_RESTANT: calculerTotalRestant(),
+        STATUT: 'EN_COURS',
+        URGENT: false,
+        
+        // Détails des actes
+        details: selectedPrestations.map((acte, index) => ({
+          ORDRE: index + 1,
+          TYPE_ELEMENT: acte.TYPE_ELEMENT || 'PRESTATION',
+          COD_ELEMENT: acte.CODE_ACTE,
+          LIBELLE: acte.LIBELLE,
+          QUANTITE: acte.QUANTITE,
+          UNITE: acte.UNITE || 'unité',
+          POSOLOGIE: acte.POSOLOGIE || '',
+          DUREE_TRAITEMENT: acte.DUREE,
+          PRIX_UNITAIRE: acte.PRIX_UNITAIRE || 0,
+          REMBOURSABLE: acte.REMBOURSABLE || 1,
+          TAUX_PRISE_EN_CHARGE: acte.TAUX_PRISE_EN_CHARGE || 80,
+          PRIX_PRISE_EN_CHARGE: acte.PRIX_PRISE_EN_CHARGE || 0,
+          DESCRIPTION: acte.DESCRIPTION || ''
+        }))
       };
       
-      const prescriptionData = cleanPrescriptionData(rawData);
-      
-      console.log('📤 Données de prescription envoyées:', JSON.stringify(prescriptionData, null, 2));
-      
+      // Appel API pour créer la prescription
       const response = await prescriptionsAPI.create(prescriptionData);
       
-      console.log('📥 Réponse création prescription:', response);
-      
       if (response.success) {
-        const numeroPrescription = response.data?.numero || response.prescriptionId || response.id || prescriptionNum;
-        message.success(`Prescription créée avec succès! Numéro: ${numeroPrescription}`);
-        
-        // Préparer les données pour l'ordonnance
         const ordonnanceData = {
-          numero: numeroPrescription,
+          numero: prescriptionNum,
+          COD_PRES: response.data?.COD_PRES || prescriptionNum,
           patient,
           selectedPrestataire,
-          selectedMedicaments,
+          selectedPrestations,
           centreId,
-          centres,
+          centreNom,
+          centreDetails,
           typePrestation,
           affectionCode,
+          affectionLibelle,
+          affectionDetails,
           urgent: false,
           dateValidite: moment().add(30, 'days').format('DD/MM/YYYY'),
-          statut: 'Validée',
-          nombreActes: selectedMedicaments.length,
-          total: calculerTotal()
+          statut: 'EN_COURS',
+          nombrePrestations: selectedPrestations.length,
+          total: calculerTotal(),
+          totalPriseEnCharge: calculerTotalPriseEnCharge(),
+          totalRestant: calculerTotalRestant(),
+          dateCreation: moment().format('DD/MM/YYYY HH:mm'),
+          datePrescription: moment().format('DD/MM/YYYY'),
+          observations: `Affection: ${affectionLibelle || 'Non spécifiée'}`,
+          qrCodeData: JSON.stringify({
+            numero: prescriptionNum,
+            patient: patient.nom_complet,
+            date: moment().format('DD/MM/YYYY'),
+            centre: centreNom,
+            type: typePrestation
+          })
         };
         
         setOrdonnanceToPrint(ordonnanceData);
         resetPrescriptionForm();
         setPrintModalVisible(true);
+        
+        // Recharger les données
+        loadMesPrescriptions();
+        
+        message.success(`Prescription créée avec succès! Numéro: ${response.data?.NUM_PRESCRIPTION || prescriptionNum}`);
       } else {
-        message.error(response.message || 'Erreur lors de la création de la prescription');
+        let errorMessage = response.message || 'Erreur lors de la création de la prescription';
+        message.error(errorMessage);
       }
     } catch (error) {
-      console.error('❌ Erreur création prescription:', error);
-      
-      if (error.response?.data?.message) {
-        message.error(`Erreur: ${error.response.data.message}`);
-      } else if (error.message.includes('COD_ELEMENT')) {
-        message.error('Erreur: Le code élément des médicaments est invalide. Veuillez vérifier les données.');
-      } else {
-        message.error('Erreur lors de la création de la prescription');
-      }
+      console.error('Erreur création prescription:', error);
+      message.error('Erreur lors de la création de la prescription: ' + error.message);
     } finally {
       setLoading(prev => ({ ...prev, prescrire: false }));
       setValidationModalVisible(false);
     }
   };
 
-  // Réinitialiser le formulaire de prescription
   const resetPrescriptionForm = () => {
     setPatient(null);
-    setSelectedMedicaments([]);
+    setSelectedPrestations([]);
     setAffectionCode('');
+    setAffectionLibelle('');
     setAffectionDetails(null);
-    setConsultationInfo(null);
-    setMedecinConsultation(null);
-    setShowMedecinChangeAlert(false);
-    setCentreNom('');
+    setAffectionOptions([]);
+    setSearchPrestation('');
+    setSearchResults(actesMedicaux);
     prescriptionForm.resetFields();
   };
 
-  // ==================== EXÉCUTION DE PRESCRIPTION ====================
-
-  // Rechercher une prescription par numéro
-// Modifiez la fonction searchPrescription pour mieux gérer la recherche
-const searchPrescription = async () => {
-  if (!prescriptionNumero || prescriptionNumero.trim().length === 0) {
-    message.warning('Veuillez entrer un numéro de prescription');
-    return;
-  }
-  
-  setLoading(prev => ({ ...prev, execution: true }));
-  try {
-    console.log('🔍 Recherche prescription:', prescriptionNumero);
-    
-    // Essayer plusieurs formats
-    let response = null;
-    
-    // Essayer 1: Recherche par ID si c'est un nombre
-    if (/^\d+$/.test(prescriptionNumero)) {
-      console.log('🔍 Recherche par ID numérique:', prescriptionNumero);
-      response = await prescriptionsAPI.getByNumeroOrId(prescriptionNumero);
+  const searchPrescription = async (numero) => {
+    if (!numero || numero.trim().length < 3) {
+      message.warning('Veuillez entrer un numéro de prescription valide');
+      return;
     }
     
-    // Essayer 2: Si non trouvé ou si c'est une chaîne avec préfixe
-    if (!response || !response.success || !response.prescription) {
-      console.log('🔍 Recherche par numéro textuel:', prescriptionNumero);
+    setLoading(prev => ({ ...prev, execution: true }));
+    try {
+      const response = await prescriptionsAPI.getByNumeroOrId(numero);
       
-      // Nettoyer le numéro - enlever les préfixes
-      const cleanedNumero = prescriptionNumero
-        .replace(/^PRES-/, '')
-        .replace(/^pres-/, '')
-        .trim();
-      
-      // Essayer d'abord avec le numéro nettoyé
-      response = await prescriptionsAPI.getByNumeroOrId(cleanedNumero);
-      
-      // Si toujours pas trouvé, essayer avec le numéro original
-      if (!response || !response.success || !response.prescription) {
-        response = await prescriptionsAPI.getByNumeroOrId(prescriptionNumero);
-      }
-    }
-    
-    if (response.success && response.prescription) {
-      const prescription = response.prescription;
-      console.log('✅ Prescription trouvée:', prescription);
-      
-      // Extraire les détails de différentes manières
-      let details = [];
-      
-      // Méthode 1: Détails directement dans la réponse
-      if (prescription.details && Array.isArray(prescription.details)) {
-        details = prescription.details;
-      }
-      // Méthode 2: Détails dans un champ différent
-      else if (prescription.actes && Array.isArray(prescription.actes)) {
-        details = prescription.actes;
-      }
-      // Méthode 3: Charger via une autre API
-      else {
-        try {
-          const detailsResponse = await prescriptionsAPI.getDetails(prescription.id || prescription.COD_PRES);
-          if (detailsResponse.success && detailsResponse.details) {
-            details = detailsResponse.details;
-          }
-        } catch (error) {
-          console.warn('⚠️ Impossible de charger les détails:', error);
+      if (response.success && response.prescription) {
+        const prescription = response.prescription;
+        
+        // Obtenir le nom du centre de la prescription
+        const prescriptionCentreName = getCentreNameById(prescription.COD_CEN);
+        
+        // Vérifier si la prescription appartient au centre actuel
+        if (centreId && prescription.COD_CEN && prescription.COD_CEN.toString() !== centreId.toString()) {
+          message.error({
+            content: (
+              <div>
+                <p><strong>Cette prescription n'appartient pas à votre centre de santé.</strong></p>
+                <p>Centre actuel: <strong>{centreNom}</strong></p>
+                <p>Centre de la prescription: <strong>{prescriptionCentreName}</strong></p>
+                <p style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
+                  Vous ne pouvez exécuter que les prescriptions de votre propre centre.
+                </p>
+              </div>
+            ),
+            duration: 8,
+            style: {
+              maxWidth: '500px'
+            }
+          });
+          setSelectedPrescription(null);
+          setActesExecutes([]);
+          return;
         }
-      }
-      
-      setSelectedPrescription({
-        ...prescription,
-        details: details,
-        nombreActes: details.length,
-        total: details.reduce((sum, detail) => {
-          const prix = parseFloat(detail.PRIX_UNITAIRE || detail.prix || 0);
-          const quantite = parseInt(detail.QUANTITE || detail.quantite || 1);
-          return sum + (prix * quantite);
-        }, 0)
-      });
-      
-      setPrescriptionDetails(prescription);
-      
-      const initialActes = details.map((detail, index) => ({
-        ...detail,
-        execute: false,
-        quantite_executee: detail.QUANTITE || detail.quantite || 1,
-        prix_execute: detail.PRIX_UNITAIRE || detail.prix || 0,
-        LIBELLE: detail.LIBELLE || detail.libelle || detail.nom || 'Acte non spécifié',
-        QUANTITE: detail.QUANTITE || detail.quantite || 1,
-        key: detail.id || `${detail.COD_ELEMENT || detail.code}_${index}_${Math.random()}`,
-        COD_ELEMENT: detail.COD_ELEMENT || detail.code || detail.id
-      }));
-      
-      setActesExecutes(initialActes);
-      calculerTotalExecution();
-      
-      message.success(`Prescription trouvée - ${prescription.NOM_BEN || prescription.patient_nom} - ${details.length} actes`);
-    } else {
-      message.error(response.message || 'Prescription non trouvée');
-      setSelectedPrescription(null);
-      setPrescriptionDetails(null);
-      setActesExecutes([]);
-    }
-  } catch (error) {
-    console.error('❌ Erreur recherche prescription:', error);
-    
-    // Essayer une recherche alternative
-    try {
-      const searchResponse = await prescriptionsAPI.getAll({
-        search: prescriptionNumero,
-        limit: 5,
-        include_details: true
-      });
-      
-      if (searchResponse.success && searchResponse.prescriptions.length > 0) {
-        const prescription = searchResponse.prescriptions[0];
-        message.success(`Prescription trouvée via recherche: ${prescription.NUMERO_PRESCRIPTION || prescription.id}`);
-        // Traiter la prescription comme ci-dessus...
+        
+        // Vérifier si la prescription peut être exécutée (statut EN_COURS ou EN_ATTENTE)
+        if (prescription.STATUT === 'EXECUTEE' || prescription.STATUT === 'VALIDEE' || prescription.STATUT === 'ANNULEE') {
+          message.warning(`Cette prescription est déjà ${prescription.STATUT.toLowerCase()}`);
+          setSelectedPrescription(null);
+          setActesExecutes([]);
+          return;
+        }
+        
+        // Préparer les actes à exécuter
+        const details = prescription.details || [];
+        const actes = details.map((detail, index) => ({
+          key: `acte_${detail.COD_ELEMENT || detail.id || index}_${Date.now()}`,
+          ...detail,
+          COD_ELEMENT: detail.COD_ELEMENT || detail.CODE_ACTE || detail.id,
+          LIBELLE: detail.LIBELLE || detail.NOM_COMMERCIAL || 'Acte non spécifié',
+          prix: parseFloat(detail.PRIX_UNITAIRE || detail.prix_unitaire || detail.PRIX || 0),
+          quantite: parseInt(detail.QUANTITE || 1),
+          total: parseFloat(detail.PRIX_UNITAIRE || detail.prix_unitaire || detail.PRIX || 0) * parseInt(detail.QUANTITE || 1),
+          execute: false,
+          STATUT: detail.STATUT || 'EN_ATTENTE'
+        }));
+        
+        setSelectedPrescription({
+          ...prescription,
+          centreNom: prescriptionCentreName,
+          nombreActes: details.length,
+          total: prescription.MONTANT_TOTAL || actes.reduce((sum, acte) => sum + acte.total, 0),
+          NOM_BEN: prescription.NOM_BEN || prescription.patient_nom || 'Patient inconnu',
+          NOM_MEDECIN: prescription.NOM_MEDECIN || selectedPrestataire?.nom_complet || 'Médecin inconnu'
+        });
+        
+        setActesExecutes(actes);
+        calculerTotalFacture(actes);
+        
+        message.success(`Prescription trouvée: ${prescription.NUM_PRESCRIPTION || prescription.numero || numero}`);
       } else {
-        message.error('Aucune prescription trouvée avec ce numéro');
+        message.warning('Aucune prescription trouvée avec ce numéro ou cette prescription ne peut pas être exécutée');
+        setSelectedPrescription(null);
+        setActesExecutes([]);
       }
-    } catch (searchError) {
-      message.error('Erreur lors de la recherche de la prescription');
-    }
-    
-    setSelectedPrescription(null);
-    setPrescriptionDetails(null);
-    setActesExecutes([]);
-  } finally {
-    setLoading(prev => ({ ...prev, execution: false }));
-  }
-};
-
-  // Gérer l'exécution d'un acte
-  const toggleActeExecution = (key, execute) => {
-    setActesExecutes(prev => 
-      prev.map(acte => 
-        acte.key === key ? { ...acte, execute } : acte
-      )
-    );
-  };
-
-  // Mettre à jour les détails d'exécution d'un acte
-  const updateActeExecution = (key, field, value) => {
-    setActesExecutes(prev => 
-      prev.map(acte => 
-        acte.key === key ? { ...acte, [field]: value } : acte
-      )
-    );
-    
-    setTimeout(() => calculerTotalExecution(), 0);
-  };
-
-  // Calculer le total de la facture d'exécution
-  const calculerTotalExecution = () => {
-    const total = actesExecutes.reduce((sum, acte) => {
-      if (acte.execute) {
-        const quantite = parseInt(acte.quantite_executee) || 0;
-        const prix = parseFloat(acte.prix_execute) || 0;
-        return sum + (quantite * prix);
-      }
-      return sum;
-    }, 0);
-    
-    setTotalFacture(total);
-    return total;
-  };
-
-  // Valider l'exécution de la prescription
-  const validerExecution = async () => {
-    try {
-      if (!selectedPrescription) {
-        message.error('Aucune prescription sélectionnée');
-        return;
-      }
-      
-      if (!selectedPrestataire) {
-        message.error('Veuillez sélectionner un médecin exécutant');
-        return;
-      }
-      
-      const actesAExecuter = actesExecutes.filter(acte => acte.execute);
-      if (actesAExecuter.length === 0) {
-        message.error('Veuillez sélectionner au moins un acte à exécuter');
-        return;
-      }
-      
-      setLoading(prev => ({ ...prev, execution: true }));
-      
-      const executionData = {
-        prescriptionId: selectedPrescription.COD_PRES || selectedPrescription.id,
-        prestataire_id: selectedPrestataire.id,
-        prestataire_nom: selectedPrestataire.nom_complet,
-        actes: actesAExecuter.map(acte => ({
-          COD_ELEMENT: acte.COD_ELEMENT,
-          LIBELLE: acte.LIBELLE,
-          QUANTITE: acte.quantite_executee,
-          PRIX_UNITAIRE: acte.prix_execute,
-          REMBOURSABLE: acte.REMBOURSABLE
-        })),
-        total: totalFacture,
-        date_execution: moment().format('YYYY-MM-DD HH:mm:ss'),
-        centre_id: centreId
-      };
-      
-      console.log('📤 Données d\'exécution:', executionData);
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      message.success('Exécution enregistrée avec succès!');
-      setModalVisible(true);
-      
     } catch (error) {
-      console.error('❌ Erreur exécution:', error);
-      message.error('Erreur lors de l\'exécution de la prescription');
+      console.error('Erreur recherche prescription:', error);
+      message.error('Erreur lors de la recherche de la prescription: ' + error.message);
+      setSelectedPrescription(null);
+      setActesExecutes([]);
     } finally {
       setLoading(prev => ({ ...prev, execution: false }));
     }
   };
 
-  // ==================== COLONNES DES TABLES ====================
+  const calculerTotalFacture = (actes) => {
+    const total = actes
+      .filter(acte => acte.execute)
+      .reduce((sum, acte) => sum + (acte.total || 0), 0);
+    setTotalFacture(total);
+  };
 
-  const medicamentsColumns = [
+  const toggleActeExecution = (key, execute) => {
+    const newActes = actesExecutes.map(acte => 
+      acte.key === key ? { ...acte, execute } : acte
+    );
+    setActesExecutes(newActes);
+    calculerTotalFacture(newActes);
+  };
+
+  const validerExecution = async () => {
+    if (!selectedPrestataire) {
+      message.error('Veuillez sélectionner un médecin exécutant');
+      return;
+    }
+    
+    const actesExecutesCount = actesExecutes.filter(a => a.execute).length;
+    if (actesExecutesCount === 0) {
+      message.error('Veuillez sélectionner au moins un acte à exécuter');
+      return;
+    }
+    
+    setLoading(prev => ({ ...prev, execution: true }));
+    try {
+      const response = await prescriptionsAPI.updateStatus(
+        selectedPrescription.COD_PRES || selectedPrescription.id, 
+        {
+          statut: 'EXECUTEE',
+          date_execution: moment().format('YYYY-MM-DD HH:mm:ss'),
+          executant_id: selectedPrestataire.COD_PRE || selectedPrestataire.id,
+          executant_nom: selectedPrestataire.nom_complet
+        }
+      );
+      
+      if (response.success) {
+        // Préparer les données pour l'impression de la fiche d'exécution
+        const ficheExecutionData = {
+          numero: selectedPrescription.NUM_PRESCRIPTION || selectedPrescription.numero || selectedPrescription.COD_PRES,
+          COD_PRES: selectedPrescription.COD_PRES || selectedPrescription.id,
+          patient: {
+            nom_complet: selectedPrescription.NOM_BEN || 'Patient inconnu',
+            numero_carte: selectedPrescription.rawData?.NUMERO_CARTE || 'N/A',
+            age: selectedPrescription.rawData?.AGE || 'N/A',
+            sexe: selectedPrescription.rawData?.SEXE || 'N/A',
+            telephone: selectedPrescription.rawData?.TELEPHONE || 'N/A',
+            taux_couverture: selectedPrescription.rawData?.TAUX_COUVERTURE || 80
+          },
+          selectedPrestataire: {
+            nom_complet: selectedPrestataire.nom_complet,
+            specialite: selectedPrestataire?.specialite || 'Médecin Généraliste',
+            MATRICULE: selectedPrestataire?.MATRICULE || 'N/A'
+          },
+          centreNom: centreNom,
+          centreDetails: centreDetails,
+          typePrestation: selectedPrescription.TYPE_PRESTATION || 'PRESCRIPTION',
+          affectionCode: selectedPrescription.COD_AFF || 'N/A',
+          affectionLibelle: selectedPrescription.rawData?.LIB_AFF || 'Non spécifiée',
+          dateValidite: selectedPrescription.rawData?.DATE_VALIDITE ? 
+            moment(selectedPrescription.rawData.DATE_VALIDITE).format('DD/MM/YYYY') : 
+            moment().add(30, 'days').format('DD/MM/YYYY'),
+          statut: 'EXECUTEE',
+          nombrePrestations: actesExecutes.filter(a => a.execute).length,
+          total: totalFacture,
+          totalPriseEnCharge: Math.round(totalFacture * (selectedPrescription.rawData?.TAUX_COUVERTURE || 80) / 100),
+          totalRestant: totalFacture - Math.round(totalFacture * (selectedPrescription.rawData?.TAUX_COUVERTURE || 80) / 100),
+          dateCreation: moment().format('DD/MM/YYYY HH:mm'),
+          dateExecution: moment().format('DD/MM/YYYY HH:mm'),
+          datePrescription: selectedPrescription.DATE_PRESCRIPTION ? 
+            moment(selectedPrescription.DATE_PRESCRIPTION).format('DD/MM/YYYY') : 
+            'Date inconnue',
+          selectedPrestations: actesExecutes.filter(a => a.execute).map((acte, index) => ({
+            key: `acte_${acte.COD_ELEMENT || acte.id || index}_${Date.now()}`,
+            CODE_ACTE: acte.COD_ELEMENT || acte.CODE_ACTE || acte.id,
+            LIBELLE: acte.LIBELLE || 'Acte non spécifié',
+            QUANTITE: acte.quantite || 1,
+            UNITE: acte.UNITE || 'unité',
+            POSOLOGIE: acte.POSOLOGIE || '',
+            DUREE: acte.DUREE || '1',
+            PRIX_UNITAIRE: acte.prix || 0,
+            PRIX: acte.prix || 0,
+            TAUX_PRISE_EN_CHARGE: selectedPrescription.rawData?.TAUX_COUVERTURE || 80,
+            PRIX_PRISE_EN_CHARGE: Math.round((acte.prix || 0) * (selectedPrescription.rawData?.TAUX_COUVERTURE || 80) / 100),
+            CATEGORIE: selectedPrescription.TYPE_PRESTATION || 'PRESCRIPTION',
+            DESCRIPTION: acte.DESCRIPTION || '',
+            TYPE_ELEMENT: acte.TYPE_ELEMENT || 'PRESTATION',
+            REMBOURSABLE: acte.REMBOURSABLE || 1
+          })),
+          qrCodeData: JSON.stringify({
+            numero: selectedPrescription.NUM_PRESCRIPTION || selectedPrescription.numero || selectedPrescription.COD_PRES,
+            patient: selectedPrescription.NOM_BEN || 'Patient inconnu',
+            date: moment().format('DD/MM/YYYY'),
+            centre: centreNom,
+            type: selectedPrescription.TYPE_PRESTATION || 'PRESCRIPTION',
+            execution: true
+          })
+        };
+        
+        setOrdonnanceToPrint(ficheExecutionData);
+        message.success(`Prescription exécutée avec succès! ${actesExecutesCount} acte(s) validé(s)`);
+        
+        // Afficher la modale d'impression de la fiche d'exécution
+        setPrintModalVisible(true);
+        
+        setSelectedPrescription(null);
+        setActesExecutes([]);
+        setPrescriptionNumero('');
+        setTotalFacture(0);
+        
+        // Recharger l'historique
+        loadMesPrescriptions();
+      } else {
+        message.error('Erreur lors de l\'exécution de la prescription: ' + (response.message || 'Erreur inconnue'));
+      }
+    } catch (error) {
+      console.error('Erreur exécution:', error);
+      message.error('Erreur lors de l\'exécution de la prescription: ' + error.message);
+    } finally {
+      setLoading(prev => ({ ...prev, execution: false }));
+    }
+  };
+
+  // ==================== ONGLET HISTORIQUE ====================
+  const loadMesPrescriptions = async () => {
+    try {
+      if (!selectedPrestataire) {
+        setMesPrescriptions([]);
+        return;
+      }
+      
+      setLoading(prev => ({ ...prev, historique: true }));
+      
+      const params = {
+        limit: 50,
+        page: 1,
+        COD_PRE: selectedPrestataire.COD_PRE || selectedPrestataire.id,
+        COD_CEN: centreId,
+      };
+      
+      const response = await prescriptionsAPI.getAll(params);
+      
+      if (response.success && Array.isArray(response.prescriptions)) {
+        let filteredPrescriptions = response.prescriptions;
+        
+        if (centreId) {
+          filteredPrescriptions = response.prescriptions.filter(pres => {
+            if (!pres.COD_CEN) return true;
+            return pres.COD_CEN.toString() === centreId.toString();
+          });
+        }
+        
+        // Pour chaque prescription, nous devons récupérer les détails
+        const formattedPrescriptions = await Promise.all(filteredPrescriptions.map(async (pres) => {
+          const getDisplayStatut = (statut) => {
+            const statutMap = {
+              'EN_ATTENTE': 'En attente',
+              'EN_COURS': 'En cours', 
+              'EXECUTEE': 'Exécutée',
+              'VALIDEE': 'Validée',
+              'REJETEE': 'Rejetée',
+              'ANNULEE': 'Annulée'
+            };
+            return statutMap[statut] || statut;
+          };
+          
+          const displayStatut = getDisplayStatut(pres.STATUT);
+          
+          let numero = '';
+          if (pres.NUM_PRESCRIPTION) {
+            numero = pres.NUM_PRESCRIPTION;
+          } else if (pres.numero) {
+            numero = pres.numero;
+          } else {
+            const prefix = (pres.TYPE_PRESTATION || 'PRES').substring(0, 3).toUpperCase();
+            const datePart = moment(pres.DATE_PRESCRIPTION || pres.date_creation).format('YYMMDD');
+            const idPart = (pres.COD_PRES || pres.id || '').toString().padStart(4, '0');
+            numero = `${prefix}-${datePart}-${idPart}`;
+          }
+          
+          let patientNom = '';
+          if (pres.NOM_BEN && pres.PRE_BEN) {
+            patientNom = `${pres.PRE_BEN} ${pres.NOM_BEN}`;
+          } else if (pres.patient_nom) {
+            patientNom = pres.patient_nom;
+          } else if (pres.patient && pres.patient.nom_complet) {
+            patientNom = pres.patient.nom_complet;
+          } else {
+            patientNom = 'Patient inconnu';
+          }
+          
+          // Récupérer les détails de la prescription
+          let details = [];
+          let total = 0;
+          
+          try {
+            if (pres.COD_PRES || pres.id) {
+              const detailResponse = await prescriptionsAPI.getById(pres.COD_PRES || pres.id);
+              if (detailResponse.success && detailResponse.prescription && detailResponse.prescription.details) {
+                details = detailResponse.prescription.details;
+                // Calculer le total basé sur les détails
+                total = details.reduce((sum, detail) => {
+                  const prix = parseFloat(detail.PRIX_UNITAIRE || detail.prix_unitaire || 0);
+                  const quantite = parseFloat(detail.QUANTITE || detail.quantite || 1);
+                  return sum + (prix * quantite);
+                }, 0);
+              }
+            }
+          } catch (error) {
+            console.warn(`Impossible de récupérer les détails de la prescription ${pres.COD_PRES}:`, error);
+          }
+          
+          // Si pas de détails mais qu'on a des montants dans la prescription
+          if (total === 0) {
+            if (pres.MONTANT_TOTAL) {
+              total = pres.MONTANT_TOTAL;
+            } else if (pres.montant_total) {
+              total = pres.montant_total;
+            }
+          }
+          
+          // Obtenir le nom du centre de la prescription
+          const prescriptionCentreName = getCentreNameById(pres.COD_CEN);
+          
+          return {
+            id: pres.COD_PRES || pres.id,
+            COD_PRES: pres.COD_PRES || pres.id,
+            COD_CEN: pres.COD_CEN,
+            centreNom: prescriptionCentreName,
+            NUMERO_PRESCRIPTION: numero,
+            NOM_BEN: patientNom,
+            patient: patientNom,
+            DATE_PRESCRIPTION: pres.DATE_PRESCRIPTION ? 
+              moment(pres.DATE_PRESCRIPTION).format('DD/MM/YYYY HH:mm') : 
+              (pres.date_creation ? moment(pres.date_creation).format('DD/MM/YYYY HH:mm') : 'Date inconnue'),
+            TYPE_PRESTATION: pres.TYPE_PRESTATION || 'PHARMACIE',
+            type: pres.TYPE_PRESTATION || 'PHARMACIE',
+            STATUT: displayStatut,
+            statut: displayStatut,
+            nombreActes: details.length || pres.nombre_elements || 0,
+            total: total,
+            NOM_MEDECIN: selectedPrestataire.nom_complet,
+            medecin: selectedPrestataire.nom_complet,
+            COD_AFF: pres.COD_AFF,
+            details: details, // Inclure les détails récupérés
+            rawData: pres
+          };
+        }));
+        
+        setMesPrescriptions(formattedPrescriptions);
+      } else {
+        setMesPrescriptions([]);
+      }
+    } catch (error) {
+      console.error('Erreur chargement historique:', error);
+      message.error('Erreur lors du chargement de l\'historique');
+      setMesPrescriptions([]);
+    } finally {
+      setLoading(prev => ({ ...prev, historique: false }));
+    }
+  };
+
+  // Fonction pour préparer une prescription pour l'impression
+  const preparePrescriptionForPrint = (prescription) => {
+    // Transformer les détails en format pour l'impression
+    const selectedPrestationsForPrint = prescription.details ? prescription.details.map((detail, index) => ({
+      key: `acte_${detail.COD_ELEMENT || detail.id || index}_${Date.now()}`,
+      CODE_ACTE: detail.COD_ELEMENT || detail.CODE_ACTE || detail.id,
+      LIBELLE: detail.LIBELLE || detail.NOM_COMMERCIAL || 'Acte non spécifié',
+      QUANTITE: detail.QUANTITE || 1,
+      UNITE: detail.UNITE || 'unité',
+      POSOLOGIE: detail.POSOLOGIE || '',
+      DUREE: detail.DUREE_TRAITEMENT || detail.DUREE || '1',
+      PRIX_UNITAIRE: detail.PRIX_UNITAIRE || detail.prix_unitaire || 0,
+      PRIX: detail.PRIX_UNITAIRE || detail.prix_unitaire || 0,
+      TAUX_PRISE_EN_CHARGE: detail.TAUX_PRISE_EN_CHARGE || 80,
+      PRIX_PRISE_EN_CHARGE: detail.PRIX_PRISE_EN_CHARGE || 0,
+      CATEGORIE: detail.CATEGORIE || prescription.TYPE_PRESTATION,
+      DESCRIPTION: detail.DESCRIPTION || '',
+      TYPE_ELEMENT: detail.TYPE_ELEMENT || 'PRESTATION',
+      REMBOURSABLE: detail.REMBOURSABLE || 1
+    })) : [];
+    
+    // Calculer les totaux
+    const total = selectedPrestationsForPrint.reduce((sum, acte) => {
+      const prix = parseFloat(acte.PRIX_UNITAIRE) || 0;
+      const quantite = parseInt(acte.QUANTITE) || 1;
+      return sum + (prix * quantite);
+    }, 0);
+    
+    const totalPriseEnCharge = selectedPrestationsForPrint.reduce((sum, acte) => {
+      const prix = parseFloat(acte.PRIX_UNITAIRE) || 0;
+      const quantite = parseInt(acte.QUANTITE) || 1;
+      const taux = parseInt(acte.TAUX_PRISE_EN_CHARGE) || 80;
+      return sum + (prix * quantite * taux / 100);
+    }, 0);
+    
+    const totalRestant = total - totalPriseEnCharge;
+    
+    return {
+      numero: prescription.NUMERO_PRESCRIPTION,
+      COD_PRES: prescription.COD_PRES,
+      patient: {
+        nom_complet: prescription.NOM_BEN,
+        numero_carte: prescription.rawData?.NUMERO_CARTE || 'N/A',
+        age: prescription.rawData?.AGE || 'N/A',
+        sexe: prescription.rawData?.SEXE || 'N/A',
+        telephone: prescription.rawData?.TELEPHONE || 'N/A',
+        taux_couverture: prescription.rawData?.TAUX_COUVERTURE || 80
+      },
+      selectedPrestataire: {
+        nom_complet: prescription.NOM_MEDECIN || selectedPrestataire.nom_complet,
+        specialite: selectedPrestataire?.specialite || 'Médecin Généraliste',
+        MATRICULE: selectedPrestataire?.MATRICULE || 'N/A'
+      },
+      centreNom: prescription.centreNom || centreNom,
+      centreDetails: centreDetails,
+      typePrestation: prescription.TYPE_PRESTATION,
+      affectionCode: prescription.COD_AFF || 'N/A',
+      affectionLibelle: prescription.rawData?.LIB_AFF || 'Non spécifiée',
+      dateValidite: prescription.rawData?.DATE_VALIDITE ? 
+        moment(prescription.rawData.DATE_VALIDITE).format('DD/MM/YYYY') : 
+        moment().add(30, 'days').format('DD/MM/YYYY'),
+      statut: prescription.STATUT,
+      total: total,
+      totalPriseEnCharge: totalPriseEnCharge,
+      totalRestant: totalRestant,
+      dateCreation: prescription.DATE_PRESCRIPTION,
+      datePrescription: prescription.DATE_PRESCRIPTION ? 
+        moment(prescription.DATE_PRESCRIPTION).format('DD/MM/YYYY') : 
+        'Date inconnue',
+      selectedPrestations: selectedPrestationsForPrint,
+      qrCodeData: JSON.stringify({
+        numero: prescription.NUMERO_PRESCRIPTION,
+        patient: prescription.NOM_BEN,
+        date: prescription.DATE_PRESCRIPTION ? 
+          moment(prescription.DATE_PRESCRIPTION).format('DD/MM/YYYY') : 
+          'Date inconnue',
+        centre: prescription.centreNom || centreNom,
+        type: prescription.TYPE_PRESTATION
+      })
+    };
+  };
+
+  const handleViewPrescriptionDetails = async (prescription) => {
+    try {
+      setSelectedPrescriptionDetails(prescription);
+      
+      // Si la prescription n'a pas de détails, les charger
+      if (!prescription.details || prescription.details.length === 0) {
+        setLoading(prev => ({ ...prev, details: true }));
+        const response = await prescriptionsAPI.getById(prescription.COD_PRES || prescription.id);
+        if (response.success && response.prescription) {
+          setSelectedPrescriptionDetails({
+            ...prescription,
+            details: response.prescription.details || []
+          });
+        }
+        setLoading(prev => ({ ...prev, details: false }));
+      }
+      
+      setDetailsModalVisible(true);
+    } catch (error) {
+      console.error('Erreur chargement détails:', error);
+      message.error('Erreur lors du chargement des détails');
+      setLoading(prev => ({ ...prev, details: false }));
+    }
+  };
+
+  const handlePrintPrescriptionFromHistory = async (prescription) => {
+    try {
+      // Préparer les données pour l'impression
+      const ordonnanceData = preparePrescriptionForPrint(prescription);
+      
+      setOrdonnanceToPrint(ordonnanceData);
+      setPrintModalVisible(true);
+      
+      message.success(`Prescription ${prescription.NUMERO_PRESCRIPTION} prête pour l'impression`);
+    } catch (error) {
+      console.error('Erreur préparation impression:', error);
+      message.error('Erreur lors de la préparation de l\'impression: ' + error.message);
+    }
+  };
+
+  // ==================== NOUVELLE FONCTION POUR IMPRIMER FICHE D'EXÉCUTION ====================
+  const imprimerFicheExecution = async () => {
+    if (!selectedPrescription) {
+      message.error('Aucune prescription sélectionnée');
+      return;
+    }
+    
+    if (!selectedPrestataire) {
+      message.error('Veuillez sélectionner un médecin exécutant');
+      return;
+    }
+    
+    const actesExecutesList = actesExecutes.filter(a => a.execute);
+    if (actesExecutesList.length === 0) {
+      message.error('Veuillez sélectionner au moins un acte à exécuter');
+      return;
+    }
+    
+    try {
+      setPrintingOrdonnance(true);
+      
+      // Préparer les données pour la fiche d'exécution
+      const ficheExecutionData = {
+        numero: selectedPrescription.NUM_PRESCRIPTION || selectedPrescription.numero || selectedPrescription.COD_PRES,
+        COD_PRES: selectedPrescription.COD_PRES || selectedPrescription.id,
+        patient: {
+          nom_complet: selectedPrescription.NOM_BEN || 'Patient inconnu',
+          numero_carte: selectedPrescription.rawData?.NUMERO_CARTE || 'N/A',
+          age: selectedPrescription.rawData?.AGE || 'N/A',
+          sexe: selectedPrescription.rawData?.SEXE || 'N/A',
+          telephone: selectedPrescription.rawData?.TELEPHONE || 'N/A',
+          taux_couverture: selectedPrescription.rawData?.TAUX_COUVERTURE || 80
+        },
+        selectedPrestataire: {
+          nom_complet: selectedPrestataire.nom_complet,
+          specialite: selectedPrestataire?.specialite || 'Médecin Généraliste',
+          MATRICULE: selectedPrestataire?.MATRICULE || 'N/A'
+        },
+        centreNom: centreNom,
+        centreDetails: centreDetails,
+        typePrestation: selectedPrescription.TYPE_PRESTATION || 'PRESCRIPTION',
+        affectionCode: selectedPrescription.COD_AFF || 'N/A',
+        affectionLibelle: selectedPrescription.rawData?.LIB_AFF || 'Non spécifiée',
+        dateValidite: selectedPrescription.rawData?.DATE_VALIDITE ? 
+          moment(selectedPrescription.rawData.DATE_VALIDITE).format('DD/MM/YYYY') : 
+          moment().add(30, 'days').format('DD/MM/YYYY'),
+        statut: 'À EXÉCUTER',
+        nombrePrestations: actesExecutesList.length,
+        total: totalFacture,
+        totalPriseEnCharge: Math.round(totalFacture * (selectedPrescription.rawData?.TAUX_COUVERTURE || 80) / 100),
+        totalRestant: totalFacture - Math.round(totalFacture * (selectedPrescription.rawData?.TAUX_COUVERTURE || 80) / 100),
+        dateCreation: moment().format('DD/MM/YYYY HH:mm'),
+        datePrescription: selectedPrescription.DATE_PRESCRIPTION ? 
+          moment(selectedPrescription.DATE_PRESCRIPTION).format('DD/MM/YYYY') : 
+          'Date inconnue',
+        selectedPrestations: actesExecutesList.map((acte, index) => ({
+          key: `acte_${acte.COD_ELEMENT || acte.id || index}_${Date.now()}`,
+          CODE_ACTE: acte.COD_ELEMENT || acte.CODE_ACTE || acte.id,
+          LIBELLE: acte.LIBELLE || 'Acte non spécifié',
+          QUANTITE: acte.quantite || 1,
+          UNITE: acte.UNITE || 'unité',
+          POSOLOGIE: acte.POSOLOGIE || '',
+          DUREE: acte.DUREE || '1',
+          PRIX_UNITAIRE: acte.prix || 0,
+          PRIX: acte.prix || 0,
+          TAUX_PRISE_EN_CHARGE: selectedPrescription.rawData?.TAUX_COUVERTURE || 80,
+          PRIX_PRISE_EN_CHARGE: Math.round((acte.prix || 0) * (selectedPrescription.rawData?.TAUX_COUVERTURE || 80) / 100),
+          CATEGORIE: selectedPrescription.TYPE_PRESTATION || 'PRESCRIPTION',
+          DESCRIPTION: acte.DESCRIPTION || '',
+          TYPE_ELEMENT: acte.TYPE_ELEMENT || 'PRESTATION',
+          REMBOURSABLE: acte.REMBOURSABLE || 1
+        })),
+        qrCodeData: JSON.stringify({
+          numero: selectedPrescription.NUM_PRESCRIPTION || selectedPrescription.numero || selectedPrescription.COD_PRES,
+          patient: selectedPrescription.NOM_BEN || 'Patient inconnu',
+          date: moment().format('DD/MM/YYYY'),
+          centre: centreNom,
+          type: selectedPrescription.TYPE_PRESTATION || 'PRESCRIPTION',
+          execution: true
+        })
+      };
+      
+      // Générer la fenêtre d'impression
+      await genererFicheExecutionHTML(ficheExecutionData);
+      
+      message.success('Fiche d\'exécution générée avec succès');
+    } catch (error) {
+      console.error('Erreur impression fiche d\'exécution:', error);
+      message.error('Erreur lors de la génération de la fiche d\'exécution: ' + error.message);
+    } finally {
+      setPrintingOrdonnance(false);
+    }
+  };
+
+  // ==================== COLONNES DES TABLES ====================
+  
+  const actesColumns = [
     {
-      title: 'Médicament/Acte',
-      dataIndex: 'libelle',
-      key: 'libelle',
+      title: 'Code',
+      dataIndex: 'CODE_ACTE',
+      key: 'CODE_ACTE',
+      width: 100,
+      render: (code) => <Tag color="blue">{code}</Tag>
+    },
+    {
+      title: 'Désignation',
+      dataIndex: 'LIBELLE',
+      key: 'LIBELLE',
+      ellipsis: true,
       render: (text, record) => (
         <div>
-          <div><strong>{text || record.NOM_COMMERCIAL || 'Non spécifié'}</strong></div>
-          {record.NOM_GENERIQUE && (
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              Générique: {record.NOM_GENERIQUE}
-            </div>
-          )}
-          {record.FORME_PHARMACEUTIQUE && (
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              Forme: {record.FORME_PHARMACEUTIQUE} {record.DOSAGE ? `- ${record.DOSAGE}` : ''}
+          <div>{text}</div>
+          {record.DESCRIPTION && (
+            <div style={{ fontSize: '11px', color: '#666' }}>
+              {record.DESCRIPTION.substring(0, 50)}...
             </div>
           )}
         </div>
       )
     },
     {
-      title: 'Prix unitaire',
-      dataIndex: 'PRIX_UNITAIRE',
-      key: 'PRIX_UNITAIRE',
-      align: 'right',
+      title: 'Prix (FCFA)',
+      dataIndex: 'PRIX',
+      key: 'PRIX',
+      width: 100,
       render: (prix) => (
         <span style={{ fontWeight: 'bold' }}>
-          {parseFloat(prix || 0).toLocaleString('fr-FR')} XAF
+          {parseFloat(prix || 0).toLocaleString('fr-FR')}
         </span>
       )
     },
     {
-      title: 'Remboursable',
-      dataIndex: 'REMBOURSABLE',
-      key: 'REMBOURSABLE',
-      align: 'center',
-      render: (remboursable) => (
-        <Tag color={remboursable ? 'green' : 'red'}>
-          {remboursable ? 'OUI' : 'NON'}
-        </Tag>
+      title: 'Taux',
+      dataIndex: 'TAUX_PRISE_EN_CHARGE',
+      key: 'TAUX_PRISE_EN_CHARGE',
+      width: 80,
+      render: (taux) => (
+        <Tag color="green">{taux || 80}%</Tag>
       )
     },
     {
       title: 'Action',
       key: 'action',
-      align: 'center',
+      width: 90,
       render: (_, record) => (
         <Button
           type="primary"
           size="small"
           icon={<PlusOutlined />}
-          onClick={() => ajouterMedicament(record)}
+          onClick={() => ajouterActe(record)}
+          disabled={selectedPrestations.some(p => p.CODE_ACTE === record.CODE_ACTE)}
         >
           Ajouter
         </Button>
@@ -2361,14 +1464,49 @@ const searchPrescription = async () => {
     }
   ];
 
-  const prescriptionMedicamentsColumns = [
+  const prescriptionActesColumns = [
+    {
+      title: 'Type',
+      dataIndex: 'TYPE_ELEMENT',
+      key: 'TYPE_ELEMENT',
+      width: 80,
+      render: (type) => (
+        <Tag color={type === 'MANUEL' ? 'orange' : 'blue'}>
+          {type === 'MANUEL' ? 'Manuel' : 'Nomenclature'}
+        </Tag>
+      )
+    },
+    {
+      title: 'Code',
+      dataIndex: 'CODE_ACTE',
+      key: 'CODE_ACTE',
+      width: 100,
+      render: (code) => <Tag color="blue">{code}</Tag>
+    },
     {
       title: 'Désignation',
       dataIndex: 'LIBELLE',
       key: 'LIBELLE',
-      width: 200
+      width: 200,
+      ellipsis: true
     },
     {
+      title: 'Qté',
+      dataIndex: 'QUANTITE',
+      key: 'QUANTITE',
+      width: 70,
+      render: (text, record) => (
+        <InputNumber
+          min={1}
+          max={999}
+          value={text}
+          onChange={(value) => updateActe(record.key, 'QUANTITE', value)}
+          style={{ width: '70px' }}
+          size="small"
+        />
+      )
+    },
+    ...((typePrestation === 'PHARMACIE' || typePrestation === 'MEDICAMENT') ? [{
       title: 'Posologie',
       dataIndex: 'POSOLOGIE',
       key: 'POSOLOGIE',
@@ -2376,45 +1514,62 @@ const searchPrescription = async () => {
       render: (text, record) => (
         <Input
           value={text}
-          onChange={(e) => updateMedicament(record.key, 'POSOLOGIE', e.target.value)}
-          placeholder="Ex: 1 comprimé matin et soir"
+          onChange={(e) => updateActe(record.key, 'POSOLOGIE', e.target.value)}
+          placeholder="Posologie"
+          size="small"
         />
       )
-    },
-    {
-      title: 'Durée',
+    }] : []),
+    ...((typePrestation === 'PHARMACIE' || typePrestation === 'MEDICAMENT') ? [{
+      title: 'Durée (j)',
       dataIndex: 'DUREE',
       key: 'DUREE',
-      width: 100,
-      render: (text, record) => (
-        <Input
-          value={text}
-          onChange={(e) => updateMedicament(record.key, 'DUREE', e.target.value)}
-          placeholder="Ex: 7 jours"
-        />
-      )
-    },
-    {
-      title: 'Quantité',
-      dataIndex: 'QUANTITE',
-      key: 'QUANTITE',
-      width: 100,
+      width: 80,
       render: (text, record) => (
         <InputNumber
           min={1}
-          max={99}
+          max={365}
           value={text}
-          onChange={(value) => updateMedicament(record.key, 'QUANTITE', value)}
+          onChange={(value) => updateActe(record.key, 'DUREE', value)}
+          style={{ width: '70px' }}
+          size="small"
+        />
+      )
+    }] : []),
+    {
+      title: 'Prix unit.',
+      dataIndex: 'PRIX_UNITAIRE',
+      key: 'PRIX_UNITAIRE',
+      width: 100,
+      render: (prix, record) => (
+        <InputNumber
+          value={parseFloat(prix || 0)}
+          onChange={(value) => updateActe(record.key, 'PRIX_UNITAIRE', value)}
+          placeholder="0"
+          size="small"
           style={{ width: '100%' }}
+          min={0}
+          formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
         />
       )
     },
     {
-      title: 'Prix unitaire',
-      dataIndex: 'PRIX_UNITAIRE',
-      key: 'PRIX_UNITAIRE',
-      width: 120,
-      render: (prix) => `${parseFloat(prix || 0).toLocaleString('fr-FR')} XAF`
+      title: 'Taux %',
+      dataIndex: 'TAUX_PRISE_EN_CHARGE',
+      key: 'TAUX_PRISE_EN_CHARGE',
+      width: 80,
+      render: (taux, record) => (
+        <InputNumber
+          value={parseInt(taux || 80)}
+          onChange={(value) => updateActe(record.key, 'TAUX_PRISE_EN_CHARGE', value)}
+          placeholder="80"
+          size="small"
+          style={{ width: '70px' }}
+          min={0}
+          max={100}
+          suffix="%"
+        />
+      )
     },
     {
       title: 'Total',
@@ -2423,25 +1578,98 @@ const searchPrescription = async () => {
       render: (_, record) => {
         const prix = parseFloat(record.PRIX_UNITAIRE) || 0;
         const quantite = parseInt(record.QUANTITE) || 1;
+        const taux = parseInt(record.TAUX_PRISE_EN_CHARGE) || 80;
+        const total = prix * quantite;
+        const priseEnCharge = Math.round(total * taux / 100);
+        const restant = total - priseEnCharge;
+        
         return (
-          <span style={{ fontWeight: 'bold', color: '#1890ff' }}>
-            {(prix * quantite).toLocaleString('fr-FR')} XAF
-          </span>
+          <div>
+            <div style={{ fontSize: '11px', color: '#666' }}>Total: {total.toLocaleString('fr-FR')}</div>
+            <div style={{ fontSize: '10px', color: '#1890ff' }}>Prise en charge: {priseEnCharge.toLocaleString('fr-FR')}</div>
+            <div style={{ fontSize: '10px', color: '#f5222d' }}>Reste: {restant.toLocaleString('fr-FR')}</div>
+          </div>
         );
       }
     },
     {
       title: 'Action',
       key: 'action',
-      width: 80,
+      width: 50,
       render: (_, record) => (
         <Button
           danger
           type="text"
           icon={<DeleteOutlined />}
-          onClick={() => supprimerMedicament(record.key)}
+          onClick={() => supprimerActe(record.key)}
           size="small"
         />
+      )
+    }
+  ];
+
+  const executionColumns = [
+    {
+      title: 'Acte',
+      dataIndex: 'LIBELLE',
+      key: 'LIBELLE',
+      width: 200,
+      render: (text, record) => (
+        <div>
+          <div><strong>{text}</strong></div>
+          <div style={{ fontSize: '11px', color: '#666' }}>
+            Code: {record.COD_ELEMENT} | Qté: {record.quantite}
+          </div>
+        </div>
+      )
+    },
+    {
+      title: 'Prix unit.',
+      dataIndex: 'prix',
+      key: 'prix',
+      width: 100,
+      render: (prix) => `${parseFloat(prix || 0).toLocaleString('fr-FR')} FCFA`
+    },
+    {
+      title: 'Quantité',
+      dataIndex: 'quantite',
+      key: 'quantite',
+      width: 80,
+      render: (quantite) => <Tag color="blue">{quantite}</Tag>
+    },
+    {
+      title: 'Total',
+      key: 'total',
+      width: 100,
+      render: (_, record) => (
+        <span style={{ fontWeight: 'bold' }}>
+          {record.total?.toLocaleString('fr-FR') || '0'} FCFA
+        </span>
+      )
+    },
+    {
+      title: 'Statut',
+      dataIndex: 'STATUT',
+      key: 'STATUT',
+      width: 100,
+      render: (statut) => (
+        <Tag color={statut === 'EXECUTE' ? 'green' : 'orange'}>
+          {statut === 'EXECUTE' ? 'Exécuté' : 'En attente'}
+        </Tag>
+      )
+    },
+    {
+      title: 'Exécuter',
+      key: 'execute',
+      width: 100,
+      render: (_, record) => (
+        <Checkbox
+          checked={record.execute}
+          onChange={(e) => toggleActeExecution(record.key, e.target.checked)}
+          disabled={record.STATUT === 'EXECUTE'}
+        >
+          {record.execute ? 'Oui' : 'Non'}
+        </Checkbox>
       )
     }
   ];
@@ -2455,39 +1683,31 @@ const searchPrescription = async () => {
         <div>
           <div><strong>{text}</strong></div>
           <div style={{ fontSize: '12px', color: '#666' }}>
-            {record.titre || 'Dr.'} {record.prenom} {record.nom}
+            {record.specialite || 'Généraliste'}
+            {record.GRADE && ` | ${record.GRADE}`}
           </div>
         </div>
       )
     },
     {
-      title: 'Spécialité',
-      dataIndex: 'specialite',
-      key: 'specialite',
-      width: 150,
-      render: (specialite) => specialite || 'Non spécifié'
+      title: 'Matricule',
+      dataIndex: 'MATRICULE',
+      key: 'MATRICULE',
+      width: 100,
+      render: (matricule) => (
+        <Tag color="blue">{matricule || 'N/A'}</Tag>
+      )
     },
     {
       title: 'Contact',
       key: 'contact',
-      width: 150,
       render: (_, record) => (
         <div>
           <div>{record.telephone || 'Non renseigné'}</div>
-          <div style={{ fontSize: '12px', color: '#666' }}>
-            {record.email || ''}
-          </div>
+          {record.email && (
+            <div style={{ fontSize: '11px', color: '#666' }}>{record.email}</div>
+          )}
         </div>
-      )
-    },
-    {
-      title: 'Statut',
-      key: 'statut',
-      width: 100,
-      render: (_, record) => (
-        <Tag color={record.statut_affectation === 'Actif' ? 'green' : 'orange'}>
-          {record.statut_affectation || 'Actif'}
-        </Tag>
       )
     },
     {
@@ -2498,8 +1718,12 @@ const searchPrescription = async () => {
         <Button
           type={selectedPrestataire?.id === record.id ? 'default' : 'primary'}
           size="small"
-          onClick={() => selectPrestataire(record)}
-          disabled={selectedPrestataire?.id === record.id}
+          onClick={() => {
+            setSelectedPrestataire(record);
+            prescriptionForm.setFieldValue('COD_PRESCRIPTEUR', record.id);
+            setModalPrestataires(false);
+            message.success(`Médecin sélectionné: ${record.nom_complet}`);
+          }}
         >
           {selectedPrestataire?.id === record.id ? 'Sélectionné' : 'Sélectionner'}
         </Button>
@@ -2507,121 +1731,1212 @@ const searchPrescription = async () => {
     }
   ];
 
-  const executionColumns = [
+  // Colonnes pour la modal des détails des actes
+  const detailsActesColumns = [
     {
-      title: 'Exécuter',
-      dataIndex: 'execute',
-      key: 'execute',
-      width: 80,
-      render: (checked, record) => (
-        <Checkbox
-          checked={checked}
-          onChange={(e) => toggleActeExecution(record.key, e.target.checked)}
-        />
-      )
+      title: '#',
+      key: 'ordre',
+      width: 50,
+      render: (_, record, index) => index + 1
     },
     {
-      title: 'Acte/Médicament',
+      title: 'Code',
+      dataIndex: 'COD_ELEMENT',
+      key: 'COD_ELEMENT',
+      width: 100,
+      render: (code) => <Tag color="blue">{code}</Tag>
+    },
+    {
+      title: 'Libellé',
       dataIndex: 'LIBELLE',
       key: 'LIBELLE',
       width: 200
     },
     {
-      title: 'Quantité prescrite',
+      title: 'Qté',
       dataIndex: 'QUANTITE',
       key: 'QUANTITE',
-      width: 120,
-      align: 'center'
+      width: 80,
+      render: (quantite) => <Tag color="blue">{quantite}</Tag>
     },
     {
-      title: 'Quantité à exécuter',
-      key: 'quantite_executee',
-      width: 150,
-      render: (_, record) => (
-        <InputNumber
-          min={1}
-          max={record.QUANTITE || 99}
-          value={record.quantite_executee}
-          onChange={(value) => updateActeExecution(record.key, 'quantite_executee', value)}
-          style={{ width: '100%' }}
-          disabled={!record.execute}
-        />
-      )
+      title: 'Prix unit.',
+      dataIndex: 'PRIX_UNITAIRE',
+      key: 'PRIX_UNITAIRE',
+      width: 100,
+      render: (prix) => `${parseFloat(prix || 0).toLocaleString('fr-FR')} FCFA`
     },
     {
-      title: 'Prix unitaire',
-      key: 'prix_execute',
-      width: 150,
-      render: (_, record) => (
-        <InputNumber
-          min={0}
-          step={100}
-          value={record.prix_execute}
-          onChange={(value) => updateActeExecution(record.key, 'prix_execute', value)}
-          style={{ width: '100%' }}
-          formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
-          parser={value => value.replace(/\s/g, '')}
-          disabled={!record.execute}
-        />
-      )
-    },
-    {
-      title: 'Sous-total',
-      key: 'sous_total',
+      title: 'Total',
+      key: 'total',
       width: 120,
       render: (_, record) => {
-        if (!record.execute) return '-';
-        const quantite = parseInt(record.quantite_executee) || 0;
-        const prix = parseFloat(record.prix_execute) || 0;
-        return (
-          <span style={{ fontWeight: 'bold', color: '#52c41a' }}>
-            {(quantite * prix).toLocaleString('fr-FR')} XAF
-          </span>
-        );
+        const prix = parseFloat(record.PRIX_UNITAIRE || 0);
+        const quantite = parseFloat(record.QUANTITE || 1);
+        return `${(prix * quantite).toLocaleString('fr-FR')} FCFA`;
       }
     }
   ];
 
+  // ==================== FONCTION POUR GÉNÉRER LA FICHE D'EXÉCUTION ====================
+  const genererFicheExecutionHTML = async (ficheExecutionData) => {
+    // Créer la fenêtre d'impression
+    const printWindow = window.open('', '_blank');
+    const typeColor = getTypeColor(ficheExecutionData.typePrestation);
+    const typeLabel = getTypeLabel(ficheExecutionData.typePrestation);
+    
+    // Calculer les totaux par catégorie
+    const categories = {};
+    ficheExecutionData.selectedPrestations?.forEach(acte => {
+      const cat = acte.CATEGORIE || 'DIVERS';
+      if (!categories[cat]) categories[cat] = { total: 0, priseEnCharge: 0, restant: 0 };
+      
+      const prix = parseFloat(acte.PRIX_UNITAIRE || 0);
+      const quantite = parseInt(acte.QUANTITE || 1);
+      const taux = parseInt(acte.TAUX_PRISE_EN_CHARGE || 80);
+      const total = prix * quantite;
+      const priseEnCharge = Math.round(total * taux / 100);
+      const restant = total - priseEnCharge;
+      
+      categories[cat].total += total;
+      categories[cat].priseEnCharge += priseEnCharge;
+      categories[cat].restant += restant;
+    });
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html lang="fr">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Fiche d'Exécution - ${ficheExecutionData.numero}</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 15mm;
+          }
+          
+          body {
+            font-family: 'Arial', 'Helvetica', sans-serif;
+            margin: 0;
+            padding: 0;
+            font-size: 10px;
+            line-height: 1.4;
+            color: #333;
+            background: #fff;
+          }
+          
+          .container {
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: 0;
+          }
+          
+          /* En-tête moderne avec logo */
+          .header {
+            border-bottom: 3px solid ${typeColor};
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            position: relative;
+          }
+          
+          .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+          }
+          
+          .logo-container {
+            flex: 0 0 auto;
+          }
+          
+          .logo {
+            height: 70px;
+            width: auto;
+          }
+          
+          .header-text {
+            flex: 1;
+            text-align: center;
+            padding: 0 15px;
+          }
+          
+          .header-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: ${typeColor};
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+          }
+          
+          .header-subtitle {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+          }
+          
+          .header-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            background: #f8f9fa;
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
+          }
+          
+          /* Grille moderne */
+          .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-bottom: 12px;
+          }
+          
+          .grid-3 {
+            grid-template-columns: repeat(3, 1fr);
+          }
+          
+          .info-box {
+            border: 1px solid #e0e0e0;
+            padding: 6px 8px;
+            border-radius: 5px;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            transition: all 0.2s ease;
+          }
+          
+          .info-box:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          }
+          
+          .info-label {
+            font-weight: bold;
+            font-size: 8px;
+            color: #666;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          
+          .info-value {
+            font-size: 9px;
+            font-weight: 500;
+          }
+          
+          /* Tableau moderne */
+          .table-container {
+            margin: 12px 0;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          }
+          
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8px;
+          }
+          
+          th {
+            background: linear-gradient(135deg, ${typeColor}, ${typeColor}dd);
+            color: white;
+            padding: 6px 5px;
+            text-align: left;
+            font-weight: bold;
+            border: none;
+            font-size: 9px;
+          }
+          
+          td {
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+            vertical-align: top;
+          }
+          
+          tr:nth-child(even) {
+            background: #f8fafc;
+          }
+          
+          tr:hover {
+            background: #f1f5f9;
+          }
+          
+          /* Totaux modernes */
+          .totals {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin: 12px 0;
+            font-size: 9px;
+          }
+          
+          .total-box {
+            border: 1px solid #e0e0e0;
+            padding: 8px;
+            text-align: center;
+            border-radius: 6px;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+          }
+          
+          .total-label {
+            font-weight: bold;
+            margin-bottom: 4px;
+            font-size: 8px;
+            color: #666;
+            text-transform: uppercase;
+          }
+          
+          .total-value {
+            font-size: 14px;
+            font-weight: bold;
+          }
+          
+          /* Signatures modernes */
+          .signatures {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 2px solid #e0e0e0;
+          }
+          
+          .signature-box {
+            text-align: center;
+          }
+          
+          .signature-line {
+            width: 70%;
+            height: 1px;
+            background: #333;
+            margin: 20px auto 5px;
+          }
+          
+          .signature-text {
+            font-size: 9px;
+            margin-top: 3px;
+            color: #666;
+          }
+          
+          /* Footer moderne */
+          .footer {
+            font-size: 7px;
+            text-align: center;
+            margin-top: 15px;
+            color: #888;
+            padding-top: 8px;
+            border-top: 1px solid #eee;
+          }
+          
+          /* Badges */
+          .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 7px;
+            font-weight: bold;
+            margin-right: 3px;
+          }
+          
+          .badge-success {
+            background: #d4edda;
+            color: #155724;
+          }
+          
+          .badge-warning {
+            background: #fff3cd;
+            color: #856404;
+          }
+          
+          .badge-info {
+            background: #d1ecf1;
+            color: #0c5460;
+          }
+          
+          /* Optimisations pour impression */
+          @media print {
+            body {
+              font-size: 9px;
+            }
+            
+            .no-print {
+              display: none;
+            }
+            
+            .table-container {
+              page-break-inside: avoid;
+            }
+            
+            .signatures {
+              page-break-inside: avoid;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <!-- En-tête moderne avec logo -->
+          <div class="header">
+            <div class="header-content">
+              <div class="logo-container">
+                <img src="${AMSlogo}" alt="Logo AMS" class="logo">
+              </div>
+              <div class="header-text">
+                <div class="header-title">
+                  FICHE D'EXÉCUTION MÉDICALE
+                </div>
+                <div class="header-subtitle">
+                  ${typeLabel} | N° ${ficheExecutionData.numero}
+                </div>
+                <div style="font-size: 9px; color: #666; margin-top: 2px;">
+                  Document d'exécution des actes médicaux
+                </div>
+              </div>
+              <div style="flex: 0 0 auto; text-align: right;">
+                <div style="font-size: 9px; color: #666;">Statut: <span class="badge badge-warning">À EXÉCUTER</span></div>
+                <div style="font-size: 8px; margin-top: 2px;">${moment().format('DD/MM/YYYY HH:mm')}</div>
+              </div>
+            </div>
+            
+            <div class="header-info">
+              <div><strong>Date prescription:</strong> ${ficheExecutionData.datePrescription}</div>
+              <div><strong>Centre:</strong> ${ficheExecutionData.centreNom}</div>
+              <div><strong>Validité:</strong> ${ficheExecutionData.dateValidite}</div>
+            </div>
+          </div>
+          
+          <!-- Section patient -->
+          <div class="grid grid-3" style="margin-bottom: 10px;">
+            <div class="info-box">
+              <div class="info-label">PATIENT</div>
+              <div class="info-value" style="font-size: 10px; font-weight: bold;">${ficheExecutionData.patient?.nom_complet || 'N/A'}</div>
+              <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                <span class="badge badge-info">Carte: ${ficheExecutionData.patient?.numero_carte || 'N/A'}</span>
+              </div>
+            </div>
+            
+            <div class="info-box">
+              <div class="info-label">INFORMATIONS MÉDICALES</div>
+              <div class="info-value">
+                ${ficheExecutionData.patient?.age || 'N/A'} ans | 
+                ${ficheExecutionData.patient?.sexe === 'M' ? 'Masculin' : ficheExecutionData.patient?.sexe === 'F' ? 'Féminin' : 'N/A'}
+              </div>
+              <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                GS: ${ficheExecutionData.patient?.groupe_sanguin || 'N/A'} | 
+                Tél: ${ficheExecutionData.patient?.telephone || 'N/A'}
+              </div>
+            </div>
+            
+            <div class="info-box">
+              <div class="info-label">COUVERTURE</div>
+              <div class="info-value" style="color: #1890ff; font-weight: bold;">
+                ${ficheExecutionData.patient?.taux_couverture || 80}%
+              </div>
+              <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                ${ficheExecutionData.patient?.assureur || 'Assureur N/A'}
+                ${ficheExecutionData.patient?.numero_assurance ? `| N°: ${ficheExecutionData.patient.numero_assurance}` : ''}
+              </div>
+            </div>
+          </div>
+          
+          <!-- Section médicale -->
+          <div class="grid" style="margin-bottom: 10px;">
+            <div class="info-box">
+              <div class="info-label">MÉDECIN PRESCRIPTEUR</div>
+              <div class="info-value" style="font-size: 10px;">${ficheExecutionData.selectedPrestataire?.nom_complet || 'N/A'}</div>
+              <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                ${ficheExecutionData.selectedPrestataire?.specialite || 'Médecin'} | 
+                Matricule: ${ficheExecutionData.selectedPrestataire?.MATRICULE || 'N/A'}
+              </div>
+            </div>
+            
+            <div class="info-box">
+              <div class="info-label">AFFECTION / DIAGNOSTIC</div>
+              <div class="info-value" style="font-size: 9px;">${ficheExecutionData.affectionLibelle || 'Non spécifiée'}</div>
+              <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                Code: ${ficheExecutionData.affectionCode || 'N/A'}
+              </div>
+            </div>
+          </div>
+          
+          <!-- Tableau des actes à exécuter -->
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th width="5%">#</th>
+                  <th width="15%">Code</th>
+                  <th width="30%">Désignation</th>
+                  <th width="8%">Qté</th>
+                  ${ficheExecutionData.typePrestation === 'PHARMACIE' || ficheExecutionData.typePrestation === 'MEDICAMENT' ? '<th width="12%">Posologie</th><th width="5%">Durée</th>' : ''}
+                  <th width="10%">Prix Unit.</th>
+                  <th width="8%">Taux</th>
+                  <th width="8%">Total</th>
+                  <th width="10%">PEC</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${ficheExecutionData.selectedPrestations?.map((acte, index) => {
+                  const prix = parseFloat(acte.PRIX_UNITAIRE || 0);
+                  const quantite = parseInt(acte.QUANTITE || 1);
+                  const taux = parseInt(acte.TAUX_PRISE_EN_CHARGE || 80);
+                  const total = prix * quantite;
+                  const priseEnCharge = Math.round(total * taux / 100);
+                  
+                  return `
+                    <tr>
+                      <td>${index + 1}</td>
+                      <td><span class="badge badge-info">${acte.CODE_ACTE || ''}</span></td>
+                      <td>
+                        <div style="font-weight: 500;">${acte.LIBELLE || ''}</div>
+                        ${acte.POSOLOGIE ? `<div style="font-size: 7px; color: #666; margin-top: 1px;">${acte.POSOLOGIE}</div>` : ''}
+                      </td>
+                      <td>${quantite} ${acte.UNITE || 'unité'}</td>
+                      ${ficheExecutionData.typePrestation === 'PHARMACIE' || ficheExecutionData.typePrestation === 'MEDICAMENT' ? `
+                        <td>${acte.POSOLOGIE || ''}</td>
+                        <td>${acte.DUREE || ''} j</td>
+                      ` : ''}
+                      <td style="font-weight: bold;">${prix.toLocaleString('fr-FR')}</td>
+                      <td><span class="badge badge-success">${taux}%</span></td>
+                      <td style="font-weight: bold;">${total.toLocaleString('fr-FR')}</td>
+                      <td style="color: #52c41a; font-weight: bold;">${priseEnCharge.toLocaleString('fr-FR')}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- Résumé par catégorie -->
+          <div style="margin: 10px 0; padding: 8px; background: #f8fafc; border-radius: 6px; border: 1px solid #e9ecef;">
+            <div style="font-weight: bold; font-size: 9px; margin-bottom: 6px; color: #666;">RÉSUMÉ PAR CATÉGORIE</div>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 8px;">
+              ${Object.entries(categories).map(([categorie, montants]) => `
+                <div style="padding: 4px; background: #fff; border-radius: 4px; border: 1px solid #e0e0e0;">
+                  <div style="font-weight: bold; color: ${typeColor};">${categorie}</div>
+                  <div style="margin-top: 2px;">
+                    <div>Total: <strong>${montants.total.toLocaleString('fr-FR')}</strong></div>
+                    <div>PEC: <strong style="color: #52c41a;">${montants.priseEnCharge.toLocaleString('fr-FR')}</strong></div>
+                    <div>Reste: <strong style="color: #f5222d;">${montants.restant.toLocaleString('fr-FR')}</strong></div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          
+          <!-- Totaux -->
+          <div class="totals">
+            <div class="total-box" style="border-color: #1890ff;">
+              <div class="total-label">TOTAL À FACTURER</div>
+              <div class="total-value" style="color: #1890ff;">
+                ${ficheExecutionData.total?.toLocaleString('fr-FR') || '0'} FCFA
+              </div>
+              <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                ${ficheExecutionData.nombrePrestations || 0} acte(s)
+              </div>
+            </div>
+            
+            <div class="total-box" style="border-color: #52c41a;">
+              <div class="total-label">PRISE EN CHARGE</div>
+              <div class="total-value" style="color: #52c41a;">
+                ${ficheExecutionData.totalPriseEnCharge?.toLocaleString('fr-FR') || '0'} FCFA
+              </div>
+              <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                (${ficheExecutionData.patient?.taux_couverture || 80}% couverture)
+              </div>
+            </div>
+            
+            <div class="total-box" style="border-color: #f5222d;">
+              <div class="total-label">RESTE À CHARGE</div>
+              <div class="total-value" style="color: #f5222d;">
+                ${ficheExecutionData.totalRestant?.toLocaleString('fr-FR') || '0'} FCFA
+              </div>
+              <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                À la charge du patient
+              </div>
+            </div>
+          </div>
+          
+          <!-- Observations -->
+          <div style="margin: 10px 0; padding: 8px; background: #fff8e1; border-radius: 6px; border: 1px solid #ffd54f;">
+            <div style="font-weight: bold; font-size: 9px; color: #ff9800; margin-bottom: 4px;">
+              <i class="fas fa-exclamation-circle"></i> OBSERVATIONS
+            </div>
+            <div style="font-size: 8px;">
+              Cette fiche d'exécution liste les actes médicaux à réaliser pour le patient. 
+              Tous les actes doivent être validés par le médecin exécutant avant facturation.
+            </div>
+          </div>
+          
+          <!-- Signatures -->
+          <div class="signatures">
+            <div class="signature-box">
+              <div class="signature-text"><strong>LE MÉDECIN EXÉCUTANT</strong></div>
+              <div class="signature-line"></div>
+              <div class="signature-text">
+                ${ficheExecutionData.selectedPrestataire?.nom_complet || ''}<br>
+                ${ficheExecutionData.selectedPrestataire?.specialite || 'Médecin Généraliste'}<br>
+                <span style="font-size: 7px; color: #999;">Date et signature</span>
+              </div>
+            </div>
+            
+            <div class="signature-box">
+              <div class="signature-text"><strong>LE CENTRE DE SANTÉ</strong></div>
+              <div class="signature-line"></div>
+              <div class="signature-text">
+                ${ficheExecutionData.centreNom || ''}<br>
+                Centre de Santé Agréé<br>
+                <span style="font-size: 7px; color: #999;">Cachet et signature</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Footer -->
+          <div class="footer">
+            <div>
+              Document généré électroniquement par le Système de Gestion Médicale (SGM) | 
+              ${moment().format('DD/MM/YYYY à HH:mm')}
+            </div>
+            <div style="margin-top: 4px; font-size: 6px; color: #aaa;">
+              © ${new Date().getFullYear()} AMS - Advanced Medical System | Document confidentiel - Reproduction interdite
+            </div>
+          </div>
+        </div>
+        
+        <script>
+          // Imprimer automatiquement
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+              setTimeout(function() {
+                window.close();
+              }, 1000);
+            }, 500);
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+  };
+
+  // ==================== IMPRESSION SUR FORMAT A4 MODERNE AVEC LOGO ====================
+  
+  const imprimerOrdonnanceA4 = async () => {
+    try {
+      setPrintingOrdonnance(true);
+      
+      if (!ordonnanceToPrint) {
+        message.error('Aucune ordonnance à imprimer');
+        return;
+      }
+      
+      // Calculer les totaux par catégorie
+      const categories = {};
+      ordonnanceToPrint.selectedPrestations?.forEach(acte => {
+        const cat = acte.CATEGORIE || 'DIVERS';
+        if (!categories[cat]) categories[cat] = { total: 0, priseEnCharge: 0, restant: 0 };
+        
+        const prix = parseFloat(acte.PRIX_UNITAIRE || 0);
+        const quantite = parseInt(acte.QUANTITE || 1);
+        const taux = parseInt(acte.TAUX_PRISE_EN_CHARGE || 80);
+        const total = prix * quantite;
+        const priseEnCharge = Math.round(total * taux / 100);
+        const restant = total - priseEnCharge;
+        
+        categories[cat].total += total;
+        categories[cat].priseEnCharge += priseEnCharge;
+        categories[cat].restant += restant;
+      });
+      
+      // Créer la fenêtre d'impression
+      const printWindow = window.open('', '_blank');
+      const typeColor = getTypeColor(ordonnanceToPrint.typePrestation);
+      const typeLabel = getTypeLabel(ordonnanceToPrint.typePrestation);
+      
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html lang="fr">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Feuille de Prise en Charge - ${ordonnanceToPrint.numero}</title>
+          <style>
+            @page {
+              size: A4;
+              margin: 15mm;
+            }
+            
+            body {
+              font-family: 'Arial', 'Helvetica', sans-serif;
+              margin: 0;
+              padding: 0;
+              font-size: 10px;
+              line-height: 1.4;
+              color: #333;
+              background: #fff;
+            }
+            
+            .container {
+              max-width: 210mm;
+              margin: 0 auto;
+              padding: 0;
+            }
+            
+            /* En-tête moderne avec logo */
+            .header {
+              border-bottom: 3px solid ${typeColor};
+              padding-bottom: 10px;
+              margin-bottom: 15px;
+              position: relative;
+            }
+            
+            .header-content {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              margin-bottom: 8px;
+            }
+            
+            .logo-container {
+              flex: 0 0 auto;
+            }
+            
+            .logo {
+              height: 70px;
+              width: auto;
+            }
+            
+            .header-text {
+              flex: 1;
+              text-align: center;
+              padding: 0 15px;
+            }
+            
+            .header-title {
+              font-size: 16px;
+              font-weight: bold;
+              color: ${typeColor};
+              margin-bottom: 4px;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            
+            .header-subtitle {
+              font-size: 12px;
+              color: #666;
+              margin-bottom: 4px;
+            }
+            
+            .header-info {
+              display: flex;
+              justify-content: space-between;
+              font-size: 9px;
+              background: #f8f9fa;
+              padding: 6px 10px;
+              border-radius: 4px;
+              border: 1px solid #e9ecef;
+            }
+            
+            /* Grille moderne */
+            .grid {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 8px;
+              margin-bottom: 12px;
+            }
+            
+            .grid-3 {
+              grid-template-columns: repeat(3, 1fr);
+            }
+            
+            .info-box {
+              border: 1px solid #e0e0e0;
+              padding: 6px 8px;
+              border-radius: 5px;
+              background: #fff;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+              transition: all 0.2s ease;
+            }
+            
+            .info-box:hover {
+              box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }
+            
+            .info-label {
+              font-weight: bold;
+              font-size: 8px;
+              color: #666;
+              margin-bottom: 2px;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            
+            .info-value {
+              font-size: 9px;
+              font-weight: 500;
+            }
+            
+            /* Tableau moderne */
+            .table-container {
+              margin: 12px 0;
+              border-radius: 6px;
+              overflow: hidden;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }
+            
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              font-size: 8px;
+            }
+            
+            th {
+              background: linear-gradient(135deg, ${typeColor}, ${typeColor}dd);
+              color: white;
+              padding: 6px 5px;
+              text-align: left;
+              font-weight: bold;
+              border: none;
+              font-size: 9px;
+            }
+            
+            td {
+              padding: 5px;
+              border-bottom: 1px solid #eee;
+              vertical-align: top;
+            }
+            
+            tr:nth-child(even) {
+              background: #f8fafc;
+            }
+            
+            tr:hover {
+              background: #f1f5f9;
+            }
+            
+            /* Totaux modernes */
+            .totals {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 8px;
+              margin: 12px 0;
+              font-size: 9px;
+            }
+            
+            .total-box {
+              border: 1px solid #e0e0e0;
+              padding: 8px;
+              text-align: center;
+              border-radius: 6px;
+              background: #fff;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            }
+            
+            .total-label {
+              font-weight: bold;
+              margin-bottom: 4px;
+              font-size: 8px;
+              color: #666;
+              text-transform: uppercase;
+            }
+            
+            .total-value {
+              font-size: 14px;
+              font-weight: bold;
+            }
+            
+            /* Signatures modernes */
+            .signatures {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 20px;
+              margin-top: 25px;
+              padding-top: 15px;
+              border-top: 2px solid #e0e0e0;
+            }
+            
+            .signature-box {
+              text-align: center;
+            }
+            
+            .signature-line {
+              width: 70%;
+              height: 1px;
+              background: #333;
+              margin: 20px auto 5px;
+            }
+            
+            .signature-text {
+              font-size: 9px;
+              margin-top: 3px;
+              color: #666;
+            }
+            
+            /* Footer moderne */
+            .footer {
+              font-size: 7px;
+              text-align: center;
+              margin-top: 15px;
+              color: #888;
+              padding-top: 8px;
+              border-top: 1px solid #eee;
+            }
+            
+            /* Badges */
+            .badge {
+              display: inline-block;
+              padding: 2px 6px;
+              border-radius: 3px;
+              font-size: 7px;
+              font-weight: bold;
+              margin-right: 3px;
+            }
+            
+            .badge-success {
+              background: #d4edda;
+              color: #155724;
+            }
+            
+            .badge-warning {
+              background: #fff3cd;
+              color: #856404;
+            }
+            
+            .badge-info {
+              background: #d1ecf1;
+              color: #0c5460;
+            }
+            
+            /* QR Code style */
+            .qrcode-container {
+              text-align: center;
+              margin: 10px 0;
+              padding: 8px;
+              background: #f8f9fa;
+              border-radius: 6px;
+              border: 1px solid #e9ecef;
+            }
+            
+            /* Optimisations pour impression */
+            @media print {
+              body {
+                font-size: 9px;
+              }
+              
+              .no-print {
+                display: none;
+              }
+              
+              .table-container {
+                page-break-inside: avoid;
+              }
+              
+              .signatures {
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <!-- En-tête moderne avec logo -->
+            <div class="header">
+              <div class="header-content">
+                <div class="logo-container">
+                  <img src="${AMSlogo}" alt="Logo AMS" class="logo">
+                </div>
+                <div class="header-text">
+                  <div class="header-title">
+                    FEUILLE DE PRISE EN CHARGE MÉDICALE
+                  </div>
+                  <div class="header-subtitle">
+                    ${typeLabel} | N° ${ordonnanceToPrint.numero}
+                  </div>
+                  <div style="font-size: 9px; color: #666; margin-top: 2px;">
+                    Document officiel de prescription médicale
+                  </div>
+                </div>
+                <div style="flex: 0 0 auto; text-align: right;">
+                  <div style="font-size: 9px; color: #666;">Statut: <span class="badge badge-success">${ordonnanceToPrint.statut || 'EN COURS'}</span></div>
+                  <div style="font-size: 8px; margin-top: 2px;">${ordonnanceToPrint.dateCreation}</div>
+                </div>
+              </div>
+              
+              <div class="header-info">
+                <div><strong>Date prescription:</strong> ${ordonnanceToPrint.datePrescription}</div>
+                <div><strong>Centre:</strong> ${ordonnanceToPrint.centreNom}</div>
+                <div><strong>Validité:</strong> ${ordonnanceToPrint.dateValidite}</div>
+              </div>
+            </div>
+            
+            <!-- Section patient -->
+            <div class="grid grid-3" style="margin-bottom: 10px;">
+              <div class="info-box">
+                <div class="info-label">PATIENT</div>
+                <div class="info-value" style="font-size: 10px; font-weight: bold;">${ordonnanceToPrint.patient?.nom_complet || 'N/A'}</div>
+                <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                  <span class="badge badge-info">Carte: ${ordonnanceToPrint.patient?.numero_carte || 'N/A'}</span>
+                </div>
+              </div>
+              
+              <div class="info-box">
+                <div class="info-label">INFORMATIONS MÉDICALES</div>
+                <div class="info-value">
+                  ${ordonnanceToPrint.patient?.age || 'N/A'} ans | 
+                  ${ordonnanceToPrint.patient?.sexe === 'M' ? 'Masculin' : ordonnanceToPrint.patient?.sexe === 'F' ? 'Féminin' : 'N/A'}
+                </div>
+                <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                  GS: ${ordonnanceToPrint.patient?.groupe_sanguin || 'N/A'} | 
+                  Tél: ${ordonnanceToPrint.patient?.telephone || 'N/A'}
+                </div>
+              </div>
+              
+              <div class="info-box">
+                <div class="info-label">COUVERTURE</div>
+                <div class="info-value" style="color: #1890ff; font-weight: bold;">
+                  ${ordonnanceToPrint.patient?.taux_couverture || 80}%
+                </div>
+                <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                  ${ordonnanceToPrint.patient?.assureur || 'Assureur N/A'}
+                  ${ordonnanceToPrint.patient?.numero_assurance ? `| N°: ${ordonnanceToPrint.patient.numero_assurance}` : ''}
+                </div>
+              </div>
+            </div>
+            
+            <!-- Section médicale -->
+            <div class="grid" style="margin-bottom: 10px;">
+              <div class="info-box">
+                <div class="info-label">MÉDECIN PRESCRIPTEUR</div>
+                <div class="info-value" style="font-size: 10px;">${ordonnanceToPrint.selectedPrestataire?.nom_complet || 'N/A'}</div>
+                <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                  ${ordonnanceToPrint.selectedPrestataire?.specialite || 'Médecin'} | 
+                  Matricule: ${ordonnanceToPrint.selectedPrestataire?.MATRICULE || 'N/A'}
+                </div>
+              </div>
+              
+              <div class="info-box">
+                <div class="info-label">AFFECTION / DIAGNOSTIC</div>
+                <div class="info-value" style="font-size: 9px;">${ordonnanceToPrint.affectionLibelle || 'Non spécifiée'}</div>
+                <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                  Code: ${ordonnanceToPrint.affectionCode || 'N/A'}
+                </div>
+              </div>
+            </div>
+            
+            <!-- Tableau des actes -->
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th width="5%">#</th>
+                    <th width="15%">Code</th>
+                    <th width="30%">Désignation</th>
+                    <th width="8%">Qté</th>
+                    ${ordonnanceToPrint.typePrestation === 'PHARMACIE' || ordonnanceToPrint.typePrestation === 'MEDICAMENT' ? '<th width="12%">Posologie</th><th width="5%">Durée</th>' : ''}
+                    <th width="10%">Prix Unit.</th>
+                    <th width="8%">Taux</th>
+                    <th width="8%">Total</th>
+                    <th width="10%">PEC</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${ordonnanceToPrint.selectedPrestations?.map((acte, index) => {
+                    const prix = parseFloat(acte.PRIX_UNITAIRE || 0);
+                    const quantite = parseInt(acte.QUANTITE || 1);
+                    const taux = parseInt(acte.TAUX_PRISE_EN_CHARGE || 80);
+                    const total = prix * quantite;
+                    const priseEnCharge = Math.round(total * taux / 100);
+                    
+                    return `
+                      <tr>
+                        <td>${index + 1}</td>
+                        <td><span class="badge badge-info">${acte.CODE_ACTE || ''}</span></td>
+                        <td>
+                          <div style="font-weight: 500;">${acte.LIBELLE || ''}</div>
+                          ${acte.POSOLOGIE ? `<div style="font-size: 7px; color: #666; margin-top: 1px;">${acte.POSOLOGIE}</div>` : ''}
+                        </td>
+                        <td>${quantite} ${acte.UNITE || 'unité'}</td>
+                        ${ordonnanceToPrint.typePrestation === 'PHARMACIE' || ordonnanceToPrint.typePrestation === 'MEDICAMENT' ? `
+                          <td>${acte.POSOLOGIE || ''}</td>
+                          <td>${acte.DUREE || ''} j</td>
+                        ` : ''}
+                        <td style="font-weight: bold;">${prix.toLocaleString('fr-FR')}</td>
+                        <td><span class="badge badge-success">${taux}%</span></td>
+                        <td style="font-weight: bold;">${total.toLocaleString('fr-FR')}</td>
+                        <td style="color: #52c41a; font-weight: bold;">${priseEnCharge.toLocaleString('fr-FR')}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Résumé par catégorie -->
+            <div style="margin: 10px 0; padding: 8px; background: #f8fafc; border-radius: 6px; border: 1px solid #e9ecef;">
+              <div style="font-weight: bold; font-size: 9px; margin-bottom: 6px; color: #666;">RÉSUMÉ PAR CATÉGORIE</div>
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 8px;">
+                ${Object.entries(categories).map(([categorie, montants]) => `
+                  <div style="padding: 4px; background: #fff; border-radius: 4px; border: 1px solid #e0e0e0;">
+                    <div style="font-weight: bold; color: ${typeColor};">${categorie}</div>
+                    <div style="margin-top: 2px;">
+                      <div>Total: <strong>${montants.total.toLocaleString('fr-FR')}</strong></div>
+                      <div>PEC: <strong style="color: #52c41a;">${montants.priseEnCharge.toLocaleString('fr-FR')}</strong></div>
+                      <div>Reste: <strong style="color: #f5222d;">${montants.restant.toLocaleString('fr-FR')}</strong></div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            
+            <!-- Totaux -->
+            <div class="totals">
+              <div class="total-box" style="border-color: #1890ff;">
+                <div class="total-label">TOTAL PRESCRIPTION</div>
+                <div class="total-value" style="color: #1890ff;">
+                  ${ordonnanceToPrint.total?.toLocaleString('fr-FR') || '0'} FCFA
+                </div>
+                <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                  ${ordonnanceToPrint.selectedPrestations?.length || 0} élément(s)
+                </div>
+              </div>
+              
+              <div class="total-box" style="border-color: #52c41a;">
+                <div class="total-label">PRISE EN CHARGE</div>
+                <div class="total-value" style="color: #52c41a;">
+                  ${ordonnanceToPrint.totalPriseEnCharge?.toLocaleString('fr-FR') || '0'} FCFA
+                </div>
+                <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                  (${ordonnanceToPrint.patient?.taux_couverture || 80}% couverture)
+                </div>
+              </div>
+              
+              <div class="total-box" style="border-color: #f5222d;">
+                <div class="total-label">RESTE À CHARGE</div>
+                <div class="total-value" style="color: #f5222d;">
+                  ${ordonnanceToPrint.totalRestant?.toLocaleString('fr-FR') || '0'} FCFA
+                </div>
+                <div style="font-size: 7px; color: #666; margin-top: 2px;">
+                  À la charge du patient
+                </div>
+              </div>
+            </div>
+            
+            <!-- Observations -->
+            <div style="margin: 10px 0; padding: 8px; background: #e8f4fd; border-radius: 6px; border: 1px solid #b6d4fe;">
+              <div style="font-weight: bold; font-size: 9px; color: #1890ff; margin-bottom: 4px;">
+                <i class="fas fa-info-circle"></i> OBSERVATIONS
+              </div>
+              <div style="font-size: 8px;">
+                ${ordonnanceToPrint.observations || 'Aucune observation particulière.'}
+                ${ordonnanceToPrint.dateExecution ? `<br><strong>Date d'exécution:</strong> ${ordonnanceToPrint.dateExecution}` : ''}
+              </div>
+            </div>
+            
+            <!-- QR Code -->
+            <div class="qrcode-container">
+              <div style="font-size: 8px; color: #666; margin-bottom: 4px;">
+                <strong>CODE DE VÉRIFICATION</strong>
+              </div>
+              <div style="font-size: 7px; color: #999; margin-bottom: 6px;">
+                Scannez ce code pour vérifier l'authenticité de la prescription
+              </div>
+              <div style="font-family: monospace; font-size: 6px; background: #f8f9fa; padding: 4px; border-radius: 3px;">
+                ${ordonnanceToPrint.qrCodeData || ''}
+              </div>
+            </div>
+            
+            <!-- Signatures -->
+            <div class="signatures">
+              <div class="signature-box">
+                <div class="signature-text"><strong>LE MÉDECIN PRESCRIPTEUR</strong></div>
+                <div class="signature-line"></div>
+                <div class="signature-text">
+                  ${ordonnanceToPrint.selectedPrestataire?.nom_complet || ''}<br>
+                  ${ordonnanceToPrint.selectedPrestataire?.specialite || 'Médecin Généraliste'}<br>
+                  <span style="font-size: 7px; color: #999;">Date et signature</span>
+                </div>
+              </div>
+              
+              <div class="signature-box">
+                <div class="signature-text"><strong>LE CENTRE DE SANTÉ</strong></div>
+                <div class="signature-line"></div>
+                <div class="signature-text">
+                  ${ordonnanceToPrint.centreNom || ''}<br>
+                  Centre de Santé Agréé<br>
+                  <span style="font-size: 7px; color: #999;">Cachet et signature</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="footer">
+              <div>
+                Document généré électroniquement par le Système de Gestion Médicale (SGM) | 
+                ${moment().format('DD/MM/YYYY à HH:mm')}
+              </div>
+              <div style="margin-top: 4px; font-size: 6px; color: #aaa;">
+                © ${new Date().getFullYear()} AMS - Advanced Medical System | Document confidentiel - Reproduction interdite
+              </div>
+            </div>
+          </div>
+          
+          <script>
+            // Imprimer automatiquement
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+                setTimeout(function() {
+                  window.close();
+                }, 1000);
+              }, 500);
+            };
+          </script>
+        </body>
+        </html>
+      `);
+      
+      printWindow.document.close();
+      
+      message.success('Feuille de prise en charge générée avec succès');
+    } catch (error) {
+      console.error('Erreur impression:', error);
+      message.error('Erreur lors de la génération du document: ' + error.message);
+    } finally {
+      setPrintingOrdonnance(false);
+    }
+  };
+
   // ==================== EFFETS ====================
-
   useEffect(() => {
-    console.log('🏥 Composant Prescriptions monté');
-    console.log('📍 Centre ID stocké:', localStorage.getItem('selectedCentre'));
-    console.log('📍 Centre ID état:', centreId);
     loadCentres();
-  }, [loadCentres]);
+  }, []);
 
   useEffect(() => {
-    console.log('🔄 Centre changé ou prestataires à charger:', centreId);
     if (centreId) {
       loadPrestataires();
     }
-  }, [centreId, loadPrestataires]);
+  }, [centreId]);
+
+  useEffect(() => {
+    if (typePrestation) {
+      loadActesMedicaux();
+    }
+  }, [typePrestation]);
 
   useEffect(() => {
     if (activeTab === 'historique' && selectedPrestataire) {
       loadMesPrescriptions();
     }
-  }, [activeTab, selectedPrestataire, loadMesPrescriptions]);
+  }, [activeTab, selectedPrestataire]);
 
-  useEffect(() => {
-    if (affectionCode) {
-      searchAffection(affectionCode);
-    } else {
-      setAffectionDetails(null);
-    }
-  }, [affectionCode]);
-
-  // Effet pour mettre à jour le nom du centre
-  useEffect(() => {
-    if (centreId && centres.length > 0) {
-      const centre = centres.find(c => c.id === centreId || c.cod_cen === centreId);
-      if (centre) {
-        setCentreNom(centre.nom || centre.NOM_CENTRE || `Centre ${centreId}`);
-      }
-    }
-  }, [centreId, centres]);
-
+  // ==================== RENDU PRINCIPAL ====================
+  
   return (
     <div style={{ padding: '20px', background: '#f0f2f5', minHeight: '100vh' }}>
       <Card
@@ -2629,6 +2944,11 @@ const searchPrescription = async () => {
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <MedicineBoxOutlined style={{ marginRight: 8, fontSize: '20px', color: '#1890ff' }} />
             <span>Gestion des Prescriptions Médicales</span>
+            {centreNom && (
+              <Tag color="blue" style={{ marginLeft: 16 }}>
+                <DatabaseOutlined /> {centreNom}
+              </Tag>
+            )}
           </div>
         }
         extra={
@@ -2636,35 +2956,34 @@ const searchPrescription = async () => {
             <Select
               value={centreId}
               onChange={(value) => {
-                console.log('🏥 Centre changé:', value);
-                setCentreId(value);
-                localStorage.setItem('selectedCentre', value);
-                loadPrestataires();
+                if (value) {
+                  setCentreId(value.toString());
+                  localStorage.setItem('selectedCentre', value.toString());
+                }
               }}
-              style={{ width: 200 }}
+              style={{ width: 250 }}
               placeholder="Sélectionner un centre"
-              loading={centres.length === 0}
+              loading={loadingCentres}
+              disabled={loadingCentres}
             >
-              {centres.map(centre => (
-                <Option key={centre.id || centre.cod_cen} value={centre.id || centre.cod_cen}>
-                  {centre.nom || centre.NOM_CENTRE || `Centre ${centre.id || centre.cod_cen}`}
-                </Option>
-              ))}
+              {centres.map(centre => {
+                const centreValue = centre.id || centre.COD_CEN;
+                if (!centreValue) return null;
+                return (
+                  <Option key={centreValue} value={centreValue.toString()}>
+                    {centre.nom || centre.LIB_CEN || centre.NOM_CENTRE || `Centre ${centreValue}`}
+                    {centre.TYP_CEN && ` (${centre.TYP_CEN})`}
+                  </Option>
+                );
+              })}
             </Select>
-            
-            <Button
-              icon={<SyncOutlined />}
-              onClick={() => loadPrestataires()}
-              loading={loading.prestataires}
-              style={{ marginLeft: 8 }}
-              title="Rafraîchir la liste des médecins"
-            />
             
             <Button
               type={selectedPrestataire ? 'default' : 'primary'}
               icon={<TeamOutlined />}
               onClick={() => setModalPrestataires(true)}
-              loading={loading.prestataires}
+              loading={loadingPrestataires}
+              disabled={!centreId}
             >
               {selectedPrestataire ? 
                 `Dr. ${selectedPrestataire.nom_complet.split(' ')[0]}` : 
@@ -2694,136 +3013,7 @@ const searchPrescription = async () => {
               layout="vertical"
               onFinish={validerPrescription}
             >
-              {/* ALERTE CHANGEMENT DE MÉDECIN */}
-              {showMedecinChangeAlert && medecinConsultation && selectedPrestataire && (
-                <Alert
-                  message="Attention: Changement de médecin"
-                  description={
-                    <div>
-                      <div>Vous avez changé de médecin prescripteur.</div>
-                      <div style={{ marginTop: 8 }}>
-                        <strong>Médecin de la consultation:</strong> {medecinConsultation.nom}
-                      </div>
-                      <div>
-                        <strong>Médecin sélectionné:</strong> {selectedPrestataire.nom_complet}
-                      </div>
-                    </div>
-                  }
-                  type="warning"
-                  showIcon
-                  action={
-                    <Space>
-                      <Button 
-                        size="small" 
-                        type="primary"
-                        icon={<SwapOutlined />}
-                        onClick={() => {
-                          if (prestataires.length > 0) {
-                            const medecinConsultationTrouve = prestataires.find(p => 
-                              p.nom_complet && p.nom_complet.toLowerCase().includes(medecinConsultation.nom.toLowerCase())
-                            );
-                            if (medecinConsultationTrouve) {
-                              selectPrestataire(medecinConsultationTrouve, true);
-                              setShowMedecinChangeAlert(false);
-                            }
-                          }
-                        }}
-                      >
-                        Revenir au médecin de la consultation
-                      </Button>
-                      <Button 
-                        size="small" 
-                        onClick={() => setShowMedecinChangeAlert(false)}
-                      >
-                        Garder ce médecin
-                      </Button>
-                    </Space>
-                  }
-                  style={{ marginBottom: 16 }}
-                />
-              )}
-
-              {/* SECTION PRESTATAIRE */}
-              <Card
-                title={
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <TeamOutlined style={{ marginRight: 8 }} />
-                    <span>Médecin Prescripteur</span>
-                    {medecinConsultation && selectedPrestataire && selectedPrestataire.nom_complet.includes(medecinConsultation.nom) && (
-                      <Tag color="green" style={{ marginLeft: 8 }}>
-                        <UserSwitchOutlined /> Médecin de la consultation
-                      </Tag>
-                    )}
-                  </div>
-                }
-                style={{ marginBottom: 16 }}
-                size="small"
-              >
-                {selectedPrestataire ? (
-                  <Alert
-                    message={
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <strong>Médecin sélectionné:</strong> {selectedPrestataire.nom_complet}
-                          {medecinConsultation && selectedPrestataire.nom_complet.includes(medecinConsultation.nom) && (
-                            <Tag color="green" style={{ marginLeft: 8 }}>
-                              Médecin de la consultation
-                            </Tag>
-                          )}
-                        </div>
-                        <div>
-                          <Button 
-                            size="small" 
-                            icon={<TeamOutlined />}
-                            onClick={() => setModalPrestataires(true)}
-                          >
-                            Changer
-                          </Button>
-                        </div>
-                      </div>
-                    }
-                    description={
-                      <Descriptions size="small" column={2}>
-                        <Descriptions.Item label="Spécialité">
-                          {selectedPrestataire.specialite}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="Contact">
-                          {selectedPrestataire.telephone || 'Non renseigné'}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="Centre">
-                          {centreNom || `Centre ${centreId}`}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="Statut">
-                          <Tag color={selectedPrestataire.statut_affectation === 'Actif' ? 'green' : 'orange'}>
-                            {selectedPrestataire.statut_affectation || 'Actif'}
-                          </Tag>
-                        </Descriptions.Item>
-                      </Descriptions>
-                    }
-                    type="info"
-                    showIcon
-                  />
-                ) : (
-                  <Alert
-                    message="Aucun médecin sélectionné"
-                    description="Veuillez sélectionner un médecin prescripteur pour continuer"
-                    type="warning"
-                    showIcon
-                    action={
-                      <Button 
-                        type="primary" 
-                        size="small" 
-                        icon={<TeamOutlined />}
-                        onClick={() => setModalPrestataires(true)}
-                      >
-                        Sélectionner un médecin
-                      </Button>
-                    }
-                  />
-                )}
-              </Card>
-
-              {/* ÉTAPE 1: INFORMATION PATIENT */}
+              {/* SECTION PATIENT */}
               <Card
                 title={
                   <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -2839,6 +3029,7 @@ const searchPrescription = async () => {
                     <Form.Item
                       label="Numéro de carte du patient"
                       required
+                      rules={[{ required: true, message: 'Veuillez entrer un numéro de carte' }]}
                     >
                       <Input.Search
                         placeholder="Entrez le numéro de la carte d'assurance"
@@ -2847,6 +3038,7 @@ const searchPrescription = async () => {
                         onSearch={searchPatient}
                         loading={loading.patient}
                         allowClear
+                        disabled={!centreId}
                       />
                     </Form.Item>
                   </Col>
@@ -2858,16 +3050,24 @@ const searchPrescription = async () => {
                     >
                       <Select
                         value={typePrestation}
-                        onChange={setTypePrestation}
+                        onChange={(value) => {
+                          setTypePrestation(value);
+                          setSelectedPrestations([]);
+                          setSearchPrestation('');
+                        }}
                         size="large"
+                        disabled={!centreId}
                       >
                         <Option value="PHARMACIE">Pharmacie</Option>
+                        <Option value="MEDICAMENT">Médicament</Option>
+                        <Option value="EXAMEN">Examen</Option>
                         <Option value="BIOLOGIE">Biologie</Option>
                         <Option value="IMAGERIE">Imagerie Médicale</Option>
                         <Option value="HOSPITALISATION">Hospitalisation</Option>
                         <Option value="CONSULTATION">Consultation Spécialisée</Option>
                         <Option value="KINESITHERAPIE">Kinésithérapie</Option>
                         <Option value="INFIRMIER">Soins infirmiers</Option>
+                        <Option value="ACTE">Acte Médical</Option>
                       </Select>
                     </Form.Item>
                   </Col>
@@ -2881,110 +3081,43 @@ const searchPrescription = async () => {
                         <Descriptions.Item label="Nom">
                           <strong>{patient.nom_complet}</strong>
                         </Descriptions.Item>
-                        <Descriptions.Item label="Identifiant National">
-                          {patient.identifiant_national || 'Non renseigné'}
+                        <Descriptions.Item label="Identifiant">
+                          {patient.identifiant_national || patient.numero_carte}
                         </Descriptions.Item>
                         <Descriptions.Item label="Âge/Sexe">
-                          {patient.age || 'N/A'} ans / {patient.sexe || 'N/A'}
+                          {patient.age} ans / {patient.sexe || 'Non spécifié'}
                         </Descriptions.Item>
                         <Descriptions.Item label="Groupe Sanguin">
-                          {patient.groupe_sanguin || 'Non renseigné'} {patient.rhesus || ''}
+                          {patient.groupe_sanguin || 'Non renseigné'}
                         </Descriptions.Item>
                         <Descriptions.Item label="Téléphone">
                           {patient.telephone || 'Non renseigné'}
                         </Descriptions.Item>
-                        <Descriptions.Item label="Numéro Carte">
-                          {patient.numero_carte || 'Non renseigné'}
+                        <Descriptions.Item label="Taux Couverture">
+                          <Tag color="green">{patient.taux_couverture || 80}%</Tag>
                         </Descriptions.Item>
                       </Descriptions>
                     }
                     type="success"
                     showIcon
                     style={{ marginBottom: 16 }}
-                  />
-                )}
-
-                {consultationInfo && (
-                  <Alert
-                    message="Dernière consultation"
-                    description={
-                      <div>
-                        <div><strong>Date:</strong> {moment(consultationInfo.date).format('DD/MM/YYYY HH:mm')}</div>
-                        <div><strong>Type:</strong> {consultationInfo.type}</div>
-                        <div><strong>Médecin:</strong> {consultationInfo.medecin}</div>
-                        <div><strong>Montant:</strong> {consultationInfo.montant?.toLocaleString('fr-FR')} XAF</div>
-                        {medecinConsultation && (
-                          <div style={{ marginTop: 8 }}>
-                            <Tag color="blue">
-                              <UserSwitchOutlined /> Ce médecin a été automatiquement sélectionné
-                            </Tag>
-                          </div>
-                        )}
-                      </div>
+                    action={
+                      <Button size="small" onClick={() => setPatient(null)}>
+                        Changer
+                      </Button>
                     }
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
                   />
                 )}
               </Card>
 
-              {/* ÉTAPE 2: CODE AFFECTATION */}
+              {/* SECTION AFFECTION */}
               <Card
                 title={
                   <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <InfoCircleOutlined style={{ marginRight: 8 }} />
-                    <span>Étape 2: Code Affectation</span>
-                  </div>
-                }
-                style={{ marginBottom: 16 }}
-                size="small"
-              >
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Form.Item
-                      label="Code Affectation (Obligatoire)"
-                      required
-                      rules={[{ required: true, message: 'Le code affectation est obligatoire' }]}
-                    >
-                      <Input
-                        placeholder="Entrez le code d'affection (ex: J00, A01, etc.)"
-                        value={affectionCode}
-                        onChange={(e) => setAffectionCode(e.target.value.toUpperCase())}
-                        size="large"
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    {affectionDetails && (
-                      <Alert
-                        message={`Affection: ${affectionDetails.libelle}`}
-                        description={
-                          <div>
-                            <div><strong>Catégorie:</strong> {affectionDetails.categorie}</div>
-                            <div><strong>Gravité:</strong> {affectionDetails.gravite}</div>
-                            <div><strong>Remboursable:</strong> {affectionDetails.remboursable ? 'Oui' : 'Non'}</div>
-                          </div>
-                        }
-                        type="info"
-                        showIcon
-                      />
-                    )}
-                  </Col>
-                </Row>
-              </Card>
-
-              {/* ÉTAPE 3: AJOUT DES MÉDICAMENTS */}
-              <Card
-                title={
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <MedicineBoxOutlined style={{ marginRight: 8 }} />
-                    <span>Étape 3: Prescription Médicale</span>
-                    <Tag color="blue" style={{ marginLeft: 8 }}>
-                      {selectedMedicaments.length} acte(s)
-                    </Tag>
-                    <Tag color={saisieManuelleMode ? "orange" : "blue"} style={{ marginLeft: 8 }}>
-                      {saisieManuelleMode ? "Mode Saisie Manuelle" : "Mode Recherche"}
+                    <HeartOutlined style={{ marginRight: 8 }} />
+                    <span>Étape 2: Diagnostic et Affection</span>
+                    <Tag color="green" style={{ marginLeft: 8 }}>
+                      COD_PAY: {COD_PAY_DEFAULT}
                     </Tag>
                   </div>
                 }
@@ -2993,1267 +3126,1338 @@ const searchPrescription = async () => {
               >
                 <Row gutter={16}>
                   <Col span={24}>
-                    <Form.Item label={
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>
-                          {saisieManuelleMode ? "Saisie manuelle d'acte" : "Recherche de médicaments ou actes"}
-                        </span>
-                        <Button
-                          type="dashed"
-                          size="small"
-                          icon={saisieManuelleMode ? <SearchOutlined /> : <FileTextOutlined />}
-                          onClick={toggleSaisieManuelleMode}
-                        >
-                          {saisieManuelleMode ? "Passer en mode recherche" : "Saisir manuellement"}
-                        </Button>
-                      </div>
-                    }>
-                      {saisieManuelleMode ? (
-                        <Form
-                          form={formSaisieManuelle}
-                          layout="vertical"
-                          onFinish={ajouterActeManuel}
-                        >
-                          <Row gutter={8}>
-                            <Col span={12}>
-                              <Form.Item
-                                label="Libellé de l'acte"
-                                rules={[{ required: true, message: 'Le libellé est obligatoire' }]}
-                              >
-                                <Input
-                                  placeholder="Ex: Consultation spécialisée, Radio pulmonaire..."
-                                  value={acteManuel.LIBELLE}
-                                  onChange={(e) => setActeManuel({...acteManuel, LIBELLE: e.target.value})}
-                                  size="large"
-                                />
-                              </Form.Item>
-                            </Col>
-                            <Col span={6}>
-                              <Form.Item label="Quantité">
-                                <InputNumber
-                                  min={1}
-                                  max={999}
-                                  value={acteManuel.QUANTITE}
-                                  onChange={(value) => setActeManuel({...acteManuel, QUANTITE: value})}
-                                  style={{ width: '100%' }}
-                                />
-                              </Form.Item>
-                            </Col>
-                            <Col span={6}>
-                              <Form.Item label="Unité">
-                                <Select
-                                  value={acteManuel.UNITE}
-                                  onChange={(value) => setActeManuel({...acteManuel, UNITE: value})}
-                                  style={{ width: '100%' }}
-                                >
-                                  <Option value="boîte(s)">boîte(s)</Option>
-                                  <Option value="flacon(s)">flacon(s)</Option>
-                                  <Option value="ampoule(s)">ampoule(s)</Option>
-                                  <Option value="comprimé(s)">comprimé(s)</Option>
-                                  <Option value="sachet(s)">sachet(s)</Option>
-                                  <Option value="unité(s)">unité(s)</Option>
-                                  <Option value="séance(s)">séance(s)</Option>
-                                  <Option value="examen(s)">examen(s)</Option>
-                                  <Option value="acte(s)">acte(s)</Option>
-                                </Select>
-                              </Form.Item>
-                            </Col>
-                          </Row>
-                          <Row gutter={8}>
-                            <Col span={12}>
-                              <Form.Item label="Posologie">
-                                <Input
-                                  placeholder="Ex: 1 comprimé matin et soir"
-                                  value={acteManuel.POSOLOGIE}
-                                  onChange={(e) => setActeManuel({...acteManuel, POSOLOGIE: e.target.value})}
-                                />
-                              </Form.Item>
-                            </Col>
-                            <Col span={6}>
-                              <Form.Item label="Durée (jours)">
-                                <InputNumber
-                                  min={1}
-                                  max={365}
-                                  value={acteManuel.DUREE}
-                                  onChange={(value) => setActeManuel({...acteManuel, DUREE: value})}
-                                  style={{ width: '100%' }}
-                                />
-                              </Form.Item>
-                            </Col>
-                            <Col span={6}>
-                              <Form.Item label="Prix unitaire (FCFA)">
-                                <InputNumber
-                                  min={0}
-                                  step={100}
-                                  value={acteManuel.PRIX_UNITAIRE}
-                                  onChange={(value) => setActeManuel({...acteManuel, PRIX_UNITAIRE: value})}
-                                  style={{ width: '100%' }}
-                                  formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
-                                  parser={value => value.replace(/\s/g, '')}
-                                />
-                              </Form.Item>
-                            </Col>
-                          </Row>
-                          <Row>
-                            <Col span={24} style={{ textAlign: 'right' }}>
-                              <Space>
-                                <Button onClick={() => {
-                                  setActeManuel({
-                                    LIBELLE: '',
-                                    QUANTITE: 1,
-                                    POSOLOGIE: 'À déterminer',
-                                    DUREE: '7',
-                                    PRIX_UNITAIRE: 0,
-                                    TYPE_ELEMENT: 'MEDICAMENT',
-                                    UNITE: 'boîte(s)'
-                                  });
-                                  formSaisieManuelle.resetFields();
-                                }}>
-                                  Réinitialiser
-                                </Button>
-                                <Button type="primary" htmlType="submit" icon={<PlusOutlined />}>
-                                  Ajouter cet acte
-                                </Button>
-                              </Space>
-                            </Col>
-                          </Row>
-                        </Form>
-                      ) : (
-                        <Input.Search
-                          placeholder="Recherchez un médicament par nom commercial, générique ou code"
-                          enterButton={<SearchOutlined />}
-                          size="large"
-                          value={searchMedicament}
-                          onChange={(e) => {
-                            setSearchMedicament(e.target.value);
-                            searchMedicaments(e.target.value);
-                          }}
-                          loading={loading.medicaments}
-                          style={{ marginBottom: 16 }}
-                        />
-                      )}
+                    <Form.Item
+                      label="Recherche d'affection"
+                      required
+                      help="Tapez au moins 2 caractères pour rechercher une affection (COD_PAY = CMF)"
+                      validateStatus={affectionCode ? 'success' : ''}
+                      hasFeedback={affectionCode}
+                    >
+                      <AutoComplete
+                        options={affectionOptions}
+                        style={{ width: '100%' }}
+                        onSearch={searchAffections}
+                        onSelect={handleSelectAffection}
+                        placeholder="Ex: Hypertension, Diabète, Grippe..."
+                        notFoundContent={
+                          searchingAffections ? 
+                            <div style={{ padding: 8, textAlign: 'center' }}>
+                              <Spin size="small" /> Recherche en cours...
+                            </div> : 
+                            "Aucune affection trouvée"
+                        }
+                        disabled={!patient}
+                        filterOption={false}
+                        defaultActiveFirstOption={false}
+                        allowClear
+                        value={affectionCode ? `${affectionCode} - ${affectionLibelle}` : undefined}
+                        onChange={(value) => {
+                          if (value === '') {
+                            setAffectionOptions([]);
+                            setAffectionCode('');
+                            setAffectionLibelle('');
+                            setAffectionDetails(null);
+                          }
+                        }}
+                      />
                     </Form.Item>
                   </Col>
                 </Row>
-
-                {!saisieManuelleMode && searchResults.length > 0 && (
-                  <div style={{ marginBottom: 24 }}>
-                    <Alert
-                      message={`${searchResults.length} résultat(s) trouvé(s)`}
-                      type="info"
-                      showIcon
-                      style={{ marginBottom: 8 }}
-                    />
-                    <Table
-                      columns={medicamentsColumns}
-                      dataSource={searchResults}
-                      pagination={{ pageSize: 5 }}
-                      size="small"
-                      rowKey="COD_MED"
-                    />
-                  </div>
-                )}
-
-                <Divider orientation="left">
-                  <strong>Prescription en cours</strong>
-                  <Tag color="blue" style={{ marginLeft: 8 }}>
-                    {selectedMedicaments.length} acte(s)
-                  </Tag>
-                  {selectedMedicaments.filter(estActeManuel).length > 0 && (
-                    <Tag color="orange" style={{ marginLeft: 8 }}>
-                      {selectedMedicaments.filter(estActeManuel).length} manuel(s)
-                    </Tag>
-                  )}
-                </Divider>
-
-                {selectedMedicaments.length > 0 ? (
-                  <Table
-                    columns={prescriptionMedicamentsColumns}
-                    dataSource={selectedMedicaments}
-                    pagination={false}
-                    size="small"
-                    rowClassName={(record) => estActeManuel(record) ? 'acte-manuel-row' : ''}
-                    summary={() => (
-                      <Table.Summary.Row style={{ background: '#fafafa' }}>
-                        <Table.Summary.Cell index={0} colSpan={5} align="right">
-                          <div>
-                            <strong>Total de la prescription ({selectedMedicaments.length} actes):</strong>
-                            {selectedMedicaments.filter(estActeManuel).length > 0 && (
-                              <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
-                                dont {selectedMedicaments.filter(estActeManuel).length} acte(s) saisi(s) manuellement
-                              </div>
-                            )}
-                          </div>
-                        </Table.Summary.Cell>
-                        <Table.Summary.Cell index={1} align="right">
-                          <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#1890ff' }}>
-                            {calculerTotal().toLocaleString('fr-FR')} XAF
-                          </span>
-                        </Table.Summary.Cell>
-                        <Table.Summary.Cell index={2} />
-                      </Table.Summary.Row>
-                    )}
-                  />
-                ) : (
-                  <Empty
+                
+                {affectionCode && (
+                  <Alert
+                    message="Affection sélectionnée"
                     description={
                       <div>
-                        <div style={{ marginBottom: 8 }}>Aucun médicament ajouté à la prescription</div>
-                        <div style={{ fontSize: '12px', color: '#666' }}>
-                          {saisieManuelleMode ? 
-                            "Utilisez le formulaire ci-dessus pour ajouter un acte manuellement" : 
-                            "Recherchez des médicaments ou passez en mode saisie manuelle"}
-                        </div>
+                        <strong>Code:</strong> {affectionCode}
+                        <br />
+                        <strong>Libellé:</strong> {affectionLibelle || 'Non spécifié'}
+                        {affectionDetails && (
+                          <>
+                            <br />
+                            <strong>Type:</strong> {affectionDetails.TYPE_AFFECTION || 'Non spécifié'}
+                          </>
+                        )}
                       </div>
                     }
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    type="info"
+                    showIcon
+                    action={
+                      <Button size="small" onClick={() => {
+                        setAffectionCode('');
+                        setAffectionLibelle('');
+                        setAffectionDetails(null);
+                      }}>
+                        Changer
+                      </Button>
+                    }
                   />
                 )}
               </Card>
 
-              {/* BOUTONS D'ACTION */}
-              <div style={{ textAlign: 'center', marginTop: 24 }}>
-                <Space size="large">
-                  <Button
-                    size="large"
-                    onClick={resetPrescriptionForm}
-                    disabled={!patient && selectedMedicaments.length === 0}
-                  >
-                    <CloseCircleOutlined /> Annuler
-                  </Button>
-                  <Button
-                    type="primary"
-                    size="large"
-                    htmlType="submit"
-                    loading={loading.prescrire}
-                    disabled={!patient || !selectedPrestataire || selectedMedicaments.length === 0}
-                    icon={<CheckCircleOutlined />}
-                  >
-                    Terminer la prescription ({selectedMedicaments.length} actes)
-                  </Button>
-                </Space>
-              </div>
+              {/* SECTION ACTES MÉDICAUX */}
+              <Card
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <MedicineBoxOutlined style={{ marginRight: 8 }} />
+                      <span>Étape 3: Actes Médicaux ({getTypeLabel(typePrestation)})</span>
+                    </div>
+                    <div>
+                      <Tag color="blue">{selectedPrestations.length} élément(s)</Tag>
+                      <Tag color="green">
+                        Total: {calculerTotal().toLocaleString('fr-FR')} FCFA
+                      </Tag>
+                      <Tag color="cyan">
+                        Prise en charge: {calculerTotalPriseEnCharge().toLocaleString('fr-FR')} FCFA
+                      </Tag>
+                    </div>
+                  </div>
+                }
+                style={{ marginBottom: 16 }}
+                size="small"
+              >
+                {!patient ? (
+                  <Alert
+                    message="Patient requis"
+                    description="Veuillez d'abord rechercher un patient avant d'ajouter des actes"
+                    type="warning"
+                    showIcon
+                  />
+                ) : !affectionCode ? (
+                  <Alert
+                    message="Affection requise"
+                    description="Veuillez d'abord sélectionner une affection avant d'ajouter des actes"
+                    type="warning"
+                    showIcon
+                  />
+                ) : (
+                  <>
+                    <Row gutter={16} style={{ marginBottom: 16 }}>
+                      <Col span={18}>
+                        <Input.Search
+                          placeholder={`Rechercher des actes ${getTypeLabel(typePrestation).toLowerCase()}...`}
+                          enterButton={<SearchOutlined />}
+                          size="large"
+                          value={searchPrestation}
+                          onChange={(e) => handleSearchActes(e.target.value)}
+                          loading={loadingActes}
+                          disabled={!patient || !affectionCode}
+                        />
+                      </Col>
+                      <Col span={6}>
+                        <Space>
+                          <Button
+                            type="dashed"
+                            icon={<AppstoreAddOutlined />}
+                            onClick={() => ouvrirSaisieManuelle(typePrestation === 'PHARMACIE' ? 'MEDICAMENT' : 'ACTE')}
+                            style={{ width: '100%' }}
+                          >
+                            Saisie manuelle
+                          </Button>
+                        </Space>
+                      </Col>
+                    </Row>
+                    
+                    {loadingActes ? (
+                      <div style={{ textAlign: 'center', padding: 40 }}>
+                        <Spin tip="Chargement des actes..." size="large" />
+                      </div>
+                    ) : searchResults.length > 0 ? (
+                                               <Table
+                        columns={actesColumns}
+                        dataSource={searchResults}
+                        pagination={{ pageSize: 10, size: 'small' }}
+                        size="small"
+                        scroll={{ y: 300 }}
+                        rowKey="key"
+                        locale={{
+                          emptyText: (
+                            <Empty
+                              description="Aucun acte trouvé"
+                              image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            >
+                              <Button
+                                type="primary"
+                                size="small"
+                                onClick={() => ouvrirSaisieManuelle(typePrestation === 'PHARMACIE' ? 'MEDICAMENT' : 'ACTE')}
+                              >
+                                Ajouter manuellement
+                              </Button>
+                            </Empty>
+                          )
+                        }}
+                      />
+                    ) : (
+                      <Empty
+                        description={`Aucun ${getTypeLabel(typePrestation).toLowerCase()} disponible`}
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      >
+                        <Button
+                          type="primary"
+                          icon={<PlusOutlined />}
+                          onClick={() => ouvrirSaisieManuelle(typePrestation === 'PHARMACIE' ? 'MEDICAMENT' : 'ACTE')}
+                        >
+                          Ajouter manuellement
+                        </Button>
+                      </Empty>
+                    )}
+                    
+                    {selectedPrestations.length > 0 && (
+                      <>
+                        <Divider orientation="left">
+                          <strong>Liste des actes prescrits</strong> ({selectedPrestations.length} élément(s))
+                        </Divider>
+                        
+                        <Table
+                          columns={prescriptionActesColumns}
+                          dataSource={selectedPrestations}
+                          pagination={false}
+                          size="small"
+                          scroll={{ x: 1200 }}
+                          rowKey="key"
+                          summary={() => {
+                            const total = calculerTotal();
+                            const priseEnCharge = calculerTotalPriseEnCharge();
+                            const restant = calculerTotalRestant();
+                            
+                            return (
+                              <Table.Summary.Row style={{ background: '#fafafa' }}>
+                                <Table.Summary.Cell colSpan={4} align="right">
+                                  <strong>Total général:</strong>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell>
+                                  <strong>{total.toLocaleString('fr-FR')} FCFA</strong>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell>
+                                  <Tag color="green">Prise en charge:</Tag>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell>
+                                  <strong style={{ color: '#52c41a' }}>
+                                    {priseEnCharge.toLocaleString('fr-FR')} FCFA
+                                  </strong>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell>
+                                  <Tag color="red">Reste à charge:</Tag>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell>
+                                  <strong style={{ color: '#f5222d' }}>
+                                    {restant.toLocaleString('fr-FR')} FCFA
+                                  </strong>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell></Table.Summary.Cell>
+                              </Table.Summary.Row>
+                            );
+                          }}
+                        />
+                      </>
+                    )}
+                  </>
+                )}
+              </Card>
+              
+              {/* SECTION VALIDATION */}
+              <Card
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <CheckCircleOutlined style={{ marginRight: 8 }} />
+                    <span>Étape 4: Validation de la Prescription</span>
+                  </div>
+                }
+                style={{ marginBottom: 16 }}
+                size="small"
+              >
+                <Row gutter={16}>
+                  <Col span={24}>
+                    <Alert
+                      message="Informations importantes"
+                      description={
+                        <div>
+                          <p>
+                            <strong>Type de prescription:</strong> {getTypeLabel(typePrestation)}
+                          </p>
+                          <p>
+                            <strong>Nombre d'actes:</strong> {selectedPrestations.length}
+                          </p>
+                          <p>
+                            <strong>Total de la prescription:</strong> {calculerTotal().toLocaleString('fr-FR')} FCFA
+                          </p>
+                          <p>
+                            <strong>Prise en charge estimée:</strong> {calculerTotalPriseEnCharge().toLocaleString('fr-FR')} FCFA
+                          </p>
+                          <p>
+                            <strong>Reste à charge:</strong> {calculerTotalRestant().toLocaleString('fr-FR')} FCFA
+                          </p>
+                        </div>
+                      }
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                    />
+                    
+                    <Form.Item
+                      label="Observations supplémentaires"
+                      name="observations"
+                    >
+                      <TextArea
+                        rows={3}
+                        placeholder="Ajoutez des observations ou commentaires sur cette prescription..."
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
+                
+                <div style={{ textAlign: 'right' }}>
+                  <Space>
+                    <Button
+                      type="default"
+                      icon={<DeleteOutlined />}
+                      onClick={resetPrescriptionForm}
+                      disabled={!patient && selectedPrestations.length === 0}
+                    >
+                      Réinitialiser
+                    </Button>
+                    
+                    <Button
+                      type="primary"
+                      icon={<CheckCircleOutlined />}
+                      onClick={validerPrescription}
+                      loading={loading.prescrire}
+                      disabled={!patient || selectedPrestations.length === 0 || !affectionCode || !selectedPrestataire}
+                      size="large"
+                    >
+                      Valider la prescription
+                    </Button>
+                    
+                    <Button
+                      type="primary"
+                      icon={<PrinterOutlined />}
+                      onClick={validerPrescription}
+                      disabled={!patient || selectedPrestations.length === 0 || !affectionCode || !selectedPrestataire}
+                      ghost
+                      size="large"
+                    >
+                      Valider et imprimer
+                    </Button>
+                  </Space>
+                </div>
+              </Card>
             </Form>
           </TabPane>
-
-          {/* TAB 2: EXÉCUTION DE PRESCRIPTION */}
-          <TabPane 
+          
+          {/* TAB 2: EXÉCUTION */}
+          <TabPane
             tab={
               <span>
-                <CheckCircleOutlined />
-                Exécution de Prescription
+                <PlayCircleOutlined />
+                Exécution des Prescriptions
               </span>
-            } 
+            }
             key="execution"
           >
             <Card
               title={
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <CalculatorOutlined style={{ marginRight: 8 }} />
-                  <span>Exécution de Prescription</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <PlayCircleOutlined style={{ marginRight: 8 }} />
+                    <span>Exécution des Prescriptions</span>
+                  </div>
+                  {selectedPrescription && (
+                    <Tag color="blue" style={{ fontSize: '14px' }}>
+                      <strong>Prescription: {selectedPrescription.NUM_PRESCRIPTION || selectedPrescription.numero || selectedPrescription.COD_PRES}</strong>
+                    </Tag>
+                  )}
                 </div>
               }
+              style={{ marginBottom: 16 }}
+              size="small"
             >
-              {/* INFORMATION PRESTATAIRE */}
-              {selectedPrestataire ? (
-                <Alert
-                  message={`Médecin exécutant: ${selectedPrestataire.nom_complet}`}
-                  description={`Spécialité: ${selectedPrestataire.specialite} | Centre: ${centreNom || `Centre ${centreId}`}`}
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 16 }}
-                  action={
-                    <Button 
-                      size="small" 
-                      onClick={() => setModalPrestataires(true)}
-                    >
-                      Changer
-                    </Button>
-                  }
-                />
-              ) : (
-                <Alert
-                  message="Aucun médecin sélectionné"
-                  description="Veuillez sélectionner un médecin exécutant pour pouvoir exécuter des prescriptions"
-                  type="warning"
-                  showIcon
-                  style={{ marginBottom: 16 }}
-                  action={
-                    <Button 
-                      type="primary" 
-                      size="small"
-                      onClick={() => setModalPrestataires(true)}
-                    >
-                      Sélectionner un médecin
-                    </Button>
-                  }
-                />
-              )}
-
-              {/* RECHERCHE DE PRESCRIPTION */}
               <Row gutter={16} style={{ marginBottom: 24 }}>
-                <Col span={18}>
+                <Col span={16}>
                   <Input.Search
-                    placeholder="Entrez le numéro de prescription (ex: PRES-YYMMDD-1234) ou l'ID"
+                    placeholder="Rechercher une prescription par numéro..."
                     enterButton={<SearchOutlined />}
                     size="large"
                     value={prescriptionNumero}
                     onChange={(e) => setPrescriptionNumero(e.target.value)}
                     onSearch={searchPrescription}
                     loading={loading.execution}
+                    disabled={!selectedPrestataire}
+                    allowClear
                   />
                 </Col>
-                <Col span={6}>
-                  <Button
-                    type="dashed"
-                    block
-                    size="large"
-                    icon={<HistoryOutlined />}
-                    onClick={() => setActiveTab('historique')}
-                  >
-                    Voir l'historique
-                  </Button>
+                <Col span={8}>
+                  <Space>
+                    <Button
+                      type="default"
+                      icon={<PrinterOutlined />}
+                      onClick={imprimerFicheExecution}
+                      disabled={!selectedPrescription || actesExecutes.filter(a => a.execute).length === 0}
+                      loading={printingOrdonnance}
+                    >
+                      Imprimer fiche d'exécution
+                    </Button>
+                    <Button
+                      type="dashed"
+                      icon={<ReloadOutlined />}
+                      onClick={() => {
+                        setSelectedPrescription(null);
+                        setPrescriptionNumero('');
+                        setActesExecutes([]);
+                        setTotalFacture(0);
+                      }}
+                    >
+                      Réinitialiser
+                    </Button>
+                  </Space>
                 </Col>
               </Row>
-
+              
               {selectedPrescription && (
-                <>
-                  {/* INFORMATIONS DE LA PRESCRIPTION */}
-                  <Card
-                    title="Détails de la prescription"
-                    size="small"
-                    style={{ marginBottom: 24 }}
-                    extra={
-                      <Space>
-                        <Tag color={
-                          selectedPrescription.STATUT === 'Validée' ? 'green' :
-                          selectedPrescription.STATUT === 'En attente' ? 'orange' :
-                          selectedPrescription.STATUT === 'Exécutée' ? 'blue' : 'default'
-                        }>
-                          {selectedPrescription.STATUT}
+                <Alert
+                  message="Informations de la prescription"
+                  description={
+                    <Descriptions size="small" column={3}>
+                      <Descriptions.Item label="Patient">
+                        <strong>{selectedPrescription.NOM_BEN || 'Patient inconnu'}</strong>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Type">
+                        <Tag color={getTypeColor(selectedPrescription.TYPE_PRESTATION)}>
+                          {getTypeLabel(selectedPrescription.TYPE_PRESTATION)}
                         </Tag>
-                        <Tag color="blue">
-                          {selectedPrescription.nombreActes || selectedPrescription.details?.length || 0} actes
-                        </Tag>
-                      </Space>
-                    }
-                  >
-                    <Descriptions bordered column={2} size="small">
-                      <Descriptions.Item label="Numéro">
-                        <strong>{selectedPrescription.NUMERO_PRESCRIPTION || 'N/A'}</strong>
                       </Descriptions.Item>
                       <Descriptions.Item label="Date prescription">
                         {selectedPrescription.DATE_PRESCRIPTION ? 
                           moment(selectedPrescription.DATE_PRESCRIPTION).format('DD/MM/YYYY HH:mm') : 
-                          'Non spécifiée'}
+                          'Date inconnue'}
                       </Descriptions.Item>
-                      <Descriptions.Item label="Patient">
-                        {selectedPrescription.NOM_BEN || 'Inconnu'}
+                      <Descriptions.Item label="Statut">
+                        <Tag color={
+                          selectedPrescription.STATUT === 'EN_ATTENTE' ? 'orange' :
+                          selectedPrescription.STATUT === 'EN_COURS' ? 'blue' :
+                          selectedPrescription.STATUT === 'EXECUTEE' ? 'green' :
+                          'default'
+                        }>
+                          {selectedPrescription.STATUT}
+                        </Tag>
                       </Descriptions.Item>
-                      <Descriptions.Item label="Médecin prescripteur">
-                        {selectedPrescription.NOM_MEDECIN || 'Non spécifié'}
-                      </Descriptions.Item>
-                      <Descriptions.Item label="Type">
-                        {selectedPrescription.TYPE_PRESTATION || 'Non spécifié'}
+                      <Descriptions.Item label="Centre">
+                        {selectedPrescription.centreNom || getCentreNameById(selectedPrescription.COD_CEN)}
                       </Descriptions.Item>
                       <Descriptions.Item label="Nombre d'actes">
-                        <strong>{selectedPrescription.nombreActes || selectedPrescription.details?.length || 0}</strong>
-                      </Descriptions.Item>
-                      <Descriptions.Item label="Montant total">
-                        <strong>{selectedPrescription.total ? selectedPrescription.total.toLocaleString('fr-FR') : '0'} XAF</strong>
-                      </Descriptions.Item>
-                      <Descriptions.Item label="Origine">
-                        {selectedPrescription.ORIGINE === 'Electronique' ? (
-                          <Tag color="blue">Électronique</Tag>
-                        ) : (
-                          <Tag color="orange">Manuelle</Tag>
-                        )}
+                        {selectedPrescription.nombreActes || actesExecutes.length}
                       </Descriptions.Item>
                     </Descriptions>
-                  </Card>
-
-                  {/* TABLEAU D'EXÉCUTION */}
-                  <Card
-                    title={
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span>Actes à exécuter ({actesExecutes.filter(a => a.execute).length}/{actesExecutes.length})</span>
-                        <div>
-                          <Tag color="green" style={{ fontSize: '16px' }}>
-                            Total: {totalFacture.toLocaleString('fr-FR')} XAF
-                          </Tag>
-                        </div>
-                      </div>
-                    }
+                  }
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  action={
+                    <Button size="small" onClick={() => {
+                      setSelectedPrescription(null);
+                      setPrescriptionNumero('');
+                      setActesExecutes([]);
+                      setTotalFacture(0);
+                    }}>
+                      Changer
+                    </Button>
+                  }
+                />
+              )}
+              
+              {actesExecutes.length > 0 && (
+                <>
+                  <Divider orientation="left">
+                    <strong>Liste des actes à exécuter</strong> ({actesExecutes.length} acte(s))
+                  </Divider>
+                  
+                  <Table
+                    columns={executionColumns}
+                    dataSource={actesExecutes}
+                    pagination={false}
                     size="small"
-                    style={{ marginBottom: 24 }}
-                  >
-                    {selectedPrescription.ORIGINE === 'Electronique' ? (
-                      <Table
-                        columns={executionColumns}
-                        dataSource={actesExecutes}
-                        pagination={false}
-                        size="small"
-                        rowKey="key"
-                        summary={() => (
-                          <Table.Summary.Row style={{ background: '#f0f0f0', fontWeight: 'bold' }}>
-                            <Table.Summary.Cell index={0} colSpan={5} align="right">
-                              TOTAL ({actesExecutes.filter(a => a.execute).length} actes exécutés):
-                            </Table.Summary.Cell>
-                            <Table.Summary.Cell index={1} align="right">
-                              <span style={{ color: '#52c41a', fontSize: '16px' }}>
-                                {totalFacture.toLocaleString('fr-FR')} XAF
-                              </span>
-                            </Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        )}
-                      />
-                    ) : (
-                      <Alert
-                        message="Prescription Manuelle"
-                        description="Pour les prescriptions manuelles, veuillez saisir manuellement les actes à facturer."
-                        type="warning"
-                        showIcon
-                        style={{ marginBottom: 16 }}
-                      />
-                    )}
-                    
-                    <div style={{ marginTop: 24, textAlign: 'right' }}>
-                      <Button
-                        type="primary"
-                        size="large"
-                        onClick={validerExecution}
-                        loading={loading.execution}
-                        icon={<CheckCircleOutlined />}
-                        disabled={!selectedPrestataire || actesExecutes.filter(a => a.execute).length === 0}
-                      >
-                        {selectedPrestataire ? 
-                          `Valider l'exécution (${actesExecutes.filter(a => a.execute).length} actes)` : 
-                          'Sélectionnez un médecin'}
-                      </Button>
-                    </div>
-                  </Card>
+                    scroll={{ x: 800 }}
+                    rowKey="key"
+                    style={{ marginBottom: 16 }}
+                  />
+                  
+                  <Row gutter={16} style={{ marginTop: 16 }}>
+                    <Col span={12}>
+                      <Card size="small" title="Résumé de l'exécution">
+                        <Statistic
+                          title="Actes sélectionnés"
+                          value={actesExecutes.filter(a => a.execute).length}
+                          suffix={`/ ${actesExecutes.length}`}
+                          valueStyle={{ color: '#1890ff' }}
+                        />
+                        <Divider style={{ margin: '12px 0' }} />
+                        <Statistic
+                          title="Total à facturer"
+                          value={totalFacture}
+                          prefix="FCFA"
+                          valueStyle={{ color: '#52c41a', fontSize: '24px' }}
+                          formatter={(value) => value.toLocaleString('fr-FR')}
+                        />
+                        <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+                          <ClockCircleOutlined /> 
+                          Exécution à valider par: <strong>{selectedPrestataire?.nom_complet || 'Aucun médecin sélectionné'}</strong>
+                        </div>
+                      </Card>
+                    </Col>
+                    <Col span={12}>
+                      <Card size="small" title="Validation de l'exécution">
+                        <Alert
+                          message="Instructions"
+                          description="Sélectionnez les actes à exécuter, puis validez l'exécution de la prescription."
+                          type="info"
+                          showIcon
+                          style={{ marginBottom: 16 }}
+                        />
+                        
+                        <div style={{ textAlign: 'center' }}>
+                          <Button
+                            type="primary"
+                            icon={<CheckCircleOutlined />}
+                            onClick={validerExecution}
+                            loading={loading.execution}
+                            size="large"
+                            disabled={!selectedPrescription || actesExecutes.filter(a => a.execute).length === 0 || !selectedPrestataire}
+                            style={{ width: '100%', marginBottom: 8 }}
+                          >
+                            Valider l'exécution ({actesExecutes.filter(a => a.execute).length} actes)
+                          </Button>
+                          
+                          <div style={{ fontSize: '12px', color: '#666' }}>
+                            <CheckOutlined style={{ color: '#52c41a' }} /> 
+                            Cette action enregistrera l'exécution et générera une fiche d'exécution
+                          </div>
+                        </div>
+                      </Card>
+                    </Col>
+                  </Row>
                 </>
               )}
-
+              
               {!selectedPrescription && !loading.execution && (
-                <Empty
-                  description={
-                    <div>
+                <Result
+                  icon={<PlayCircleOutlined style={{ color: '#1890ff' }} />}
+                  title="Rechercher une prescription à exécuter"
+                  subTitle="Entrez le numéro d'une prescription pour commencer l'exécution des actes médicaux."
+                  extra={
+                    <div style={{ textAlign: 'center' }}>
                       <div style={{ marginBottom: 16 }}>
-                        Entrez un numéro de prescription pour commencer l'exécution
+                        <InfoCircleOutlined style={{ color: '#faad14', marginRight: 8 }} />
+                        <span style={{ color: '#666' }}>
+                          Seules les prescriptions du centre <strong>{centreNom}</strong> peuvent être exécutées
+                        </span>
                       </div>
-                      <div style={{ fontSize: '12px', color: '#666' }}>
-                        Exemples: PRES-${moment().format('YYMMDD')}-1234 ou 456
-                      </div>
+                      <Steps
+                        current={0}
+                        items={[
+                          {
+                            title: 'Recherche',
+                            description: 'Trouver la prescription'
+                          },
+                          {
+                            title: 'Sélection',
+                            description: 'Choisir les actes à exécuter'
+                          },
+                          {
+                            title: 'Validation',
+                            description: 'Enregistrer l\'exécution'
+                          }
+                        ]}
+                      />
                     </div>
                   }
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
                 />
               )}
             </Card>
           </TabPane>
-
-          {/* TAB 3: HISTORIQUE DES PRESCRIPTIONS */}
-          <TabPane 
+          
+          {/* TAB 3: HISTORIQUE */}
+          <TabPane
             tab={
               <span>
                 <HistoryOutlined />
                 Historique des Prescriptions
                 {mesPrescriptions.length > 0 && (
-                  <Badge count={mesPrescriptions.length} style={{ marginLeft: 8 }} />
+                  <Badge
+                    count={mesPrescriptions.length}
+                    style={{ marginLeft: 8, backgroundColor: '#1890ff' }}
+                  />
                 )}
               </span>
-            } 
+            }
             key="historique"
           >
             <Card
               title={
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <HistoryOutlined style={{ marginRight: 8 }} />
-                  <span>Historique des prescriptions</span>
-                  {selectedPrestataire && (
-                    <Tag color="blue" style={{ marginLeft: 8 }}>
-                      Médecin: {selectedPrestataire.nom_complet}
-                    </Tag>
-                  )}
-                  <Tag color="green" style={{ marginLeft: 8 }}>
-                    Total: {mesPrescriptions.reduce((sum, p) => sum + (p.nombreActes || p.details?.length || 0), 0)} actes
-                  </Tag>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <HistoryOutlined style={{ marginRight: 8 }} />
+                    <span>Historique de mes Prescriptions</span>
+                  </div>
+                  <div>
+                    <Button
+                      icon={<ReloadOutlined />}
+                      onClick={loadMesPrescriptions}
+                      loading={loading.historique}
+                      size="small"
+                    >
+                      Actualiser
+                    </Button>
+                  </div>
                 </div>
               }
-              extra={
-                <Space>
-                  <Button
-                    icon={<SyncOutlined />}
-                    onClick={loadMesPrescriptions}
-                    loading={loading.prestations}
-                  >
-                    Actualiser
-                  </Button>
-                  <Button
-                    icon={<TeamOutlined />}
-                    onClick={() => setModalPrestataires(true)}
-                  >
-                    Changer médecin
-                  </Button>
-                </Space>
-              }
+              size="small"
             >
-              {selectedPrestataire ? (
-                mesPrescriptions.length > 0 ? (
-                  <List
-                    itemLayout="vertical"
-                    dataSource={mesPrescriptions}
-                    renderItem={(prescription) => (
-                      <List.Item
-                        key={prescription.COD_PRES || prescription.id}
-                        actions={[
-                          <Button
-                            type="link"
-                            icon={<EyeOutlined />}
-                            onClick={() => handleViewPrescriptionDetails(prescription)}
-                            loading={loading.prestations}
-                          >
-                            Voir détails
-                          </Button>,
-                          <Button
-                            type="link"
-                            icon={<PrinterOutlined />}
-                            onClick={() => handlePrintPrescriptionFromHistory(prescription)}
-                            loading={loading.prestations}
-                          >
-                            Imprimer Ordonnance
-                          </Button>
-                        ]}
-                      >
-                        // Dans le rendu de l'historique, modifiez la section du titre
-<List.Item.Meta
-  avatar={
-    <Avatar
-      style={{
-        backgroundColor: prescription.STATUT === 'Exécutée' ? '#52c41a' :
-          prescription.STATUT === 'Validée' ? '#1890ff' :
-          prescription.STATUT === 'En attente' ? '#faad14' : '#f5222d'
-      }}
-    >
-      {(prescription.TYPE_PRESTATION || 'P').charAt(0)}
-    </Avatar>
-  }
-  title={
-    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-      <div>
-        <strong>{prescription.NUMERO_PRESCRIPTION}</strong>
-        <Tag color="blue" style={{ marginLeft: 8 }}>
-          {prescription.TYPE_PRESTATION || 'Non spécifié'}
-        </Tag>
-        {prescription.URGENT && (
-          <Tag color="red" style={{ marginLeft: 8 }}>
-            URGENT
-          </Tag>
-        )}
-      </div>
-      <div>
-        <Tag color={
-          prescription.STATUT === 'Exécutée' ? 'success' :
-            prescription.STATUT === 'Validée' ? 'processing' :
-            prescription.STATUT === 'En attente' ? 'warning' : 'error'
-        }>
-          {prescription.STATUT || 'Inconnu'}
-        </Tag>
-      </div>
-    </div>
-  }
-  description={
-    <div>
-      <div>
-        <strong>Patient:</strong> {prescription.PRE_BEN ? `${prescription.PRE_BEN} ${prescription.NOM_BEN}` : prescription.NOM_BEN}
-      </div>
-      <div>
-        <strong>Date:</strong> {prescription.DATE_PRESCRIPTION ? 
-          moment(prescription.DATE_PRESCRIPTION).format('DD/MM/YYYY HH:mm') : 
-          'Non spécifiée'}
-      </div>
-      <div>
-        <strong>Actes:</strong> 
-        <Tag color="blue" style={{ marginLeft: 8 }}>
-          {prescription.nombreActes || prescription.details?.length || 0} actes
-        </Tag>
-        {prescription.total && prescription.total > 0 ? (
-          <span style={{ marginLeft: 8, color: '#52c41a', fontWeight: 'bold' }}>
-            • Total: {prescription.total.toLocaleString('fr-FR')} XAF
-          </span>
-        ) : (
-          <span style={{ marginLeft: 8, color: '#999', fontWeight: 'bold' }}>
-            • Total: 0 XAF
-          </span>
-        )}
-      </div>
-      <div>
-        <strong>Prescripteur:</strong> {prescription.NOM_MEDECIN || selectedPrestataire.nom_complet}
-      </div>
-      {prescription.COD_AFF && (
-        <div>
-          <strong>Affection:</strong> {prescription.COD_AFF}
-        </div>
-      )}
-      {prescription.IDENTIFIANT_NATIONAL && (
-        <div>
-          <strong>Identifiant:</strong> {prescription.IDENTIFIANT_NATIONAL}
-        </div>
-      )}
-    </div>
-  }
-/>
-                      </List.Item>
-                    )}
-                  />
-                ) : (
-                  <Empty
-                    description={
-                      <div>
-                        <div style={{ marginBottom: 16 }}>
-                          Aucune prescription trouvée pour {selectedPrestataire.nom_complet}
+              {loading.historique ? (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <Spin tip="Chargement de l'historique..." size="large" />
+                </div>
+              ) : mesPrescriptions.length > 0 ? (
+                <Table
+                  columns={[
+                    {
+                      title: 'N° Prescription',
+                      dataIndex: 'NUMERO_PRESCRIPTION',
+                      key: 'NUMERO_PRESCRIPTION',
+                      width: 150,
+                      render: (text, record) => (
+                        <div>
+                          <Tag color="blue">{text}</Tag>
+                          <div style={{ fontSize: '11px', color: '#666' }}>
+                            {record.TYPE_PRESTATION}
+                          </div>
                         </div>
-                        <Button
-                          type="primary"
-                          onClick={() => setActiveTab('saisie')}
-                        >
-                          Créer une nouvelle prescription
-                        </Button>
-                      </div>
+                      )
+                    },
+                    {
+                      title: 'Patient',
+                      dataIndex: 'NOM_BEN',
+                      key: 'NOM_BEN',
+                      width: 180,
+                      render: (text) => (
+                        <div>
+                          <UserOutlined style={{ marginRight: 4, color: '#666' }} />
+                          {text}
+                        </div>
+                      )
+                    },
+                    {
+                      title: 'Date Prescription',
+                      dataIndex: 'DATE_PRESCRIPTION',
+                      key: 'DATE_PRESCRIPTION',
+                      width: 150,
+                      sorter: (a, b) => moment(a.DATE_PRESCRIPTION, 'DD/MM/YYYY HH:mm').unix() - moment(b.DATE_PRESCRIPTION, 'DD/MM/YYYY HH:mm').unix(),
+                      sortDirections: ['descend', 'ascend'],
+                      defaultSortOrder: 'descend',
+                      render: (text) => (
+                        <div>
+                          <CalendarOutlined style={{ marginRight: 4, color: '#666' }} />
+                          {text}
+                        </div>
+                      )
+                    },
+                    {
+                      title: 'Centre',
+                      dataIndex: 'centreNom',
+                      key: 'centreNom',
+                      width: 150,
+                      render: (text) => (
+                        <div style={{ fontSize: '12px' }}>
+                          <DatabaseOutlined style={{ marginRight: 4, color: '#666' }} />
+                          {text}
+                        </div>
+                      )
+                    },
+                    {
+                      title: 'Statut',
+                      dataIndex: 'STATUT',
+                      key: 'STATUT',
+                      width: 120,
+                      filters: [
+                        { text: 'En attente', value: 'En attente' },
+                        { text: 'En cours', value: 'En cours' },
+                        { text: 'Exécutée', value: 'Exécutée' },
+                        { text: 'Validée', value: 'Validée' },
+                        { text: 'Annulée', value: 'Annulée' }
+                      ],
+                      onFilter: (value, record) => record.STATUT === value,
+                      render: (statut) => {
+                        let color = 'default';
+                        if (statut === 'En attente') color = 'orange';
+                        if (statut === 'En cours') color = 'blue';
+                        if (statut === 'Exécutée') color = 'green';
+                        if (statut === 'Validée') color = 'cyan';
+                        if (statut === 'Annulée') color = 'red';
+                        
+                        return <Tag color={color}>{statut}</Tag>;
+                      }
+                    },
+                    {
+                      title: 'Nombre Actes',
+                      dataIndex: 'nombreActes',
+                      key: 'nombreActes',
+                      width: 100,
+                      render: (nombre) => (
+                        <Tag color="geekblue">{nombre}</Tag>
+                      )
+                    },
+                    {
+                      title: 'Total (FCFA)',
+                      dataIndex: 'total',
+                      key: 'total',
+                      width: 120,
+                      sorter: (a, b) => (a.total || 0) - (b.total || 0),
+                      render: (total) => (
+                        <span style={{ fontWeight: 'bold', color: '#1890ff' }}>
+                          {parseFloat(total || 0).toLocaleString('fr-FR')}
+                        </span>
+                      )
+                    },
+                    {
+                      title: 'Actions',
+                      key: 'actions',
+                      width: 150,
+                      fixed: 'right',
+                      render: (_, record) => (
+                        <Space>
+                          <Tooltip title="Voir les détails">
+                            <Button
+                              type="text"
+                              icon={<EyeOutlined />}
+                              onClick={() => handleViewPrescriptionDetails(record)}
+                              size="small"
+                            />
+                          </Tooltip>
+                          
+                          <Tooltip title="Imprimer la prescription">
+                            <Button
+                              type="text"
+                              icon={<PrinterOutlined />}
+                              onClick={() => handlePrintPrescriptionFromHistory(record)}
+                              size="small"
+                              disabled={!record.details || record.details.length === 0}
+                            />
+                          </Tooltip>
+                          
+                          {record.STATUT !== 'Exécutée' && record.STATUT !== 'Annulée' && (
+                            <Tooltip title="Exécuter la prescription">
+                              <Button
+                                type="text"
+                                icon={<PlayCircleOutlined />}
+                                onClick={() => {
+                                  setActiveTab('execution');
+                                  setPrescriptionNumero(record.NUMERO_PRESCRIPTION);
+                                  setTimeout(() => {
+                                    searchPrescription(record.NUMERO_PRESCRIPTION);
+                                  }, 500);
+                                }}
+                                size="small"
+                              />
+                            </Tooltip>
+                          )}
+                        </Space>
+                      )
                     }
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  />
-                )
+                  ]}
+                  dataSource={mesPrescriptions}
+                  pagination={{
+                    pageSize: 10,
+                    showSizeChanger: true,
+                    showQuickJumper: true,
+                    showTotal: (total, range) => `${range[0]}-${range[1]} sur ${total} prescriptions`
+                  }}
+                  size="small"
+                  scroll={{ x: 1000 }}
+                  rowKey="id"
+                  onChange={(pagination, filters, sorter) => {
+                    console.log('Table changed:', { pagination, filters, sorter });
+                  }}
+                />
               ) : (
-                <Empty
-                  description={
+                <Result
+                  icon={<HistoryOutlined style={{ color: '#d9d9d9' }} />}
+                  title="Aucune prescription trouvée"
+                  subTitle={
                     <div>
-                      <div style={{ marginBottom: 16 }}>
-                        Veuillez sélectionner un médecin pour voir son historique de prescriptions
-                      </div>
-                      <Button
-                        type="primary"
-                        onClick={() => setModalPrestataires(true)}
-                      >
-                        Sélectionner un médecin
-                      </Button>
+                      <p>Aucune prescription n'a été trouvée pour le médecin <strong>{selectedPrestataire?.nom_complet || 'non sélectionné'}</strong></p>
+                      <p>au centre <strong>{centreNom}</strong>.</p>
                     </div>
                   }
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  extra={
+                    <Button
+                      type="primary"
+                      onClick={() => setActiveTab('saisie')}
+                      icon={<PlusOutlined />}
+                    >
+                      Créer une nouvelle prescription
+                    </Button>
+                  }
                 />
               )}
             </Card>
           </TabPane>
         </Tabs>
       </Card>
-
-      {/* MODAL DE SELECTION DES PRESTATAIRES */}
+      
+      {/* ==================== MODALES ==================== */}
+      
+      {/* Modal de saisie manuelle */}
       <Modal
         title={
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <TeamOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-            <span>Sélection du Médecin</span>
-            {medecinConsultation && (
-              <Tag color="green" style={{ marginLeft: 8 }}>
-                Médecin de consultation: {medecinConsultation.nom}
-              </Tag>
-            )}
+          <div>
+            <EditOutlined style={{ marginRight: 8 }} />
+            Saisie manuelle d'un élément
           </div>
         }
-        open={modalPrestataires}
-        onCancel={() => setModalPrestataires(false)}
-        width={800}
-        footer={null}
+        open={manualEntryModal}
+        onOk={ajouterManuellement}
+        onCancel={() => setManualEntryModal(false)}
+        okText="Ajouter"
+        cancelText="Annuler"
+        width={600}
       >
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={24}>
-            <Input.Search
-              placeholder="Rechercher un médecin par nom, spécialité ou téléphone"
-              enterButton={<SearchOutlined />}
-              size="large"
-              value={searchPrestataire}
-              onChange={(e) => searchPrestataires(e.target.value)}
-              loading={loading.prestataires}
-            />
-          </Col>
-        </Row>
-
-        {medecinConsultation && (
-          <Alert
-            message="Médecin de la dernière consultation"
-            description={
-              <div>
-                <div><strong>Nom:</strong> {medecinConsultation.nom}</div>
-                <div><strong>Date consultation:</strong> {moment(medecinConsultation.date_consultation).format('DD/MM/YYYY')}</div>
-                <div><strong>Type:</strong> {medecinConsultation.type_consultation}</div>
-                <div style={{ marginTop: 8 }}>
-                  <Tag color="blue">
-                    <UserSwitchOutlined /> Ce médecin a été automatiquement sélectionné
-                  </Tag>
-                </div>
-              </div>
-            }
-            type="info"
-            showIcon
-            style={{ marginBottom: 16 }}
-          />
-        )}
-
-        <Alert
-          message="Information"
-          description={`Sélectionnez le médecin qui va prescrire ou exécuter la prescription. Seuls les médecins affiliés au centre ${centreNom || `Centre ${centreId}`} sont affichés.`}
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
-
-        <Table
-          columns={prestatairesColumns}
-          dataSource={searchPrestataireResults}
-          pagination={{ pageSize: 5 }}
-          size="small"
-          rowKey="id"
-          loading={loading.prestataires}
-          rowClassName={(record) => {
-            if (medecinConsultation && record.nom_complet.includes(medecinConsultation.nom)) {
-              return 'medecin-consultation-row';
-            }
-            return '';
-          }}
-          locale={{
-            emptyText: (
-              searchPrestataireResults.length === 0 && !loading.prestataires ? (
-                <Empty
-                  description={
-                    <div>
-                      <div style={{ marginBottom: 8 }}>Aucun médecin trouvé</div>
-                      <div style={{ fontSize: '12px', color: '#666', marginBottom: 16 }}>
-                        {searchPrestataire ? 
-                          `Aucun médecin correspondant à "${searchPrestataire}"` : 
-                          'Aucun médecin disponible pour ce centre'}
-                      </div>
-                      <Space>
-                        <Button 
-                          type="primary" 
-                          size="small"
-                          onClick={() => {
-                            setSearchPrestataire('');
-                            loadPrestataires();
-                          }}
-                        >
-                          Voir tous les médecins
-                        </Button>
-                        <Button 
-                          size="small"
-                          onClick={() => loadPrestataires()}
-                          icon={<SyncOutlined />}
-                        >
-                          Réessayer
-                        </Button>
-                      </Space>
-                    </div>
-                  }
+        <Form
+          form={manualForm}
+          layout="vertical"
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="Type d'élément"
+                name="type"
+                initialValue={manualEntryType}
+              >
+                <Select disabled>
+                  <Option value="MEDICAMENT">Médicament</Option>
+                  <Option value="EXAMEN">Examen</Option>
+                  <Option value="ACTE">Acte médical</Option>
+                  <Option value="SOIN">Soin</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="Code (optionnel)"
+                name="code_acte"
+              >
+                <Input placeholder="Code interne ou référence" />
+              </Form.Item>
+            </Col>
+          </Row>
+          
+          <Form.Item
+            label="Libellé"
+            name="libelle"
+            rules={[{ required: true, message: 'Veuillez saisir un libellé' }]}
+          >
+            <Input placeholder="Ex: Paracétamol 500mg, Consultation spécialisée..." />
+          </Form.Item>
+          
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                label="Quantité"
+                name="quantite"
+                rules={[{ required: true, message: 'Veuillez saisir la quantité' }]}
+                initialValue={1}
+              >
+                <InputNumber min={1} max={999} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                label="Prix unitaire (FCFA)"
+                name="prix_unitaire"
+                rules={[{ required: true, message: 'Veuillez saisir le prix unitaire' }]}
+                initialValue={0}
+              >
+                <InputNumber
+                  min={0}
+                  style={{ width: '100%' }}
+                  formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
                 />
-              ) : null
-            )
-          }}
-        />
-
-        <Divider />
-
-        <div style={{ textAlign: 'center', marginTop: 16 }}>
-          <Space>
-            <Button
-              icon={<SyncOutlined />}
-              onClick={() => {
-                loadPrestataires(searchPrestataire);
-                message.info('Liste des médecins rafraîchie');
-              }}
-              loading={loading.prestataires}
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              {manualEntryType === 'MEDICAMENT' && (
+                <Form.Item
+                  label="Durée (jours)"
+                  name="duree"
+                  initialValue="7"
+                >
+                  <Input placeholder="Durée du traitement" />
+                </Form.Item>
+              )}
+            </Col>
+          </Row>
+          
+          {manualEntryType === 'MEDICAMENT' && (
+            <Form.Item
+              label="Posologie"
+              name="posologie"
+              initialValue="1 comprimé matin et soir"
             >
-              Rafraîchir
-            </Button>
-            <Button
-              onClick={() => setModalPrestataires(false)}
-            >
-              Annuler
-            </Button>
-            <Button
-              type="primary"
-              onClick={() => {
-                if (selectedPrestataire) {
-                  setModalPrestataires(false);
-                } else {
-                  message.warning('Veuillez sélectionner un médecin');
-                }
-              }}
-            >
-              Confirmer la sélection
-            </Button>
-          </Space>
-        </div>
+              <Input placeholder="Ex: 1 comprimé matin et soir après le repas" />
+            </Form.Item>
+          )}
+          
+          <Form.Item
+            label="Description (optionnel)"
+            name="description"
+          >
+            <TextArea
+              rows={3}
+              placeholder="Ajoutez une description ou des instructions supplémentaires..."
+            />
+          </Form.Item>
+        </Form>
       </Modal>
-
-      {/* MODAL DE VALIDATION */}
+      
+      {/* Modal de validation de prescription */}
       <Modal
         title={
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <WarningOutlined style={{ marginRight: 8, color: '#faad14' }} />
-            <span>Confirmation de la prescription</span>
+            <CheckCircleOutlined style={{ marginRight: 8, color: '#52c41a' }} />
+            <span>Validation de la prescription</span>
           </div>
         }
         open={validationModalVisible}
+        onOk={confirmerPrescription}
         onCancel={() => setValidationModalVisible(false)}
-        footer={[
-          <Button key="cancel" onClick={() => setValidationModalVisible(false)}>
-            Annuler
-          </Button>,
-          <Button
-            key="confirm"
-            type="primary"
-            danger
-            onClick={confirmerPrescription}
-            loading={loading.prescrire}
-            icon={<CheckCircleOutlined />}
-          >
-            Confirmer la prescription
-          </Button>
-        ]}
+        okText="Confirmer et enregistrer"
+        cancelText="Annuler"
+        width={700}
+        confirmLoading={loading.prescrire}
       >
-        <Alert
-          message="Attention"
-          description="Cette action est irréversible. Une fois validée, la prescription ne pourra plus être modifiée."
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
-        
-        <Descriptions bordered size="small" column={1}>
-          <Descriptions.Item label="Patient">
-            <strong>{patient?.nom_complet}</strong>
-          </Descriptions.Item>
-          <Descriptions.Item label="Médecin prescripteur">
-            {selectedPrestataire?.nom_complet} - {selectedPrestataire?.specialite}
-            {medecinConsultation && selectedPrestataire?.nom_complet.includes(medecinConsultation.nom) && (
-              <Tag color="green" style={{ marginLeft: 8 }}>
-                Médecin de la consultation
-              </Tag>
-            )}
-          </Descriptions.Item>
-          <Descriptions.Item label="Centre">
-            {centreNom || `Centre ${centreId}`}
-          </Descriptions.Item>
-          <Descriptions.Item label="Type de prestation">
-            {typePrestation}
-          </Descriptions.Item>
-          <Descriptions.Item label="Code affectation">
-            {affectionCode}
-          </Descriptions.Item>
-          <Descriptions.Item label="Nombre d'actes">
-            <strong>{selectedMedicaments.length}</strong>
-          </Descriptions.Item>
-          <Descriptions.Item label="Montant total">
-            <strong>{calculerTotal().toLocaleString('fr-FR')} XAF</strong>
-          </Descriptions.Item>
-        </Descriptions>
-      </Modal>
-
-      {/* MODAL D'IMPRESSION D'ORDONNANCE */}
-      <Modal
-        title={
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <PrinterOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-            <span>Impression de l'Ordonnance Médicale</span>
-          </div>
-        }
-        open={printModalVisible}
-        onCancel={() => {
-          setPrintModalVisible(false);
-          setOrdonnanceToPrint(null);
-        }}
-        width={800}
-        footer={[
-          <Button key="close" onClick={() => {
-            setPrintModalVisible(false);
-            setOrdonnanceToPrint(null);
-          }}>
-            Fermer
-          </Button>,
-          <Button
-            key="print"
-            type="primary"
-            icon={printingOrdonnance ? <LoadingOutlined /> : <PrinterOutlined />}
-            onClick={handlePrintOrdonnance}
-            disabled={printingOrdonnance || !ordonnanceToPrint}
-          >
-            {printingOrdonnance ? 'Impression...' : 'Imprimer l\'ordonnance'}
-          </Button>
-        ]}
-      >
-        {ordonnanceToPrint ? (
-          <div style={{ padding: '20px', backgroundColor: 'white', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
-            {/* Filigranes de prévisualisation */}
-            <div style={{
-              position: 'absolute',
-              top: '40%',
-              left: '20%',
-              transform: 'rotate(-45deg)',
-              opacity: 0.1,
-              zIndex: 1,
-              pointerEvents: 'none',
-              fontSize: '60px',
-              fontWeight: 'bold',
-              color: '#2c5aa0',
-              whiteSpace: 'nowrap'
-            }}>
-              VALIDÉ
-            </div>
-            <div style={{
-              position: 'absolute',
-              top: '60%',
-              left: '15%',
-              transform: 'rotate(-45deg)',
-              opacity: 0.1,
-              zIndex: 1,
-              pointerEvents: 'none',
-              fontSize: '40px',
-              fontWeight: 'bold',
-              color: '#666',
-              whiteSpace: 'nowrap'
-            }}>
-              SYSTÈME AMS
+        {patient && (
+          <div>
+            <Alert
+              message="Résumé de la prescription"
+              description="Veuillez vérifier les informations ci-dessous avant de valider définitivement la prescription."
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+            
+            <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="Patient" span={2}>
+                <strong>{patient.nom_complet}</strong> (Carte: {patient.numero_carte})
+              </Descriptions.Item>
+              <Descriptions.Item label="Médecin prescripteur">
+                {selectedPrestataire?.nom_complet || 'Non sélectionné'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Centre de santé">
+                {centreNom}
+              </Descriptions.Item>
+              <Descriptions.Item label="Type de prescription">
+                <Tag color={getTypeColor(typePrestation)}>
+                  {getTypeLabel(typePrestation)}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Affection">
+                {affectionCode} - {affectionLibelle}
+              </Descriptions.Item>
+              <Descriptions.Item label="Nombre d'actes">
+                <strong>{selectedPrestations.length}</strong>
+              </Descriptions.Item>
+              <Descriptions.Item label="Total prescription">
+                <strong style={{ color: '#1890ff' }}>
+                  {calculerTotal().toLocaleString('fr-FR')} FCFA
+                </strong>
+              </Descriptions.Item>
+              <Descriptions.Item label="Prise en charge">
+                <strong style={{ color: '#52c41a' }}>
+                  {calculerTotalPriseEnCharge().toLocaleString('fr-FR')} FCFA
+                </strong>
+              </Descriptions.Item>
+              <Descriptions.Item label="Reste à charge">
+                <strong style={{ color: '#f5222d' }}>
+                  {calculerTotalRestant().toLocaleString('fr-FR')} FCFA
+                </strong>
+              </Descriptions.Item>
+            </Descriptions>
+            
+            <div style={{ background: '#fafafa', padding: 12, borderRadius: 4, marginBottom: 16 }}>
+              <strong>Liste des actes prescrits:</strong>
+              <List
+                size="small"
+                dataSource={selectedPrestations}
+                renderItem={(acte, index) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      title={`${index + 1}. ${acte.LIBELLE}`}
+                      description={
+                        <div>
+                          Code: {acte.CODE_ACTE} | Qté: {acte.QUANTITE} | 
+                          Prix: {parseFloat(acte.PRIX_UNITAIRE || 0).toLocaleString('fr-FR')} FCFA | 
+                          Taux PEC: {acte.TAUX_PRISE_EN_CHARGE || 80}%
+                          {acte.POSOLOGIE && ` | Posologie: ${acte.POSOLOGIE}`}
+                          {acte.DUREE && ` | Durée: ${acte.DUREE} jour(s)`}
+                        </div>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
             </div>
             
-            <div style={{ textAlign: 'center', marginBottom: '10px', borderBottom: '1px solid #000', paddingBottom: '5px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#000', textTransform: 'uppercase' }}>
-                Ordonnance Médicale
-              </h3>
-              <div style={{ fontSize: '12px', color: '#666' }}>
-                Centre de Santé: {centres.find(c => c.id === centreId || c.cod_cen === centreId)?.nom || 'Centre Médical Principal'}
-              </div>
-            </div>
-            
-            <div style={{ textAlign: 'center', margin: '10px 0' }}>
-              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#2c5aa0' }}>
-                {ordonnanceToPrint.numero || generatePrescriptionNumber()}
-              </div>
-            </div>
-            
-            <div style={{ marginBottom: '10px', padding: '5px', border: '1px solid #000', borderRadius: '2px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '5px', borderBottom: '1px solid #ccc', paddingBottom: '2px' }}>
-                INFORMATIONS DU PATIENT
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontWeight: 'bold' }}>Nom et Prénom:</span>
-                  <span>{ordonnanceToPrint.patient?.nom_complet || 'Non spécifié'}</span>
+            <Alert
+              message="Consentement électronique"
+              description={
+                <div>
+                  <p>En confirmant, vous certifiez que:</p>
+                  <ul>
+                    <li>Cette prescription est médicalement justifiée</li>
+                    <li>Le patient a été correctement identifié</li>
+                    <li>Les actes prescrits sont adaptés à l'affection diagnostiquée</li>
+                    <li>Les tarifs appliqués sont conformes au barème en vigueur</li>
+                  </ul>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontWeight: 'bold' }}>Âge:</span>
-                  <span>{ordonnanceToPrint.patient?.age || 'N/A'} ans</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontWeight: 'bold' }}>Identifiant:</span>
-                  <span>{ordonnanceToPrint.patient?.numero_carte || 'Non spécifié'}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontWeight: 'bold' }}>Sexe:</span>
-                  <span>{ordonnanceToPrint.patient?.sexe || 'Non spécifié'}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div style={{ marginBottom: '10px', fontSize: '11px' }}>
-              <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>DÉTAILS DE LA PRESCRIPTION ({ordonnanceToPrint.selectedMedicaments?.length || 0} actes)</div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f0f0f0' }}>
-                    <th style={{ border: '1px solid #000', padding: '4px' }}>N°</th>
-                    <th style={{ border: '1px solid #000', padding: '4px' }}>Désignation</th>
-                    <th style={{ border: '1px solid #000', padding: '4px' }}>Quantité</th>
-                    <th style={{ border: '1px solid #000', padding: '4px' }}>Posologie</th>
-                    <th style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>Prix unitaire</th>
-                    <th style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>Montant</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ordonnanceToPrint.selectedMedicaments?.map((med, index) => {
-                    const prixUnitaire = parseFloat(med.PRIX_UNITAIRE) || 0;
-                    const quantite = parseInt(med.QUANTITE) || 1;
-                    const montant = prixUnitaire * quantite;
-                    
-                    return (
-                      <tr key={index}>
-                        <td style={{ border: '1px solid #000', padding: '4px' }}>{index + 1}</td>
-                        <td style={{ border: '1px solid #000', padding: '4px' }}>{med.LIBELLE || med.libelle || 'Médicament'}</td>
-                        <td style={{ border: '1px solid #000', padding: '4px' }}>{quantite} {med.UNITE || 'boîte(s)'}</td>
-                        <td style={{ border: '1px solid #000', padding: '4px' }}>{med.POSOLOGIE || 'À déterminer'}</td>
-                        <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>
-                          {prixUnitaire.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA
-                        </td>
-                        <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>
-                          {montant.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0})} FCFA
-                        </td>
-                      </tr>
-                    );
-                  }) || (
-                    <tr>
-                      <td style={{ border: '1px solid #000', padding: '4px' }}>1</td>
-                      <td style={{ border: '1px solid #000', padding: '4px' }}>Desiprane</td>
-                      <td style={{ border: '1px solid #000', padding: '4px' }}>5 boîte(s)</td>
-                      <td style={{ border: '1px solid #000', padding: '4px' }}>À déterminer</td>
-                      <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>500 FCFA</td>
-                      <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>2 500 FCFA</td>
-                    </tr>
-                  )}
-                </tbody>
-                <tfoot>
-                  <tr style={{ backgroundColor: '#f0f0f0', fontWeight: 'bold' }}>
-                    <td colSpan="5" style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>
-                      TOTAL DE LA PRESCRIPTION ({ordonnanceToPrint.selectedMedicaments?.length || 0} actes)
-                    </td>
-                    <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right' }}>
-                      {ordonnanceToPrint.selectedMedicaments?.reduce((sum, med) => {
-                        const prix = parseFloat(med.PRIX_UNITAIRE) || 0;
-                        const quantite = parseInt(med.QUANTITE) || 1;
-                        return sum + (prix * quantite);
-                      }, 0).toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0}) || '0'} FCFA
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-            
-            <div style={{ marginTop: '20px', textAlign: 'center', color: '#666', fontSize: '10px' }}>
-              <div>Document généré électroniquement par le système de gestion AMS</div>
-              <div>© PRTS 2025-0009 - Scan to validate</div>
-              <div>Document validé le {moment().format('DD/MM/YYYY')}</div>
-            </div>
-          </div>
-        ) : (
-          <div style={{ textAlign: 'center', padding: '40px' }}>
-            <Result
-              status="info"
-              title="Aucune ordonnance à imprimer"
-              subTitle="Veuillez créer une prescription d'abord"
+              }
+              type="warning"
+              showIcon
             />
           </div>
         )}
       </Modal>
-
-      {/* MODAL DE FACTURE */}
+      
+      {/* Modal d'impression */}
       <Modal
         title={
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <DollarOutlined style={{ marginRight: 8, color: '#52c41a' }} />
-            <span>Feuille de soins - Décompte</span>
+            <PrinterOutlined style={{ marginRight: 8 }} />
+            <span>Impression de la prescription</span>
           </div>
         }
-        open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        width={800}
+        open={printModalVisible}
+        onCancel={() => setPrintModalVisible(false)}
         footer={[
-          <Button key="close" onClick={() => setModalVisible(false)}>
+          <Button key="cancel" onClick={() => setPrintModalVisible(false)}>
             Fermer
           </Button>,
           <Button
             key="print"
             type="primary"
             icon={<PrinterOutlined />}
-            onClick={() => {
-              const content = document.getElementById('facture-content');
-              if (content) {
-                const printWindow = window.open('', '_blank');
-                printWindow.document.write(`
-                  <html>
-                    <head>
-                      <title>Feuille de Soins</title>
-                      <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
-                        .header { text-align: center; margin-bottom: 30px; }
-                        .section { margin-bottom: 20px; }
-                        table { width: 100%; border-collapse: collapse; }
-                        th, td { border: 1px solid #000; padding: 8px; text-align: left; }
-                        .total { font-weight: bold; font-size: 1.2em; }
-                        .signature { margin-top: 50px; }
-                      </style>
-                    </head>
-                    <body>
-                      <div class="header">
-                        <h2>FEUILLE DE SOINS</h2>
-                        <p>Centre de Santé</p>
-                      </div>
-                      ${content.innerHTML}
-                    </body>
-                  </html>
-                `);
-                printWindow.document.close();
-                printWindow.print();
-              }
-            }}
+            onClick={imprimerOrdonnanceA4}
+            loading={printingOrdonnance}
           >
-            Imprimer la feuille de soins
+            Imprimer
           </Button>
         ]}
+        width={700}
       >
-        <div id="facture-content">
-          <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <h2>FEUILLE DE SOINS</h2>
-            <p>Centre de Santé - Département Prescriptions</p>
-          </div>
-          
-          <Descriptions bordered column={2} size="small" style={{ marginBottom: 24 }}>
-            <Descriptions.Item label="Numéro prescription">
-              <strong>{selectedPrescription?.NUMERO_PRESCRIPTION || 'N/A'}</strong>
-            </Descriptions.Item>
-            <Descriptions.Item label="Date d'exécution">
-              {moment().format('DD/MM/YYYY HH:mm')}
-            </Descriptions.Item>
-            <Descriptions.Item label="Patient">
-              {selectedPrescription?.NOM_BEN || 'Inconnu'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Prescripteur">
-              {selectedPrescription?.NOM_MEDECIN || 'Non spécifié'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Exécutant">
-              {selectedPrestataire?.nom_complet || 'Médecin exécutant'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Centre">
-              {centreNom || `Centre ${centreId}`}
-            </Descriptions.Item>
-            <Descriptions.Item label="Statut">
-              <Tag color="green">Exécutée</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="Nombre d'actes exécutés">
-              <strong>{actesExecutes.filter(a => a.execute).length}/{actesExecutes.length}</strong>
-            </Descriptions.Item>
-          </Descriptions>
-          
-          <Table
-            columns={[
-              { title: 'Acte/Médicament', dataIndex: 'LIBELLE', key: 'LIBELLE' },
-              { title: 'Quantité', dataIndex: 'quantite_executee', key: 'quantite', align: 'center' },
-              { title: 'Prix unitaire', dataIndex: 'prix_execute', key: 'prix', align: 'right' },
-              { 
-                title: 'Total', 
-                key: 'total',
-                align: 'right',
-                render: (_, record) => (
-                  <span>{(record.quantite_executee * record.prix_execute).toLocaleString('fr-FR')} XAF</span>
-                )
-              }
-            ]}
-            dataSource={actesExecutes.filter(a => a.execute)}
-            pagination={false}
-            size="small"
-            summary={() => (
-              <Table.Summary.Row style={{ background: '#f0f0f0' }}>
-                <Table.Summary.Cell index={0} colSpan={3} align="right">
-                  <strong>TOTAL À FACTURER ({actesExecutes.filter(a => a.execute).length} actes):</strong>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={1} align="right">
-                  <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#1890ff' }}>
-                    {totalFacture.toLocaleString('fr-FR')} XAF
-                  </span>
-                </Table.Summary.Cell>
-              </Table.Summary.Row>
-            )}
-          />
-          
-          <div style={{ marginTop: 32, textAlign: 'center' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: 48 }}>
-              <div>
-                <div style={{ borderTop: '1px solid #000', width: 200, paddingTop: 8 }}>
-                  Signature du bénéficiaire
-                </div>
-              </div>
-              <div>
-                <div style={{ borderTop: '1px solid #000', width: 200, paddingTop: 8 }}>
-                  Signature et cachet de l'exécutant
-                </div>
+        {ordonnanceToPrint && (
+          <div>
+            <Alert
+              message="Prescription prête pour l'impression"
+              description={`La prescription N° ${ordonnanceToPrint.numero} a été enregistrée avec succès. Vous pouvez maintenant l'imprimer.`}
+              type="success"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+            
+            <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="Numéro">
+                <Tag color="blue">{ordonnanceToPrint.numero}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Statut">
+                <Tag color={
+                  ordonnanceToPrint.statut === 'EN_COURS' ? 'blue' :
+                  ordonnanceToPrint.statut === 'EXECUTEE' ? 'green' :
+                  'default'
+                }>
+                  {ordonnanceToPrint.statut}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Patient">
+                {ordonnanceToPrint.patient?.nom_complet}
+              </Descriptions.Item>
+              <Descriptions.Item label="Date création">
+                {ordonnanceToPrint.dateCreation}
+              </Descriptions.Item>
+              <Descriptions.Item label="Nombre d'actes">
+                {ordonnanceToPrint.nombrePrestations || ordonnanceToPrint.selectedPrestations?.length || 0}
+              </Descriptions.Item>
+              <Descriptions.Item label="Total">
+                <strong>{ordonnanceToPrint.total?.toLocaleString('fr-FR') || '0'} FCFA</strong>
+              </Descriptions.Item>
+            </Descriptions>
+            
+            <div style={{ textAlign: 'center', marginTop: 16 }}>
+              <Alert
+                message="Format d'impression"
+                description="Le document sera généré au format A4 avec en-tête professionnel, tableau des actes, totaux et signatures."
+                type="info"
+                showIcon
+              />
+              
+              <div style={{ marginTop: 16 }}>
+                <Button
+                  type="dashed"
+                  icon={<DownloadOutlined />}
+                  onClick={() => {
+                    // Option pour télécharger en PDF (à implémenter)
+                    message.info('Fonctionnalité de téléchargement PDF à venir');
+                  }}
+                  style={{ marginRight: 8 }}
+                >
+                  Télécharger PDF
+                </Button>
+                
+                <Button
+                  type="dashed"
+                  icon={<FileExcelOutlined />}
+                  onClick={() => {
+                    // Option pour exporter en Excel (à implémenter)
+                    message.info('Fonctionnalité d\'export Excel à venir');
+                  }}
+                >
+                  Exporter Excel
+                </Button>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </Modal>
-
-      {/* Styles CSS pour surligner le médecin de la consultation */}
-      <style>
-        {`
-          .medecin-consultation-row {
-            background-color: #f0f9ff !important;
-            border-left: 4px solid #1890ff !important;
-          }
-          .medecin-consultation-row:hover {
-            background-color: #e6f7ff !important;
-          }
-          .acte-manuel-row {
-            background-color: #fff9e6 !important;
-          }
-          .acte-manuel-row:hover {
-            background-color: #fff0b3 !important;
-          }
-        `}
-      </style>
+      
+      {/* Modal des prestataires (médecins) */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <TeamOutlined style={{ marginRight: 8 }} />
+            <span>Sélection du médecin prescripteur</span>
+          </div>
+        }
+        open={modalPrestataires}
+        onCancel={() => setModalPrestataires(false)}
+        footer={null}
+        width={800}
+      >
+        {!centreId ? (
+          <Alert
+            message="Centre de santé requis"
+            description="Veuillez d'abord sélectionner un centre de santé pour afficher la liste des médecins."
+            type="warning"
+            showIcon
+            action={
+              <Button size="small" onClick={() => {
+                setModalPrestataires(false);
+                message.info('Veuillez sélectionner un centre de santé');
+              }}>
+                OK
+              </Button>
+            }
+          />
+        ) : loadingPrestataires ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin tip="Chargement des médecins..." size="large" />
+          </div>
+        ) : prestataires.length > 0 ? (
+          <div>
+            <Alert
+              message={`Centre: ${centreNom}`}
+              description={`${prestataires.length} médecin(s) disponible(s) dans ce centre`}
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+            
+            <Table
+              columns={prestatairesColumns}
+              dataSource={prestataires}
+              pagination={{ pageSize: 10 }}
+              size="small"
+              scroll={{ y: 400 }}
+              rowKey="id"
+            />
+          </div>
+        ) : (
+          <Result
+            icon={<TeamOutlined style={{ color: '#d9d9d9' }} />}
+            title="Aucun médecin disponible"
+            subTitle={
+              <div>
+                <p>Aucun médecin n'a été trouvé pour le centre <strong>{centreNom}</strong>.</p>
+                <p>Veuillez vérifier que des médecins sont affectés à ce centre.</p>
+              </div>
+            }
+            extra={
+              <Button
+                type="primary"
+                onClick={() => {
+                  loadPrestataires();
+                }}
+                icon={<ReloadOutlined />}
+              >
+                Réessayer
+              </Button>
+            }
+          />
+        )}
+      </Modal>
+      
+      {/* Modal des détails de prescription */}
+      <Drawer
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <FileTextOutlined style={{ marginRight: 8 }} />
+            <span>Détails de la prescription</span>
+            {selectedPrescriptionDetails && (
+              <Tag color="blue" style={{ marginLeft: 8 }}>
+                N° {selectedPrescriptionDetails.NUMERO_PRESCRIPTION}
+              </Tag>
+            )}
+          </div>
+        }
+        placement="right"
+        onClose={() => setDetailsModalVisible(false)}
+        open={detailsModalVisible}
+        width={700}
+      >
+        {loading.details ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin tip="Chargement des détails..." size="large" />
+          </div>
+        ) : selectedPrescriptionDetails ? (
+          <div>
+            <Descriptions bordered column={2} size="small" style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="Patient" span={2}>
+                <strong>{selectedPrescriptionDetails.NOM_BEN}</strong>
+              </Descriptions.Item>
+              <Descriptions.Item label="Date prescription">
+                {selectedPrescriptionDetails.DATE_PRESCRIPTION}
+              </Descriptions.Item>
+              <Descriptions.Item label="Type">
+                <Tag color={getTypeColor(selectedPrescriptionDetails.TYPE_PRESTATION)}>
+                  {selectedPrescriptionDetails.TYPE_PRESTATION}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Statut">
+                <Tag color={
+                  selectedPrescriptionDetails.STATUT === 'En attente' ? 'orange' :
+                  selectedPrescriptionDetails.STATUT === 'En cours' ? 'blue' :
+                  selectedPrescriptionDetails.STATUT === 'Exécutée' ? 'green' :
+                  'default'
+                }>
+                  {selectedPrescriptionDetails.STATUT}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Centre">
+                {selectedPrescriptionDetails.centreNom}
+              </Descriptions.Item>
+              <Descriptions.Item label="Médecin">
+                {selectedPrescriptionDetails.NOM_MEDECIN}
+              </Descriptions.Item>
+              <Descriptions.Item label="Nombre d'actes">
+                {selectedPrescriptionDetails.nombreActes || selectedPrescriptionDetails.details?.length || 0}
+              </Descriptions.Item>
+              <Descriptions.Item label="Total">
+                <strong>{parseFloat(selectedPrescriptionDetails.total || 0).toLocaleString('fr-FR')} FCFA</strong>
+              </Descriptions.Item>
+            </Descriptions>
+            
+            {selectedPrescriptionDetails.COD_AFF && (
+              <Alert
+                message="Affection / Diagnostic"
+                description={`Code: ${selectedPrescriptionDetails.COD_AFF} - ${selectedPrescriptionDetails.rawData?.LIB_AFF || 'Non spécifié'}`}
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            )}
+            
+            {selectedPrescriptionDetails.details && selectedPrescriptionDetails.details.length > 0 ? (
+              <>
+                <Divider orientation="left">Liste des actes ({selectedPrescriptionDetails.details.length})</Divider>
+                <Table
+                  columns={detailsActesColumns}
+                  dataSource={selectedPrescriptionDetails.details}
+                  pagination={false}
+                  size="small"
+                  rowKey={(record) => record.COD_ELEMENT || record.id || Math.random()}
+                  summary={() => {
+                    const total = selectedPrescriptionDetails.details.reduce((sum, acte) => {
+                      const prix = parseFloat(acte.PRIX_UNITAIRE || 0);
+                      const quantite = parseFloat(acte.QUANTITE || 1);
+                      return sum + (prix * quantite);
+                    }, 0);
+                    
+                    return (
+                      <Table.Summary.Row style={{ background: '#fafafa' }}>
+                        <Table.Summary.Cell colSpan={5} align="right">
+                          <strong>Total de la prescription:</strong>
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell>
+                          <strong style={{ color: '#1890ff' }}>
+                            {total.toLocaleString('fr-FR')} FCFA
+                          </strong>
+                        </Table.Summary.Cell>
+                      </Table.Summary.Row>
+                    );
+                  }}
+                />
+              </>
+            ) : (
+              <Alert
+                message="Aucun détail d'acte"
+                description="Les détails de cette prescription ne sont pas disponibles."
+                type="warning"
+                showIcon
+              />
+            )}
+            
+            <div style={{ marginTop: 24 }}>
+              <Space>
+                <Button
+                  type="primary"
+                  icon={<PrinterOutlined />}
+                  onClick={() => {
+                    handlePrintPrescriptionFromHistory(selectedPrescriptionDetails);
+                    setDetailsModalVisible(false);
+                  }}
+                >
+                  Imprimer
+                </Button>
+                
+                {selectedPrescriptionDetails.STATUT !== 'Exécutée' && selectedPrescriptionDetails.STATUT !== 'Annulée' && (
+                  <Button
+                    type="default"
+                    icon={<PlayCircleOutlined />}
+                    onClick={() => {
+                      setActiveTab('execution');
+                      setPrescriptionNumero(selectedPrescriptionDetails.NUMERO_PRESCRIPTION);
+                      setDetailsModalVisible(false);
+                      setTimeout(() => {
+                        searchPrescription(selectedPrescriptionDetails.NUMERO_PRESCRIPTION);
+                      }, 500);
+                    }}
+                  >
+                    Exécuter
+                  </Button>
+                )}
+                
+                <Button onClick={() => setDetailsModalVisible(false)}>
+                  Fermer
+                </Button>
+              </Space>
+            </div>
+          </div>
+        ) : (
+          <Alert
+            message="Aucune donnée"
+            description="Les détails de la prescription ne sont pas disponibles."
+            type="warning"
+            showIcon
+          />
+        )}
+      </Drawer>
     </div>
   );
-};
-
-// Fonction utilitaire pour calculer l'âge
-function calculateAge(dateNaissance) {
-  if (!dateNaissance) return null;
-  const today = moment();
-  const birthDate = moment(dateNaissance);
-  return today.diff(birthDate, 'years');
-}
-
-const loadDetailsForPrescription = async (prescription) => {
-  try {
-    const prescriptionId = prescription.COD_PRES || prescription.id;
-    
-    // Essayer plusieurs méthodes
-    let details = [];
-    
-    // Méthode 1: Détails déjà inclus
-    if (prescription.details && Array.isArray(prescription.details)) {
-      details = prescription.details;
-    }
-    
-    // Méthode 2: API getDetails si elle existe
-    if (details.length === 0 && prescriptionsAPI.getDetails) {
-      try {
-        const response = await prescriptionsAPI.getDetails(prescriptionId);
-        if (response.success && response.details) {
-          details = response.details;
-        }
-      } catch (error) {
-        console.warn('⚠️ getDetails API échouée:', error);
-      }
-    }
-    
-    // Méthode 3: Recherche via getAll avec include_details
-    if (details.length === 0) {
-      try {
-        const response = await prescriptionsAPI.getAll({
-          id: prescriptionId,
-          limit: 1,
-          include_details: true
-        });
-        
-        if (response.success && response.prescriptions.length > 0) {
-          details = response.prescriptions[0].details || [];
-        }
-      } catch (error) {
-        console.warn('⚠️ Recherche via getAll échouée:', error);
-      }
-    }
-    
-    return details;
-  } catch (error) {
-    console.error('❌ Erreur chargement détails:', error);
-    return [];
-  }
 };
 
 export default Prescriptions;

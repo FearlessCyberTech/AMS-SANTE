@@ -707,3 +707,413 @@
     .acte-manuel-row:hover {
       background-color: #ffe7ba !important;
     }
+
+       .aem-row {
+      background-color: #f6ffed !important;
+    }
+    .aem-row:hover {
+      background-color: #d9f7be !important;
+    }
+    .medicament-row {
+      background-color: #f0f5ff !important;
+    }
+    .medicament-row:hover {
+      background-color: #d6e4ff !important;
+    }
+    .acte-manuel-row {
+      background-color: #fff9e6 !important;
+    }
+    .acte-manuel-row:hover {
+      background-color: #fff0b3 !important;
+    }
+    .medecin-consultation-row {
+      background-color: #f0f9ff !important;
+      border-left: 4px solid #1890ff !important;
+    }
+    .medecin-consultation-row:hover {
+      background-color: #e6f7ff !important;
+    }
+    /* prescriptions.css */
+
+.print-container {
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  color: #333;
+  line-height: 1.6;
+  padding: 20px;
+  background: white;
+}
+
+/* Header */
+.ordonnance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #1890ff;
+  padding-bottom: 15px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.logo-container {
+  width: 150px;
+}
+
+.logo {
+  width: 100%;
+  height: auto;
+}
+
+.company-info h2 {
+  margin: 0;
+  color: #1890ff;
+  font-size: 18px;
+}
+
+.company-info p {
+  margin: 4px 0;
+  font-size: 12px;
+  color: #666;
+}
+
+.header-right {
+  text-align: right;
+}
+
+.document-title h1 {
+  margin: 0;
+  font-size: 22px;
+  color: #d4380d;
+  font-weight: bold;
+}
+
+.document-title h2 {
+  margin: 5px 0;
+  font-size: 18px;
+  color: #1890ff;
+}
+
+.document-meta {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.document-meta p {
+  margin: 2px 0;
+}
+
+/* Sections */
+.patient-section,
+.prescription-section,
+.execution-section,
+.financial-section {
+  margin-bottom: 25px;
+}
+
+.patient-section h3,
+.prescription-section h3,
+.execution-section h3,
+.financial-section h3 {
+  background: #f0f5ff;
+  padding: 8px 12px;
+  border-left: 4px solid #1890ff;
+  margin-bottom: 15px;
+  color: #1890ff;
+}
+
+/* Tables */
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.info-table td {
+  padding: 6px 8px;
+  border: 1px solid #f0f0f0;
+}
+
+.info-table td:first-child {
+  width: 40%;
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.prescription-table,
+.execution-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin-bottom: 15px;
+}
+
+.prescription-table th,
+.execution-table th {
+  background: #1890ff;
+  color: white;
+  padding: 8px;
+  text-align: center;
+  border: 1px solid #1890ff;
+}
+
+.prescription-table td,
+.execution-table td {
+  padding: 6px 8px;
+  border: 1px solid #f0f0f0;
+  text-align: left;
+}
+
+.prescription-table tr:nth-child(even),
+.execution-table tr:nth-child(even) {
+  background: #fafafa;
+}
+
+.prescription-table .total-row,
+.execution-table .total-row {
+  background: #f0f5ff !important;
+  font-weight: bold;
+}
+
+.total-amount {
+  color: #d4380d;
+  font-size: 14px;
+}
+
+/* Alignements */
+.text-center {
+  text-align: center !important;
+}
+
+.text-right {
+  text-align: right !important;
+}
+
+/* Cards financières */
+.financial-card {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 15px;
+  text-align: center;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.financial-card.total {
+  border-top: 4px solid #52c41a;
+}
+
+.financial-card.assureur {
+  border-top: 4px solid #1890ff;
+}
+
+.financial-card.patient {
+  border-top: 4px solid #faad14;
+}
+
+.financial-icon {
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+
+.financial-card.total .financial-icon {
+  color: #52c41a;
+}
+
+.financial-card.assureur .financial-icon {
+  color: #1890ff;
+}
+
+.financial-card.patient .financial-icon {
+  color: #faad14;
+}
+
+.financial-content h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #333;
+}
+
+.financial-content .amount {
+  font-size: 20px;
+  font-weight: bold;
+  margin: 0;
+  color: #333;
+}
+
+.financial-content .description {
+  font-size: 11px;
+  color: #666;
+  margin: 5px 0 0 0;
+}
+
+/* Résumé financier */
+.financial-summary {
+  margin-top: 20px;
+  padding: 15px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.summary-table td {
+  padding: 6px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.summary-table tr:last-child td {
+  border-bottom: none;
+}
+
+.total-executed {
+  color: #d4380d;
+  font-weight: bold;
+}
+
+/* Signature */
+.footer-section {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px dashed #d9d9d9;
+}
+
+.signature-block {
+  text-align: center;
+  padding: 10px;
+}
+
+.signature-line {
+  width: 80%;
+  height: 1px;
+  background: #333;
+  margin: 20px auto 10px auto;
+}
+
+.signature-block p {
+  margin: 5px 0;
+  font-size: 11px;
+}
+
+/* Disclaimer */
+.disclaimer {
+  margin-top: 20px;
+  padding: 10px;
+  background: #fff7e6;
+  border-left: 4px solid #faad14;
+  font-size: 11px;
+}
+
+.disclaimer p {
+  margin: 5px 0;
+}
+
+/* Code-barres */
+.barcode {
+  text-align: center;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px dashed #d9d9d9;
+}
+
+.barcode-line {
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    #333 0px,
+    #333 2px,
+    transparent 2px,
+    transparent 4px
+  );
+  margin-bottom: 10px;
+}
+
+.barcode p {
+  font-family: monospace;
+  font-size: 10px;
+  color: #666;
+}
+
+/* Media print */
+@media print {
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+  
+  .print-container {
+    padding: 0;
+  }
+  
+  .ordonnance-header {
+    border-bottom-color: #000;
+  }
+  
+  .patient-section h3,
+  .prescription-section h3,
+  .execution-section h3,
+  .financial-section h3 {
+    background: none;
+    border-left-color: #000;
+    color: #000;
+  }
+  
+  .prescription-table th,
+  .execution-table th {
+    background: #000 !important;
+    color: white !important;
+    -webkit-print-color-adjust: exact;
+  }
+  
+  .prescription-table tr:nth-child(even),
+  .execution-table tr:nth-child(even) {
+    background: #f5f5f5 !important;
+    -webkit-print-color-adjust: exact;
+  }
+  
+  .financial-card {
+    box-shadow: none;
+    border: 1px solid #000;
+  }
+  
+  .disclaimer {
+    background: #fff !important;
+    border-left: 4px solid #000;
+    -webkit-print-color-adjust: exact;
+  }
+  
+  /* Masquer les éléments non nécessaires à l'impression */
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Badges et tags */
+.ant-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+}
+
+/* Responsive pour l'impression */
+@media screen and (max-width: 768px) {
+  .ordonnance-header {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .header-left {
+    flex-direction: column;
+    margin-bottom: 15px;
+  }
+  
+  .financial-card {
+    margin-bottom: 15px;
+  }
+}

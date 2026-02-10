@@ -1,0 +1,37 @@
+/* styles/BarremesManagement.css */
+.barreme-table-row:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+}
+
+.type-chip {
+  font-size: 0.75rem;
+  height: 24px;
+}
+
+.stat-card {
+  transition: transform 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+}
+
+.import-dropzone {
+  border: 2px dashed #1976d2;
+  background-color: rgba(25, 118, 210, 0.04);
+}
+
+.export-button {
+  min-width: 120px;
+}
+
+@media (max-width: 600px) {
+  .mobile-hidden {
+    display: none;
+  }
+  
+  .mobile-full-width {
+    width: 100%;
+  }
+}

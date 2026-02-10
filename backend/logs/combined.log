@@ -10,3 +10,13 @@
 {"level":"info","message":"\u001b[0mGET /api/prestataires?page=1&limit=200&actif=1&type_prestataire=M%C3%A9decin&sortBy=nom&sortOrder=ASC \u001b[32m200\u001b[0m 278.174 ms - -\u001b[0m","service":"ams-sante-api","timestamp":"2026-01-17T09:14:29.054Z"}
 {"level":"info","message":"\u001b[0mGET /api/prestataires?page=1&limit=200&actif=1&type_prestataire=M%C3%A9decin&sortBy=nom&sortOrder=ASC \u001b[32m200\u001b[0m 267.355 ms - -\u001b[0m","service":"ams-sante-api","timestamp":"2026-01-17T09:14:29.328Z"}
 {"level":"info","message":"\u001b[0mGET /api/prestataires?page=1&limit=200&actif=1&type_prestataire=M%C3%A9decin&sortBy=nom&sortOrder=ASC \u001b[32m200\u001b[0m 264.586 ms - -\u001b[0m","service":"ams-sante-api","timestamp":"2026-01-17T09:14:29.601Z"}
+{"level":"info","message":"🚀 Démarrage du serveur HealthCenterSoft...","timestamp":"2026-02-03T15:13:06.511Z"}
+{"database":"hcs_backoffice","environment":"production","host":"0.0.0.0","level":"info","message":"📊 Configuration:","node_version":"v25.2.1","port":"5000","timestamp":"2026-02-03T15:13:06.514Z"}
+{"level":"info","message":"🔍 Test de connexion à la base de données...","timestamp":"2026-02-03T15:13:06.514Z"}
+{"level":"info","message":"✅ Connexion à la base de données établie","timestamp":"2026-02-03T15:13:09.228Z"}
+{"level":"info","message":"✅ Structure de base de données vérifiée","timestamp":"2026-02-03T15:13:11.358Z"}
+{"level":"info","message":"✅ Serveur démarré sur http://0.0.0.0:5000","timestamp":"2026-02-03T15:13:11.361Z"}
+{"level":"info","message":"🔗 API: http://0.0.0.0:5000/api","timestamp":"2026-02-03T15:13:11.361Z"}
+{"level":"info","message":"❤️  Health check: http://0.0.0.0:5000/api/health","timestamp":"2026-02-03T15:13:11.362Z"}
+{"level":"info","message":"📈 Environnement: production","timestamp":"2026-02-03T15:13:11.362Z"}
+{"level":"info","message":"\nSIGINT reçu, arrêt du serveur...","timestamp":"2026-02-03T15:13:54.047Z"}

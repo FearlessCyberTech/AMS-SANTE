@@ -55,8 +55,8 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
   const [activeStep, setActiveStep] = useState(0);
   const [activeTab, setActiveTab] = useState(0);
   const [formData, setFormData] = useState({
-    beneficiaire_id: '',
-    payeur_id: '',
+    cod_ben: '',
+    cod_payeur: '',
     date_facture: new Date(),
     date_echeance: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     observations: '',
@@ -82,8 +82,6 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
   
   const [beneficiaires, setBeneficiaires] = useState([]);
   const [payeurs, setPayeurs] = useState([]);
-  const [selectedBeneficiaireInfo, setSelectedBeneficiaireInfo] = useState(null);
-  const [selectedPayeurInfo, setSelectedPayeurInfo] = useState(null);
   const [errors, setErrors] = useState({});
   const [apiLoading, setApiLoading] = useState(false);
 
@@ -91,111 +89,11 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
 
   const generateUniqueId = () => Date.now() + Math.floor(Math.random() * 1000);
 
-  // Fonction pour charger les informations détaillées du bénéficiaire
-  const loadBeneficiaireDetails = useCallback(async (beneficiaireId) => {
-    if (!beneficiaireId) {
-      setSelectedBeneficiaireInfo(null);
-      return;
-    }
-    
-    try {
-      // Chercher dans la liste déjà chargée
-      const existingBen = beneficiaires.find(b => b.id === Number(beneficiaireId));
-      if (existingBen) {
-        setSelectedBeneficiaireInfo(existingBen);
-        return;
-      }
-      
-      // Charger depuis l'API si pas dans la liste
-      setApiLoading(true);
-      const response = await patientsAPI.getById(beneficiaireId);
-      if (response.success && response.beneficiaire) {
-        const beneficiaire = response.beneficiaire;
-        const formattedBeneficiaire = {
-          id: beneficiaire.id || beneficiaire.ID_BEN || beneficiaire.beneficiaire_id,
-          nom: beneficiaire.nom || beneficiaire.NOM_BEN || '',
-          prenom: beneficiaire.prenom || beneficiaire.PRE_BEN || '',
-          identifiant: beneficiaire.identifiant || beneficiaire.IDENTIFIANT_NATIONAL || '',
-          sexe: beneficiaire.sexe || beneficiaire.SEX_BEN || '',
-          date_naissance: beneficiaire.date_naissance || beneficiaire.NAI_BEN || null,
-          telephone: beneficiaire.telephone || beneficiaire.TELEPHONE_MOBILE || '',
-          email: beneficiaire.email || beneficiaire.EMAIL || '',
-          adresse: beneficiaire.adresse || beneficiaire.ADRESSE || '',
-          ville: beneficiaire.ville || beneficiaire.VILLE || '',
-          code_postal: beneficiaire.code_postal || beneficiaire.CODE_POSTAL || '',
-          assurance: beneficiaire.assurance || beneficiaire.ASSURANCE || '',
-          numero_assurance: beneficiaire.numero_assurance || beneficiaire.NUMERO_ASSURANCE || '',
-        };
-        setSelectedBeneficiaireInfo(formattedBeneficiaire);
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des détails du bénéficiaire:', error);
-      // Essayer de trouver dans la liste des bénéficiaires déjà chargés
-      const existingBen = beneficiaires.find(b => b.id === Number(beneficiaireId));
-      if (existingBen) {
-        setSelectedBeneficiaireInfo(existingBen);
-      } else {
-        setSelectedBeneficiaireInfo(null);
-      }
-    } finally {
-      setApiLoading(false);
-    }
-  }, [beneficiaires]);
-
-  // Fonction pour charger les informations détaillées du payeur
-  const loadPayeurDetails = useCallback(async (payeurId) => {
-    if (!payeurId) {
-      setSelectedPayeurInfo(null);
-      return;
-    }
-    
-    try {
-      // Chercher dans la liste déjà chargée
-      const existingPayeur = payeurs.find(p => p.id === Number(payeurId));
-      if (existingPayeur) {
-        setSelectedPayeurInfo(existingPayeur);
-        return;
-      }
-      
-      // Charger depuis l'API si pas dans la liste
-      setApiLoading(true);
-      const response = await facturationAPI.getPayeurById(payeurId);
-      if (response.success && response.payeur) {
-        const payeur = response.payeur;
-        const formattedPayeur = {
-          id: payeur.id || payeur.payeur_id || payeur.cod_payeur,
-          libelle: payeur.libelle || payeur.LIBELLE || 'Payeur inconnu',
-          taux_couverture: Number(payeur.taux_couverture) || Number(payeur.TAUX_COUVERTURE) || 0,
-          type_payeur: payeur.type_payeur || payeur.TYPE_PAYEUR || 'assurance',
-          adresse: payeur.adresse || payeur.ADRESSE || '',
-          telephone: payeur.telephone || payeur.TELEPHONE || '',
-          email: payeur.email || payeur.EMAIL || '',
-          contact: payeur.contact || payeur.CONTACT || '',
-          conditions_paiement: payeur.conditions_paiement || payeur.CONDITIONS_PAIEMENT || '',
-          delai_paiement: payeur.delai_paiement || payeur.DELAI_PAIEMENT || 30,
-        };
-        setSelectedPayeurInfo(formattedPayeur);
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des détails du payeur:', error);
-      // Essayer de trouver dans la liste des payeurs déjà chargés
-      const existingPayeur = payeurs.find(p => p.id === Number(payeurId));
-      if (existingPayeur) {
-        setSelectedPayeurInfo(existingPayeur);
-      } else {
-        setSelectedPayeurInfo(null);
-      }
-    } finally {
-      setApiLoading(false);
-    }
-  }, [payeurs]);
-
   useEffect(() => {
     if (mode === 'edit' && data && open) {
-      // Utiliser les nouveaux noms de champs
       const formattedData = {
-        beneficiaire_id: data.beneficiaire_id || data.cod_ben || '',
-        payeur_id: data.payeur_id || data.cod_payeur || '',
+        cod_ben: data.cod_ben || '',
+        cod_payeur: data.cod_payeur || '',
         date_facture: data.date_facture ? new Date(data.date_facture) : new Date(),
         date_echeance: data.date_echeance ? new Date(data.date_echeance) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         observations: data.observations || '',
@@ -216,24 +114,11 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
       };
       
       setFormData(formattedData);
-      
-      // Charger les détails du bénéficiaire et du payeur en mode édition
-      if (formattedData.beneficiaire_id) {
-        setTimeout(() => {
-          loadBeneficiaireDetails(formattedData.beneficiaire_id);
-        }, 100);
-      }
-      
-      if (formattedData.payeur_id) {
-        setTimeout(() => {
-          loadPayeurDetails(formattedData.payeur_id);
-        }, 100);
-      }
     } else if (!open) {
       // Reset form when dialog closes
       setFormData({
-        beneficiaire_id: '',
-        payeur_id: '',
+        cod_ben: '',
+        cod_payeur: '',
         date_facture: new Date(),
         date_echeance: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         observations: '',
@@ -258,11 +143,9 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
       });
       setActiveStep(0);
       setActiveTab(0);
-      setSelectedBeneficiaireInfo(null);
-      setSelectedPayeurInfo(null);
       setErrors({});
     }
-  }, [mode, data, open, loadBeneficiaireDetails, loadPayeurDetails]);
+  }, [mode, data, open]);
 
   const loadBeneficiaires = useCallback(async () => {
     if (!open) return;
@@ -275,54 +158,36 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
       
       if (response.success && Array.isArray(response.beneficiaires)) {
         formattedBeneficiaires = response.beneficiaires.map(ben => ({
-          id: ben.id || ben.ID_BEN || ben.beneficiaire_id,
+          id: ben.id || ben.ID_BEN,
           nom: ben.nom || ben.NOM_BEN || '',
           prenom: ben.prenom || ben.PRE_BEN || '',
           identifiant: ben.identifiant || ben.IDENTIFIANT_NATIONAL || '',
           sexe: ben.sexe || ben.SEX_BEN || '',
           date_naissance: ben.date_naissance || ben.NAI_BEN || null,
           telephone: ben.telephone || ben.TELEPHONE_MOBILE || '',
-          email: ben.email || ben.EMAIL || '',
-          adresse: ben.adresse || ben.ADRESSE || '',
-          ville: ben.ville || ben.VILLE || '',
-          code_postal: ben.code_postal || ben.CODE_POSTAL || '',
-          assurance: ben.assurance || ben.ASSURANCE || '',
-          numero_assurance: ben.numero_assurance || ben.NUMERO_ASSURANCE || ''
+          email: ben.email || ben.EMAIL || ''
         }));
       } else if (Array.isArray(response)) {
         formattedBeneficiaires = response.map(ben => ({
-          id: ben.ID_BEN || ben.id || ben.beneficiaire_id,
+          id: ben.ID_BEN || ben.id,
           nom: ben.NOM_BEN || ben.nom || '',
           prenom: ben.PRE_BEN || ben.prenom || '',
           identifiant: ben.IDENTIFIANT_NATIONAL || ben.identifiant || '',
           sexe: ben.SEX_BEN || ben.sexe || '',
           date_naissance: ben.NAI_BEN || ben.date_naissance || null,
           telephone: ben.TELEPHONE_MOBILE || ben.telephone || '',
-          email: ben.EMAIL || ben.email || '',
-          adresse: ben.ADRESSE || ben.adresse || '',
-          ville: ben.VILLE || ben.ville || '',
-          code_postal: ben.CODE_POSTAL || ben.code_postal || '',
-          assurance: ben.ASSURANCE || ben.assurance || '',
-          numero_assurance: ben.NUMERO_ASSURANCE || ben.numero_assurance || ''
+          email: ben.EMAIL || ben.email || ''
         }));
       }
       
       setBeneficiaires(formattedBeneficiaires);
-      
-      // Si un bénéficiaire est déjà sélectionné, mettre à jour les informations
-      if (formData.beneficiaire_id) {
-        const selectedBen = formattedBeneficiaires.find(b => b.id === Number(formData.beneficiaire_id));
-        if (selectedBen) {
-          setSelectedBeneficiaireInfo(selectedBen);
-        }
-      }
     } catch (error) {
       console.error('Erreur lors du chargement des bénéficiaires:', error);
       setBeneficiaires([]);
     } finally {
       setApiLoading(false);
     }
-  }, [open, formData.beneficiaire_id]);
+  }, [open]);
 
   const loadPayeurs = useCallback(async () => {
     if (!open) return;
@@ -334,128 +199,37 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
       
       if (response.success && Array.isArray(response.payeurs)) {
         formattedPayeurs = response.payeurs.map(payeur => ({
-          id: payeur.id || payeur.payeur_id || payeur.cod_payeur,
+          id: payeur.cod_payeur || payeur.id,
           libelle: payeur.libelle || payeur.LIBELLE || 'Payeur inconnu',
           taux_couverture: Number(payeur.taux_couverture) || Number(payeur.TAUX_COUVERTURE) || 0,
-          type_payeur: payeur.type_payeur || payeur.TYPE_PAYEUR || 'assurance',
-          adresse: payeur.adresse || payeur.ADRESSE || '',
-          telephone: payeur.telephone || payeur.TELEPHONE || '',
-          email: payeur.email || payeur.EMAIL || '',
-          contact: payeur.contact || payeur.CONTACT || '',
-          conditions_paiement: payeur.conditions_paiement || payeur.CONDITIONS_PAIEMENT || '',
-          delai_paiement: payeur.delai_paiement || payeur.DELAI_PAIEMENT || 30
+          type_payeur: payeur.type_payeur || payeur.TYPE_PAYEUR || 'assurance'
         }));
       } else if (Array.isArray(response)) {
         formattedPayeurs = response.map(payeur => ({
-          id: payeur.id || payeur.payeur_id || payeur.cod_payeur,
+          id: payeur.cod_payeur || payeur.id,
           libelle: payeur.libelle || payeur.LIBELLE || 'Payeur inconnu',
           taux_couverture: Number(payeur.taux_couverture) || Number(payeur.TAUX_COUVERTURE) || 0,
-          type_payeur: payeur.type_payeur || payeur.TYPE_PAYEUR || 'assurance',
-          adresse: payeur.adresse || payeur.ADRESSE || '',
-          telephone: payeur.telephone || payeur.TELEPHONE || '',
-          email: payeur.email || payeur.EMAIL || '',
-          contact: payeur.contact || payeur.CONTACT || '',
-          conditions_paiement: payeur.conditions_paiement || payeur.CONDITIONS_PAIEMENT || '',
-          delai_paiement: payeur.delai_paiement || payeur.DELAI_PAIEMENT || 30
+          type_payeur: payeur.type_payeur || payeur.TYPE_PAYEUR || 'assurance'
         }));
       } else {
         formattedPayeurs = [
-          { 
-            id: 1, 
-            libelle: 'Assurance Santé A', 
-            taux_couverture: 80, 
-            type_payeur: 'assurance',
-            adresse: '123 Rue de la Santé, Paris',
-            telephone: '01 23 45 67 89',
-            email: 'contact@assurance-a.fr',
-            contact: 'M. Dupont',
-            conditions_paiement: 'Paiement sous 30 jours',
-            delai_paiement: 30
-          },
-          { 
-            id: 2, 
-            libelle: 'Mutuelle B', 
-            taux_couverture: 70, 
-            type_payeur: 'mutuelle',
-            adresse: '456 Avenue des Soins, Lyon',
-            telephone: '04 56 78 90 12',
-            email: 'info@mutuelle-b.fr',
-            contact: 'Mme Martin',
-            conditions_paiement: 'Paiement sous 45 jours',
-            delai_paiement: 45
-          },
-          { 
-            id: 3, 
-            libelle: 'Patient (paiement direct)', 
-            taux_couverture: 0, 
-            type_payeur: 'patient',
-            adresse: '',
-            telephone: '',
-            email: '',
-            contact: '',
-            conditions_paiement: 'Paiement comptant',
-            delai_paiement: 0
-          },
-          { 
-            id: 4, 
-            libelle: 'État/CNSS', 
-            taux_couverture: 100, 
-            type_payeur: 'etat',
-            adresse: 'Ministère de la Santé, Dakar',
-            telephone: '33 849 00 00',
-            email: 'cnss@etat.sn',
-            contact: 'Service Facturation',
-            conditions_paiement: 'Paiement sous 60 jours',
-            delai_paiement: 60
-          }
+          { id: 1, libelle: 'Assurance Santé A', taux_couverture: 80, type_payeur: 'assurance' },
+          { id: 2, libelle: 'Mutuelle B', taux_couverture: 70, type_payeur: 'mutuelle' },
+          { id: 3, libelle: 'Patient (paiement direct)', taux_couverture: 0, type_payeur: 'patient' },
+          { id: 4, libelle: 'État/CNSS', taux_couverture: 100, type_payeur: 'etat' }
         ];
       }
       
       setPayeurs(formattedPayeurs);
-      
-      // Si un payeur est déjà sélectionné, mettre à jour les informations
-      if (formData.payeur_id) {
-        const selectedPayeur = formattedPayeurs.find(p => p.id === Number(formData.payeur_id));
-        if (selectedPayeur) {
-          setSelectedPayeurInfo(selectedPayeur);
-        }
-      }
     } catch (error) {
       console.error('Erreur lors du chargement des payeurs:', error);
       setPayeurs([
-        { 
-          id: 1, 
-          libelle: 'Assurance Santé A', 
-          taux_couverture: 80, 
-          type_payeur: 'assurance',
-          adresse: '123 Rue de la Santé, Paris',
-          telephone: '01 23 45 67 89',
-          email: 'contact@assurance-a.fr',
-          contact: 'M. Dupont'
-        },
-        { 
-          id: 2, 
-          libelle: 'Mutuelle B', 
-          taux_couverture: 70, 
-          type_payeur: 'mutuelle',
-          adresse: '456 Avenue des Soins, Lyon',
-          telephone: '04 56 78 90 12',
-          email: 'info@mutuelle-b.fr',
-          contact: 'Mme Martin'
-        },
-        { 
-          id: 3, 
-          libelle: 'Patient (paiement direct)', 
-          taux_couverture: 0, 
-          type_payeur: 'patient',
-          adresse: '',
-          telephone: '',
-          email: '',
-          contact: ''
-        }
+        { id: 1, libelle: 'Assurance Santé A', taux_couverture: 80, type_payeur: 'assurance' },
+        { id: 2, libelle: 'Mutuelle B', taux_couverture: 70, type_payeur: 'mutuelle' },
+        { id: 3, libelle: 'Patient (paiement direct)', taux_couverture: 0, type_payeur: 'patient' }
       ]);
     }
-  }, [open, formData.payeur_id]);
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -469,11 +243,11 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
     
     switch (step) {
       case 0:
-        if (!formData.beneficiaire_id) {
-          newErrors.beneficiaire_id = 'Bénéficiaire requis';
+        if (!formData.cod_ben) {
+          newErrors.cod_ben = 'Bénéficiaire requis';
         }
-        if (!formData.payeur_id) {
-          newErrors.payeur_id = 'Payeur requis';
+        if (!formData.cod_payeur) {
+          newErrors.cod_payeur = 'Payeur requis';
         }
         if (formData.date_echeance && formData.date_facture && formData.date_echeance < formData.date_facture) {
           newErrors.date_echeance = 'La date d\'échéance doit être postérieure à la date de facturation';
@@ -519,23 +293,10 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
     setActiveStep((prevStep) => prevStep - 1);
   };
 
-  const handleChange = (field) => async (event) => {
+  const handleChange = (field) => (event) => {
     const value = event.target.value;
     setFormData(prev => ({ ...prev, [field]: value }));
     setErrors(prev => ({ ...prev, [field]: null }));
-    
-    // Charger les détails lorsque le bénéficiaire ou le payeur change
-    if (field === 'beneficiaire_id' && value) {
-      await loadBeneficiaireDetails(value);
-    } else if (field === 'beneficiaire_id' && !value) {
-      setSelectedBeneficiaireInfo(null);
-    }
-    
-    if (field === 'payeur_id' && value) {
-      await loadPayeurDetails(value);
-    } else if (field === 'payeur_id' && !value) {
-      setSelectedPayeurInfo(null);
-    }
   };
 
   const handleDateChange = (field) => (date) => {
@@ -663,7 +424,8 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
     let grandPriseEnCharge = 0;
     let grandReste = 0;
     
-    const tauxCouverture = selectedPayeurInfo?.taux_couverture || 0;
+    const selectedPayeur = payeurs.find(p => p.id === Number(formData.cod_payeur));
+    const tauxCouverture = selectedPayeur?.taux_couverture || 0;
     
     formData.factures.forEach(facture => {
       const total = facture.prestations.reduce((sum, prestation) => sum + (Number(prestation.montant) || 0), 0);
@@ -686,43 +448,45 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
   };
 
   const handleSubmit = async () => {
-  if (validateStep(activeStep)) {
-    const { totals } = calculateTotals();
-    
-    try {
-      // Prendre seulement la première facture
-      const facture = formData.factures[0];
-      const factureTotals = totals[0];
+    if (validateStep(activeStep)) {
+      const { totals } = calculateTotals();
+      const selectedPayeur = payeurs.find(p => p.id === Number(formData.cod_payeur));
       
-      // Préparer l'objet à envoyer (OBJET SIMPLE, pas de tableau)
-      const dataToSend = {
-        cod_ben: Number(formData.beneficiaire_id),
-        cod_payeur: Number(formData.payeur_id),
-        date_facture: formData.date_facture,
-        date_echeance: formData.date_echeance,
-        observations: formData.observations || '',
-        prestations: (facture.prestations || []).map(prestation => ({
-          type_prestation: prestation.type_prestation || 'consultation',
-          libelle: prestation.libelle || '',
-          quantite: Number(prestation.quantite) || 1,
-          prix_unitaire: Number(prestation.prix_unitaire) || 0,
-          montant: Number(prestation.montant) || 0,
-          date_execution: prestation.date_execution || new Date()
-        }))
-      };
-      
-      // Debug
-      console.log('✅ Données à envoyer (objet simple):', dataToSend);
-      
-      // Envoyer l'objet directement
-      onSubmit(dataToSend);
-      
-    } catch (error) {
-      console.error('Erreur lors de la préparation des factures:', error);
-      alert(`Erreur: ${error.message}`);
+      try {
+        const facturesToSubmit = formData.factures.map((facture, index) => {
+          const factureTotals = totals[index];
+          
+          return {
+            cod_ben: Number(formData.cod_ben),
+            cod_payeur: Number(formData.cod_payeur),
+            date_facture: formData.date_facture,
+            date_echeance: formData.date_echeance,
+            observations: formData.observations || '',
+            montant_total: factureTotals.total,
+            montant_couvert: factureTotals.priseEnCharge,
+            montant_restant: factureTotals.reste,
+            statut: 'brouillon',
+            type_facture: facture.type,
+            libelle_facture: facture.libelle,
+            prestations: (facture.prestations || []).map(prestation => ({
+              type_prestation: prestation.type_prestation || 'consultation',
+              libelle: prestation.libelle || '',
+              quantite: Number(prestation.quantite) || 1,
+              prix_unitaire: Number(prestation.prix_unitaire) || 0,
+              montant: Number(prestation.montant) || 0,
+              date_execution: prestation.date_execution || new Date()
+            }))
+          };
+        });
+        
+        onSubmit(facturesToSubmit);
+        
+      } catch (error) {
+        console.error('Erreur lors de la préparation des factures:', error);
+        alert(`Erreur: ${error.message}`);
+      }
     }
-  }
-};
+  };
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('fr-FR', {
@@ -750,6 +514,8 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
   };
 
   const getStepContent = (step) => {
+    const selectedPayeur = payeurs.find(p => p.id === Number(formData.cod_payeur));
+    const selectedBeneficiaire = beneficiaires.find(b => b.id === Number(formData.cod_ben));
     const { totals, grandTotal, grandPriseEnCharge, grandReste } = calculateTotals();
 
     switch (step) {
@@ -757,12 +523,12 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
         return (
           <Grid container spacing={3}>
             <Grid item xs={12}>
-              <FormControl fullWidth error={!!errors.beneficiaire_id} disabled={apiLoading}>
+              <FormControl fullWidth error={!!errors.cod_ben} disabled={apiLoading}>
                 <InputLabel>Bénéficiaire</InputLabel>
                 <Select
-                  value={formData.beneficiaire_id}
+                  value={formData.cod_ben}
                   label="Bénéficiaire"
-                  onChange={handleChange('beneficiaire_id')}
+                  onChange={handleChange('cod_ben')}
                 >
                   <MenuItem value="">Sélectionner un bénéficiaire</MenuItem>
                   {beneficiaires.map((ben) => (
@@ -771,87 +537,46 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
                     </MenuItem>
                   ))}
                 </Select>
-                {errors.beneficiaire_id && (
+                {errors.cod_ben && (
                   <Typography variant="caption" color="error">
-                    {errors.beneficiaire_id}
+                    {errors.cod_ben}
                   </Typography>
                 )}
               </FormControl>
               
-              {selectedBeneficiaireInfo && (
+              {selectedBeneficiaire && (
                 <Card variant="outlined" sx={{ mt: 2 }}>
                   <CardContent>
-                    <Typography variant="subtitle2" gutterBottom color="primary">
-                      Informations du bénéficiaire
+                    <Typography variant="body2">
+                      <strong>Nom:</strong> {selectedBeneficiaire.nom} {selectedBeneficiaire.prenom}
                     </Typography>
-                    <Grid container spacing={1}>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="body2">
-                          <strong>Nom complet:</strong> {selectedBeneficiaireInfo.nom} {selectedBeneficiaireInfo.prenom}
-                        </Typography>
-                      </Grid>
-                      {selectedBeneficiaireInfo.identifiant && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="body2">
-                            <strong>Identifiant:</strong> {selectedBeneficiaireInfo.identifiant}
-                          </Typography>
-                        </Grid>
-                      )}
-                      {selectedBeneficiaireInfo.date_naissance && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="body2">
-                            <strong>Date naissance:</strong> {formatDate(selectedBeneficiaireInfo.date_naissance)}
-                          </Typography>
-                        </Grid>
-                      )}
-                      {selectedBeneficiaireInfo.sexe && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="body2">
-                            <strong>Sexe:</strong> {selectedBeneficiaireInfo.sexe}
-                          </Typography>
-                        </Grid>
-                      )}
-                      {selectedBeneficiaireInfo.telephone && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="body2">
-                            <strong>Téléphone:</strong> {selectedBeneficiaireInfo.telephone}
-                          </Typography>
-                        </Grid>
-                      )}
-                      {selectedBeneficiaireInfo.email && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="body2">
-                            <strong>Email:</strong> {selectedBeneficiaireInfo.email}
-                          </Typography>
-                        </Grid>
-                      )}
-                      {selectedBeneficiaireInfo.adresse && (
-                        <Grid item xs={12}>
-                          <Typography variant="body2">
-                            <strong>Adresse:</strong> {selectedBeneficiaireInfo.adresse} {selectedBeneficiaireInfo.code_postal} {selectedBeneficiaireInfo.ville}
-                          </Typography>
-                        </Grid>
-                      )}
-                      {selectedBeneficiaireInfo.assurance && (
-                        <Grid item xs={12}>
-                          <Typography variant="body2">
-                            <strong>Assurance:</strong> {selectedBeneficiaireInfo.assurance} {selectedBeneficiaireInfo.numero_assurance ? `(N° ${selectedBeneficiaireInfo.numero_assurance})` : ''}
-                          </Typography>
-                        </Grid>
-                      )}
-                    </Grid>
+                    {selectedBeneficiaire.identifiant && (
+                      <Typography variant="body2">
+                        <strong>Identifiant:</strong> {selectedBeneficiaire.identifiant}
+                      </Typography>
+                    )}
+                    {selectedBeneficiaire.date_naissance && (
+                      <Typography variant="body2">
+                        <strong>Date naissance:</strong> {formatDate(selectedBeneficiaire.date_naissance)}
+                      </Typography>
+                    )}
+                    {selectedBeneficiaire.telephone && (
+                      <Typography variant="body2">
+                        <strong>Téléphone:</strong> {selectedBeneficiaire.telephone}
+                      </Typography>
+                    )}
                   </CardContent>
                 </Card>
               )}
             </Grid>
             
             <Grid item xs={12}>
-              <FormControl fullWidth error={!!errors.payeur_id}>
+              <FormControl fullWidth error={!!errors.cod_payeur}>
                 <InputLabel>Payeur</InputLabel>
                 <Select
-                  value={formData.payeur_id}
+                  value={formData.cod_payeur}
                   label="Payeur"
-                  onChange={handleChange('payeur_id')}
+                  onChange={handleChange('cod_payeur')}
                 >
                   <MenuItem value="">Sélectionner un payeur</MenuItem>
                   {payeurs.map((payeur) => (
@@ -860,98 +585,31 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
                     </MenuItem>
                   ))}
                 </Select>
-                {errors.payeur_id && (
+                {errors.cod_payeur && (
                   <Typography variant="caption" color="error">
-                    {errors.payeur_id}
+                    {errors.cod_payeur}
                   </Typography>
                 )}
               </FormControl>
               
-              {selectedPayeurInfo && (
+              {selectedPayeur && (
                 <Card variant="outlined" sx={{ mt: 2 }}>
                   <CardContent>
-                    <Typography variant="subtitle2" gutterBottom color="primary">
-                      Informations du payeur
+                    <Typography variant="body2">
+                      <strong>Type de payeur:</strong> {selectedPayeur.type_payeur || 'Non spécifié'}
                     </Typography>
-                    <Grid container spacing={1}>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="body2">
-                          <strong>Type de payeur:</strong> {selectedPayeurInfo.type_payeur || 'Non spécifié'}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="body2">
-                          <strong>Taux de couverture:</strong> {selectedPayeurInfo.taux_couverture}%
-                        </Typography>
-                      </Grid>
-                      {selectedPayeurInfo.contact && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="body2">
-                            <strong>Contact:</strong> {selectedPayeurInfo.contact}
-                          </Typography>
-                        </Grid>
-                      )}
-                      {selectedPayeurInfo.telephone && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="body2">
-                            <strong>Téléphone:</strong> {selectedPayeurInfo.telephone}
-                          </Typography>
-                        </Grid>
-                      )}
-                      {selectedPayeurInfo.email && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="body2">
-                            <strong>Email:</strong> {selectedPayeurInfo.email}
-                          </Typography>
-                        </Grid>
-                      )}
-                      {selectedPayeurInfo.adresse && (
-                        <Grid item xs={12}>
-                          <Typography variant="body2">
-                            <strong>Adresse:</strong> {selectedPayeurInfo.adresse}
-                          </Typography>
-                        </Grid>
-                      )}
-                      {selectedPayeurInfo.conditions_paiement && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="body2">
-                            <strong>Conditions de paiement:</strong> {selectedPayeurInfo.conditions_paiement}
-                          </Typography>
-                        </Grid>
-                      )}
-                      {selectedPayeurInfo.delai_paiement !== undefined && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="body2">
-                            <strong>Délai de paiement:</strong> {selectedPayeurInfo.delai_paiement} jours
-                          </Typography>
-                        </Grid>
-                      )}
-                    </Grid>
-                    
+                    <Typography variant="body2">
+                      <strong>Taux de couverture:</strong> {selectedPayeur.taux_couverture}%
+                    </Typography>
                     {grandTotal > 0 && (
-                      <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-                        <Typography variant="subtitle2" gutterBottom color="primary">
-                          Estimation financière
+                      <>
+                        <Typography variant="body2">
+                          <strong>Prise en charge totale estimée:</strong> {formatCurrency(grandPriseEnCharge)}
                         </Typography>
-                        <Grid container spacing={1}>
-                          <Grid item xs={12} sm={6}>
-                            <Typography variant="body2">
-                              <strong>Prise en charge totale estimée:</strong>
-                            </Typography>
-                            <Typography variant="h6" color="success.main">
-                              {formatCurrency(grandPriseEnCharge)}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <Typography variant="body2">
-                              <strong>Reste à charge total:</strong>
-                            </Typography>
-                            <Typography variant="h6" color="error.main">
-                              {formatCurrency(grandReste)}
-                            </Typography>
-                          </Grid>
-                        </Grid>
-                      </Box>
+                        <Typography variant="body2">
+                          <strong>Reste à charge total:</strong> {formatCurrency(grandReste)}
+                        </Typography>
+                      </>
                     )}
                   </CardContent>
                 </Card>
@@ -1212,10 +870,10 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
                         </Grid>
                         <Grid item xs={12} md={6}>
                           <Typography variant="body2" color="text.secondary">
-                            Payeur: {selectedPayeurInfo?.libelle || 'Non sélectionné'}
+                            Payeur: {selectedPayeur?.libelle || 'Non sélectionné'}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            Taux de couverture: {selectedPayeurInfo?.taux_couverture || 0}%
+                            Taux de couverture: {selectedPayeur?.taux_couverture || 0}%
                           </Typography>
                           <Typography variant="body2" color="success.main">
                             Prise en charge: {formatCurrency(totals[factureIndex]?.priseEnCharge || 0)}
@@ -1249,9 +907,6 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
                     <Typography variant="body2">
                       <strong>Reste à charge total:</strong> {formatCurrency(grandReste)}
                     </Typography>
-                    <Typography variant="body2" sx={{ mt: 1, fontSize: '0.875rem' }}>
-                      <strong>Payeur:</strong> {selectedPayeurInfo?.libelle || 'Non sélectionné'}
-                    </Typography>
                   </Grid>
                 </Grid>
               </CardContent>
@@ -1274,86 +929,23 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
                 <Card variant="outlined">
                   <CardContent>
                     <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                      Informations du bénéficiaire
+                      Informations client
                     </Typography>
-                    {selectedBeneficiaireInfo ? (
-                      <>
-                        <Typography variant="body2">
-                          <strong>Nom complet:</strong> {selectedBeneficiaireInfo.nom} {selectedBeneficiaireInfo.prenom}
-                        </Typography>
-                        {selectedBeneficiaireInfo.identifiant && (
-                          <Typography variant="body2">
-                            <strong>Identifiant:</strong> {selectedBeneficiaireInfo.identifiant}
-                          </Typography>
-                        )}
-                        {selectedBeneficiaireInfo.date_naissance && (
-                          <Typography variant="body2">
-                            <strong>Date naissance:</strong> {formatDate(selectedBeneficiaireInfo.date_naissance)}
-                          </Typography>
-                        )}
-                        {selectedBeneficiaireInfo.telephone && (
-                          <Typography variant="body2">
-                            <strong>Téléphone:</strong> {selectedBeneficiaireInfo.telephone}
-                          </Typography>
-                        )}
-                        {selectedBeneficiaireInfo.email && (
-                          <Typography variant="body2">
-                            <strong>Email:</strong> {selectedBeneficiaireInfo.email}
-                          </Typography>
-                        )}
-                        {selectedBeneficiaireInfo.adresse && (
-                          <Typography variant="body2">
-                            <strong>Adresse:</strong> {selectedBeneficiaireInfo.adresse}
-                          </Typography>
-                        )}
-                      </>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        Aucun bénéficiaire sélectionné
-                      </Typography>
-                    )}
-                  </CardContent>
-                </Card>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                      Informations du payeur
+                    <Typography variant="body2">
+                      <strong>Bénéficiaire:</strong> {selectedBeneficiaire ? `${selectedBeneficiaire.nom} ${selectedBeneficiaire.prenom}` : 'Non sélectionné'}
                     </Typography>
-                    {selectedPayeurInfo ? (
-                      <>
-                        <Typography variant="body2">
-                          <strong>Payeur:</strong> {selectedPayeurInfo.libelle || 'Non sélectionné'}
-                        </Typography>
-                        <Typography variant="body2">
-                          <strong>Type payeur:</strong> {selectedPayeurInfo.type_payeur || 'Non spécifié'}
-                        </Typography>
-                        <Typography variant="body2">
-                          <strong>Taux couverture:</strong> {selectedPayeurInfo.taux_couverture || 0}%
-                        </Typography>
-                        {selectedPayeurInfo.contact && (
-                          <Typography variant="body2">
-                            <strong>Contact:</strong> {selectedPayeurInfo.contact}
-                          </Typography>
-                        )}
-                        {selectedPayeurInfo.telephone && (
-                          <Typography variant="body2">
-                            <strong>Téléphone:</strong> {selectedPayeurInfo.telephone}
-                          </Typography>
-                        )}
-                        {selectedPayeurInfo.conditions_paiement && (
-                          <Typography variant="body2">
-                            <strong>Conditions de paiement:</strong> {selectedPayeurInfo.conditions_paiement}
-                          </Typography>
-                        )}
-                      </>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        Aucun payeur sélectionné
-                      </Typography>
-                    )}
+                    <Typography variant="body2">
+                      <strong>Identifiant:</strong> {selectedBeneficiaire?.identifiant || 'Non disponible'}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Payeur:</strong> {selectedPayeur?.libelle || 'Non sélectionné'}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Type payeur:</strong> {selectedPayeur?.type_payeur || 'Non spécifié'}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Taux couverture:</strong> {selectedPayeur?.taux_couverture || 0}%
+                    </Typography>
                   </CardContent>
                 </Card>
               </Grid>
@@ -1372,28 +964,6 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
                     </Typography>
                     <Typography variant="body2">
                       <strong>Observations générales:</strong> {formData.observations || 'Aucune'}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                      Récapitulatif financier
-                    </Typography>
-                    <Typography variant="body2">
-                      <strong>Total général:</strong> {formatCurrency(grandTotal)}
-                    </Typography>
-                    <Typography variant="body2" color="success.main">
-                      <strong>Prise en charge totale:</strong> {formatCurrency(grandPriseEnCharge)}
-                    </Typography>
-                    <Typography variant="body2" color="error.main">
-                      <strong>Reste à charge total:</strong> {formatCurrency(grandReste)}
-                    </Typography>
-                    <Typography variant="body2" sx={{ mt: 1 }}>
-                      <strong>Nombre de factures:</strong> {formData.factures.length}
                     </Typography>
                   </CardContent>
                 </Card>
@@ -1442,6 +1012,34 @@ const FactureDialog = ({ open, mode, data, onClose, onSubmit, loading }) => {
                   </Card>
                 </Grid>
               ))}
+              
+              <Grid item xs={12}>
+                <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
+                  <CardContent>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="subtitle1">
+                          TOTAL GÉNÉRAL
+                        </Typography>
+                        <Typography variant="h5">
+                          {formatCurrency(grandTotal)}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="body2">
+                          Prise en charge totale: {formatCurrency(grandPriseEnCharge)}
+                        </Typography>
+                        <Typography variant="body2">
+                          Reste à charge total: {formatCurrency(grandReste)}
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                          Nombre de factures: {formData.factures.length}
+                        </Typography>
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
+              </Grid>
               
               <Grid item xs={12}>
                 <TextField

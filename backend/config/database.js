@@ -13,6 +13,9 @@ const config = {
     trustServerCertificate: true,
     enableArithAbort: true
   },
+  // Timeouts to reduce chance of hanging requests
+  connectionTimeout: parseInt(process.env.DB_CONN_TIMEOUT) || 30000,
+  requestTimeout: parseInt(process.env.DB_REQUEST_TIMEOUT) || 300000,
   pool: {
     max: 10,
     min: 0,
@@ -27,15 +30,33 @@ const getConnection = async () => {
     if (poolConnection && poolConnection.connected) {
       return poolConnection;
     }
-    
+
+    // If there's an existing pool but it's not connected, try to close it first
+    if (poolConnection && !poolConnection.connected) {
+      try {
+        await poolConnection.close();
+      } catch (e) {
+        // ignore close errors
+      }
+      poolConnection = null;
+    }
+
     console.log('🔄 Connexion à SQL Server...');
     console.log('   Serveur:', config.server);
     console.log('   Base:', config.database);
     console.log('   Utilisateur:', config.user);
-    
-    poolConnection = await sql.connect(config);
+
+    // Use explicit ConnectionPool to attach error handlers
+    const pool = new sql.ConnectionPool(config);
+    pool.on('error', (err) => {
+      console.error('❌ SQL Pool error event:', err && err.message ? err.message : err);
+      // Reset cached connection so next request will reconnect
+      poolConnection = null;
+    });
+
+    poolConnection = await pool.connect();
     console.log('✅ Connecté à SQL Server');
-    
+
     return poolConnection;
   } catch (error) {
     console.error('❌ ERREUR CONNEXION SQL SERVER:');

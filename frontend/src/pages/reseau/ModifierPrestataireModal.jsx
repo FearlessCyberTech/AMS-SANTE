@@ -100,12 +100,28 @@ const ModifierPrestataireModal = ({
       }
       
       // Charger les centres disponibles
-      const allCentresResponse = await centresAPI.getAll();
+      const user = (window && window.localStorage && localStorage.getItem('user')) ? JSON.parse(localStorage.getItem('user')) : null;
+      const userCentreId = user?.centre_id || user?.COD_CEN || user?.prestataire?.centre_id || null;
+      
+      console.log('🔍 Chargement centres pour ModifierPrestataireModal - User:', user, 'Centre ID:', userCentreId);
+      
+      let allCentresResponse;
+      if (user && !user.super_admin && userCentreId) {
+        console.log('👤 Utilisateur non super-admin avec centre ID:', userCentreId);
+        const centreResult = await centresAPI.getById(userCentreId);
+        allCentresResponse = { success: centreResult.success, centres: centreResult.centre ? [centreResult.centre] : (centreResult.centres || []) };
+      } else {
+        console.log('👤 Super-admin ou pas de centre ID, chargement de tous les centres');
+        allCentresResponse = await centresAPI.getAll();
+      }
+      
+      console.log('✅ Réponse centres ModifierPrestataireModal:', allCentresResponse);
+      
       if (allCentresResponse.success) {
         // Filtrer les centres déjà associés
         const centresAssocies = centresResponse.centres || [];
-        const centresDisponibles = allCentresResponse.centres.filter(centre => 
-          !centresAssocies.some(c => c.id === centre.id)
+        const centresDisponibles = (allCentresResponse.centres || []).filter(centre => 
+          !centresAssocies.some(c => c.id === centre.id || c.COD_CEN === centre.COD_CEN)
         );
         setAvailableCentres(centresDisponibles);
       }

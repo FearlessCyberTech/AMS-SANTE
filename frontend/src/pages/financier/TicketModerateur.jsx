@@ -2,537 +2,270 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Table, Card, Tag, Button, Space, Modal, Form,
   Input, Select, Descriptions, message,
-  Statistic, Row, Col, Progress, Timeline, Tabs,
-  DatePicker, Tooltip, Popconfirm, Badge, Alert,
-  Empty, Spin, Divider, FloatButton, Checkbox, Typography
+  Statistic, Row, Col, Progress, Alert,
+  Empty, Divider, FloatButton, Typography,
+  Avatar, Badge, Drawer, notification,
+  DatePicker, Tooltip, Popconfirm, Spin
 } from 'antd';
 import {
   FileTextOutlined, DollarOutlined, CheckCircleOutlined,
   ClockCircleOutlined, EyeOutlined, DownloadOutlined,
-  ExclamationCircleOutlined, CalculatorOutlined,
-  FilterOutlined, ReloadOutlined, ExportOutlined,
-  PercentageOutlined, LineChartOutlined, UserOutlined,
-  WarningOutlined, InfoCircleOutlined, PrinterOutlined,
-  FilePdfOutlined, IdcardOutlined, MedicineBoxOutlined,
-  SettingOutlined, CopyOutlined, ShareAltOutlined,
-  QrcodeOutlined, SyncOutlined, BankOutlined,
-  FileExcelOutlined, AppstoreOutlined, TeamOutlined,
-  SearchOutlined, FileAddOutlined
+  ExclamationCircleOutlined, FilterOutlined, ReloadOutlined,
+  ExportOutlined, UserOutlined, WarningOutlined,
+  InfoCircleOutlined, PrinterOutlined, MedicineBoxOutlined,
+  SettingOutlined, FileExcelOutlined, TeamOutlined,
+  SearchOutlined, FileAddOutlined, SafetyOutlined
 } from '@ant-design/icons';
 import moment from 'moment';
-import { financesAPI, remboursementsAPI } from '../../services/api';
+import { financesAPI, beneficiairesAPI } from '../../services/api';
+import './TicketsModerateurs.css';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
 const { RangePicker } = DatePicker;
 
-// Composant Ticket Modérateur optimisé pour impression avec données réelles
-const TicketModerateurPrint = React.forwardRef(({ ticket, config }, ref) => {
-  // Calculer le ticket modérateur à partir des données
-  const montantTotal = ticket.montant_total || ticket.MONTANT_TOTAL || 0;
-  const tauxPriseCharge = ticket.taux_prise_charge || ticket.TAUX_PRISE_CHARGE || 0;
-  const montantPriseCharge = ticket.montant_prise_charge || ticket.MONTANT_PRISE_CHARGE || (montantTotal * tauxPriseCharge / 100);
-  const montantTicket = ticket.montant_ticket || ticket.MONTANT_TICKET || (montantTotal - montantPriseCharge);
+// Fonction utilitaire pour nettoyer les chaînes de caractères
+const cleanStringValue = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number') return String(value);
+  return String(value || '');
+};
+
+// Fonction utilitaire pour formater les montants
+const formatMontant = (montant) => {
+  const num = parseFloat(montant) || 0;
+  return num.toLocaleString('fr-FR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }) + ' FCFA';
+};
+
+// Fonction pour debugger les calculs
+const debugCalculs = (data, ticketId) => {
+  console.log('=== DEBUG CALCULS POUR TICKET ===');
+  console.log('Ticket ID:', ticketId);
+  console.log('Données brutes:', {
+    montant_total: data.montant_total,
+    taux_couverture: data.taux_couverture,
+    montant_couvert: data.montant_couvert,
+    montant_restant: data.montant_restant,
+    MONTANT_TOTAL: data.MONTANT_TOTAL,
+    TAUX_PRISE_CHARGE: data.TAUX_PRISE_CHARGE,
+    MONTANT_PRISE_CHARGE: data.MONTANT_PRISE_CHARGE,
+    MONTANT_TICKET: data.MONTANT_TICKET
+  });
+  
+  const montantTotal = parseFloat(data.montant_total || data.MONTANT_TOTAL || 0);
+  const taux = parseFloat(data.taux_couverture || data.TAUX_PRISE_CHARGE || 0);
+  
+  console.log('Calculs intermédiaires:', {
+    montantTotal,
+    tauxOriginal: taux,
+    tauxPourCalcul: taux > 1 ? taux / 100 : taux,
+    montantPriseChargeCalc: montantTotal * (taux > 1 ? taux / 100 : taux),
+    montantTicketCalc: montantTotal - (montantTotal * (taux > 1 ? taux / 100 : taux))
+  });
+};
+
+// Fonction utilitaire pour valider les données API
+const validateApiData = (data) => {
+  if (!data || typeof data !== 'object') return null;
+  
+  // Pour debugger
+  if (data.id === 'ID_DU_TICKET_A_DEBUGGER') {
+    debugCalculs(data, data.id);
+  }
+  
+  // Récupérer l'ID principal
+  const id = cleanStringValue(data.id || data._id || data.factureId || `tm-${Date.now()}-${Math.random()}`);
+  
+  // Récupérer le numéro de facture (priorité: numeroFacture, puis COD_TICKET, puis id)
+  const numeroFacture = cleanStringValue(data.numeroFacture || data.numero_facture || data.COD_TICKET || data.ticketCode || id);
+  
+  // Récupérer le montant total
+  const montantTotal = parseFloat(data.montant_total || data.MONTANT_TOTAL || data.montant || data.montantTicket || 0) || 0;
+  
+  // Récupérer le taux de couverture
+  let tauxPriseCharge = parseFloat(data.taux_couverture || data.TAUX_PRISE_CHARGE || data.tauxCouverture || 0) || 0;
+  
+  // DÉTERMINER SI LE TAUX EST EN POURCENTAGE OU DÉCIMAL
+  // Si le taux est > 1, on suppose que c'est un pourcentage (ex: 80 pour 80%)
+  // Sinon, on suppose que c'est un décimal (ex: 0.8 pour 80%)
+  const isPourcentage = tauxPriseCharge > 1;
+  const tauxDecimal = isPourcentage ? tauxPriseCharge / 100 : tauxPriseCharge;
+  
+  // Calculer le montant pris en charge
+  const montantPriseChargeCalc = montantTotal * tauxDecimal;
+  const montantPriseCharge = parseFloat(
+    data.montant_couvert || 
+    data.MONTANT_PRISE_CHARGE || 
+    data.montantCouvert || 
+    montantPriseChargeCalc
+  ) || 0;
+  
+  // Calculer le montant du ticket modérateur
+  const montantTicketCalc = montantTotal - montantPriseCharge;
+  const montantTicket = parseFloat(
+    data.montant_restant || 
+    data.montant_ticket || 
+    data.MONTANT_TICKET || 
+    data.ticketModerateur || 
+    montantTicketCalc
+  ) || 0;
+  
+  // Pour l'affichage, on veut le taux en pourcentage
+  const tauxPourAffichage = isPourcentage ? tauxPriseCharge : (tauxPriseCharge * 100);
+  
+  // Log de vérification
+  console.log('Ticket calculé:', {
+    id,
+    montantTotal,
+    tauxBrut: tauxPriseCharge,
+    tauxPourAffichage,
+    tauxDecimal,
+    montantPriseCharge,
+    montantTicket
+  });
+  
+  return {
+    // Identifiants (correctement formatés)
+    id,
+    COD_TICKET: numeroFacture,
+    COD_DECL: cleanStringValue(data.numero_declaration || data.COD_DECL || data.declaration_id || data.declarationId || id),
+    
+    // Bénéficiaire - chercher dans plusieurs champs possibles
+    NOM_BEN: cleanStringValue(data.nom || data.beneficiaire_nom || data.NOM_BEN || data.nomBen || data.nom_ben || 'Non spécifié'),
+    PRE_BEN: cleanStringValue(data.prenom || data.beneficiaire_prenom || data.PRE_BEN || data.prenomBen || data.prenom_ben || ''),
+    IDENTIFIANT_NATIONAL: cleanStringValue(data.patient_identifiant || data.IDENTIFIANT_NATIONAL || data.identifiant || data.matricule || data.COD_BEN || 'N/A'),
+    
+    // Médical
+    CENTRE_SANTE: cleanStringValue(data.centre_nom || data.CENTRE_SANTE || data.centre || data.centreSante || 'Centre non spécifié'),
+    MEDECIN: cleanStringValue(data.medecin_nom || data.MEDECIN || data.medecin || 'Médecin non spécifié'),
+    SPECIALITE: cleanStringValue(data.specialite || data.SPECIALITE || 'Généraliste'),
+    CATEGORIE: cleanStringValue(data.type_facture || data.CATEGORIE || data.type || 'consultation'),
+    
+    // Financier - CORRECTIONS APPLIQUÉES
+    MONTANT_TOTAL: montantTotal,
+    TAUX_PRISE_CHARGE: tauxPourAffichage, // Toujours en pourcentage pour l'affichage
+    MONTANT_PRISE_CHARGE: montantPriseCharge,
+    MONTANT_TICKET: montantTicket,
+    
+    // Statut
+    STATUT: cleanStringValue(data.statut || data.STATUT || data.etat || 'en_attente'),
+    
+    // Dates
+    DATE_CREATION: data.date_creation || data.DATE_CREATION || data.createdAt || new Date().toISOString(),
+    DATE_CONSULTATION: data.date_consultation || data.DATE_CONSULTATION || data.dateFacture,
+    DATE_PAIEMENT: data.date_paiement || data.DATE_PAIEMENT,
+    
+    // Autres
+    RAISON: cleanStringValue(data.motif || data.RAISON || data.observations || data.description || ''),
+    NB_ITEMS_TICKET: parseInt(data.nb_elements || data.NB_ITEMS || 1) || 1,
+    
+    // Données brutes complètes
+    rawData: data
+  };
+};
+
+// Composant Ticket Modérateur optimisé pour impression
+const TicketModerateurPrint = React.forwardRef(({ ticket }, ref) => {
+  if (!ticket) return null;
+  
+  // Calculs basés sur les données validées
+  const montantTotal = ticket.MONTANT_TOTAL || 0;
+  const tauxPriseCharge = ticket.TAUX_PRISE_CHARGE || 0;
+  const montantPriseCharge = ticket.MONTANT_PRISE_CHARGE || (montantTotal * (tauxPriseCharge / 100));
+  const montantTicket = ticket.MONTANT_TICKET || (montantTotal - montantPriseCharge);
+  
+  // Déterminer la couleur du statut
+  const getStatutColor = () => {
+    const statut = (ticket.STATUT || '').toLowerCase();
+    if (statut.includes('payé') || statut.includes('validé')) return '#52c41a';
+    if (statut.includes('attente')) return '#fa8c16';
+    if (statut.includes('exempte')) return '#1890ff';
+    if (statut.includes('rejeté') || statut.includes('annulé')) return '#ff4d4f';
+    return '#666';
+  };
 
   return (
-    <div 
-      ref={ref}
-      style={{
-        width: '210mm',
-        minHeight: '297mm',
-        margin: '0 auto',
-        padding: '20mm',
-        fontFamily: 'Arial, sans-serif',
-        fontSize: '12pt',
-        lineHeight: '1.4',
-        color: '#000',
-        backgroundColor: '#fff',
-        boxSizing: 'border-box',
-        pageBreakInside: 'avoid',
-        pageBreakAfter: 'avoid',
-        border: '1px solid #ddd'
-      }}
-    >
-      {/* En-tête HCS Finances */}
-      <div style={{ 
-        textAlign: 'center', 
-        marginBottom: '15mm',
-        borderBottom: '2px solid #1890ff',
-        paddingBottom: '5mm'
-      }}>
-        <div style={{ 
-          fontSize: '24pt', 
-          fontWeight: 'bold', 
-          color: '#1890ff',
-          marginBottom: '5mm'
-        }}>
-          HCS FINANCES
-        </div>
-        <div style={{ fontSize: '14pt', color: '#666' }}>
-          Système de Gestion des Tickets Modérateurs
-        </div>
-        <div style={{ fontSize: '10pt', color: '#999', marginTop: '2mm' }}>
-          123 Avenue de la Boite, 75005 Paris | Tel. +33 1 23 45 67 89
-        </div>
+    <div ref={ref} className="ticket-print">
+      <div className="ticket-header">
+        <div className="ticket-title">HCS FINANCES</div>
+        <div className="ticket-subtitle">Système de Gestion des Tickets Modérateurs</div>
       </div>
       
-      {/* Titre principal */}
-      <div style={{ 
-        textAlign: 'center', 
-        marginBottom: '10mm',
-        backgroundColor: '#f0f8ff',
-        padding: '8mm',
-        borderRadius: '5mm'
-      }}>
-        <h1 style={{ 
-          fontSize: '28pt', 
-          margin: 0, 
-          fontWeight: 'bold',
-          color: '#000',
-          textTransform: 'uppercase',
-          letterSpacing: '2px'
-        }}>
-          TICKET MODÉRATEUR
-        </h1>
-        <div style={{ fontSize: '14pt', color: '#666', marginTop: '3mm' }}>
-          Référence: <strong style={{ color: '#1890ff' }}>{ticket.COD_TICKET || ticket.cod_ticket || ticket.id}</strong>
+      <div className="ticket-main-title">
+        <h1>TICKET MODÉRATEUR</h1>
+        <div className="ticket-reference">
+          Référence: <strong>{ticket.COD_TICKET}</strong>
         </div>
-        <div style={{ fontSize: '12pt', color: '#999', marginTop: '2mm' }}>
+        <div className="ticket-date">
           Date d'émission: {moment().format('DD/MM/YYYY HH:mm')}
         </div>
       </div>
       
-      {/* Section Informations */}
-      <div style={{ 
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: '10mm',
-        marginBottom: '10mm'
-      }}>
-        {/* Informations Bénéficiaire */}
-        <div style={{ 
-          flex: '1 1 300px',
-          backgroundColor: '#f9f9f9',
-          padding: '8mm',
-          borderRadius: '5mm',
-          border: '1px solid #e8e8e8'
-        }}>
-          <h2 style={{ 
-            fontSize: '16pt', 
-            margin: '0 0 5mm 0',
-            color: '#1890ff',
-            fontWeight: 'bold',
-            borderBottom: '1px solid #1890ff',
-            paddingBottom: '2mm'
-          }}>
-            <UserOutlined style={{ marginRight: '5mm' }} />
-            BÉNÉFICIAIRE
-          </h2>
-          
-          <div style={{ marginBottom: '3mm' }}>
-            <div style={{ fontSize: '11pt', color: '#666', marginBottom: '1mm' }}>
-              Nom et Prénom
-            </div>
-            <div style={{ 
-              fontSize: '14pt', 
-              fontWeight: 'bold',
-              padding: '2mm',
-              backgroundColor: '#fff',
-              borderRadius: '2mm',
-              borderLeft: '3px solid #1890ff'
-            }}>
-              {ticket.nom_ben || ticket.NOM_BEN || ticket.beneficiaire_nom || 'Non spécifié'} {ticket.prenom_ben || ticket.PRE_BEN || ticket.beneficiaire_prenom || ''}
+      <div className="ticket-sections">
+        <div className="ticket-section">
+          <h2><UserOutlined /> BÉNÉFICIAIRE</h2>
+          <div className="ticket-field">
+            <label>Nom et Prénom</label>
+            <div className="ticket-value highlighted">
+              {ticket.NOM_BEN} {ticket.PRE_BEN}
             </div>
           </div>
-          
-          <div style={{ marginBottom: '3mm' }}>
-            <div style={{ fontSize: '11pt', color: '#666', marginBottom: '1mm' }}>
-              Identifiant National
-            </div>
-            <div style={{ 
-              fontSize: '12pt',
-              padding: '2mm',
-              backgroundColor: '#fff',
-              borderRadius: '2mm'
-            }}>
-              {ticket.identifiant_national || ticket.IDENTIFIANT_NATIONAL || ticket.patient_identifiant || 'Non spécifié'}
-            </div>
-          </div>
-          
-          <div style={{ marginBottom: '3mm' }}>
-            <div style={{ fontSize: '11pt', color: '#666', marginBottom: '1mm' }}>
-              Date de Naissance
-            </div>
-            <div style={{ 
-              fontSize: '12pt',
-              padding: '2mm',
-              backgroundColor: '#fff',
-              borderRadius: '2mm'
-            }}>
-              {ticket.date_naissance ? moment(ticket.date_naissance).format('DD/MM/YYYY') : 'Non spécifiée'}
-            </div>
-          </div>
-          
-          <div>
-            <div style={{ fontSize: '11pt', color: '#666', marginBottom: '1mm' }}>
-              Âge
-            </div>
-            <div style={{ 
-              fontSize: '12pt',
-              padding: '2mm',
-              backgroundColor: '#fff',
-              borderRadius: '2mm'
-            }}>
-              {ticket.age || 'Non spécifié'}
-            </div>
+          <div className="ticket-field">
+            <label>Identifiant</label>
+            <div className="ticket-value">{ticket.IDENTIFIANT_NATIONAL}</div>
           </div>
         </div>
         
-        {/* Informations Consultation */}
-        <div style={{ 
-          flex: '1 1 300px',
-          backgroundColor: '#f9f9f9',
-          padding: '8mm',
-          borderRadius: '5mm',
-          border: '1px solid #e8e8e8'
-        }}>
-          <h2 style={{ 
-            fontSize: '16pt', 
-            margin: '0 0 5mm 0',
-            color: '#1890ff',
-            fontWeight: 'bold',
-            borderBottom: '1px solid #1890ff',
-            paddingBottom: '2mm'
-          }}>
-            <FileTextOutlined style={{ marginRight: '5mm' }} />
-            CONSULTATION
-          </h2>
-          
-          <div style={{ marginBottom: '3mm' }}>
-            <div style={{ fontSize: '11pt', color: '#666', marginBottom: '1mm' }}>
-              Date de Consultation
-            </div>
-            <div style={{ 
-              fontSize: '14pt', 
-              fontWeight: 'bold',
-              padding: '2mm',
-              backgroundColor: '#fff',
-              borderRadius: '2mm',
-              borderLeft: '3px solid #1890ff'
-            }}>
-              {ticket.date_consultation ? moment(ticket.date_consultation).format('DD/MM/YYYY') : 
-               ticket.DATE_CREATION ? moment(ticket.DATE_CREATION).format('DD/MM/YYYY') : 
-               moment().format('DD/MM/YYYY')}
+        <div className="ticket-section">
+          <h2><FileTextOutlined /> CONSULTATION</h2>
+          <div className="ticket-field">
+            <label>Date</label>
+            <div className="ticket-value highlighted">
+              {ticket.DATE_CONSULTATION ? moment(ticket.DATE_CONSULTATION).format('DD/MM/YYYY') : moment().format('DD/MM/YYYY')}
             </div>
           </div>
-          
-          <div style={{ marginBottom: '3mm' }}>
-            <div style={{ fontSize: '11pt', color: '#666', marginBottom: '1mm' }}>
-              Médecin Consulté
-            </div>
-            <div style={{ 
-              fontSize: '12pt',
-              padding: '2mm',
-              backgroundColor: '#fff',
-              borderRadius: '2mm'
-            }}>
-              {ticket.medecin || ticket.MEDECIN || ticket.medecin_nom || 'Non spécifié'}
-            </div>
-          </div>
-          
-          <div style={{ marginBottom: '3mm' }}>
-            <div style={{ fontSize: '11pt', color: '#666', marginBottom: '1mm' }}>
-              Spécialité
-            </div>
-            <div style={{ 
-              fontSize: '12pt',
-              padding: '2mm',
-              backgroundColor: '#fff',
-              borderRadius: '2mm'
-            }}>
-              {ticket.specialite || 'Non spécifié'}
-            </div>
-          </div>
-          
-          <div>
-            <div style={{ fontSize: '11pt', color: '#666', marginBottom: '1mm' }}>
-              Centre Médical
-            </div>
-            <div style={{ 
-              fontSize: '12pt',
-              padding: '2mm',
-              backgroundColor: '#fff',
-              borderRadius: '2mm'
-            }}>
-              {ticket.centre_sante || ticket.CENTRE_SANTE || ticket.centre_nom || 'Non spécifié'}
-            </div>
+          <div className="ticket-field">
+            <label>Médecin</label>
+            <div className="ticket-value">{ticket.MEDECIN}</div>
           </div>
         </div>
       </div>
       
-      {/* Informations Médicales */}
-      <div style={{ 
-        backgroundColor: '#f8f9fa',
-        padding: '8mm',
-        borderRadius: '5mm',
-        marginBottom: '10mm',
-        border: '1px solid #e8e8e8'
-      }}>
-        <h2 style={{ 
-          fontSize: '16pt', 
-          margin: '0 0 5mm 0',
-          color: '#1890ff',
-          fontWeight: 'bold',
-          borderBottom: '1px solid #1890ff',
-          paddingBottom: '2mm'
-        }}>
-          <MedicineBoxOutlined style={{ marginRight: '5mm' }} />
-          INFORMATIONS MÉDICALES
-        </h2>
+      <div className="ticket-financial">
+        <h2><DollarOutlined /> DÉCOMPTE FINANCIER</h2>
         
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10mm' }}>
-          <div style={{ flex: '1 1 200px' }}>
-            <div style={{ fontSize: '12pt', fontWeight: 'bold', marginBottom: '2mm' }}>
-              Type de Facture
-            </div>
-            <div style={{ 
-              padding: '3mm',
-              backgroundColor: '#fff',
-              borderRadius: '2mm',
-              border: '1px solid #ddd'
-            }}>
-              {ticket.type_facture || ticket.CATEGORIE || 'Consultation'}
-            </div>
+        <div className="financial-grid">
+          <div className="financial-item total">
+            <div className="financial-label">Montant Total</div>
+            <div className="financial-amount">{formatMontant(montantTotal)}</div>
           </div>
           
-          <div style={{ flex: '1 1 200px' }}>
-            <div style={{ fontSize: '12pt', fontWeight: 'bold', marginBottom: '2mm' }}>
-              Statut
-            </div>
-            <div style={{ 
-              padding: '3mm',
-              backgroundColor: '#fff',
-              borderRadius: '2mm',
-              border: '1px solid #ddd'
-            }}>
-              {ticket.statut || ticket.STATUT || 'En attente'}
-            </div>
+          <div className="financial-item taux">
+            <div className="financial-label">Taux Couverture</div>
+            <div className="financial-amount">{tauxPriseCharge.toFixed(1)}%</div>
+          </div>
+          
+          <div className="financial-item couvert">
+            <div className="financial-label">Montant Couvert</div>
+            <div className="financial-amount">{formatMontant(montantPriseCharge)}</div>
           </div>
         </div>
         
-        <div style={{ marginTop: '5mm' }}>
-          <div style={{ fontSize: '12pt', fontWeight: 'bold', marginBottom: '2mm' }}>
-            Observations / Motif
-          </div>
-          <div style={{ 
-            padding: '4mm',
-            backgroundColor: '#fff',
-            borderRadius: '3mm',
-            border: '1px solid #ddd',
-            minHeight: '20mm',
-            whiteSpace: 'pre-wrap'
-          }}>
-            {ticket.observations || ticket.RAISON || ticket.motif || 'Aucune observation'}
-          </div>
+        <div className="ticket-moderateur">
+          <div className="ticket-moderateur-label">TICKET MODÉRATEUR À PAYER</div>
+          <div className="ticket-moderateur-amount">{formatMontant(montantTicket)}</div>
+          <div className="ticket-moderateur-note">Part restant à la charge du patient</div>
         </div>
       </div>
       
-      {/* Détails Financiers */}
-      <div style={{ 
-        backgroundColor: '#fff',
-        padding: '8mm',
-        borderRadius: '5mm',
-        marginBottom: '10mm',
-        border: '2px solid #1890ff'
-      }}>
-        <h2 style={{ 
-          fontSize: '18pt', 
-          margin: '0 0 8mm 0',
-          color: '#1890ff',
-          fontWeight: 'bold',
-          textAlign: 'center'
-        }}>
-          <DollarOutlined style={{ marginRight: '5mm' }} />
-          DÉCOMPTE FINANCIER
-        </h2>
-        
-        <div style={{ 
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '8mm',
-          marginBottom: '8mm'
-        }}>
-          {/* Montant Total */}
-          <div style={{ 
-            flex: '1 1 150px',
-            backgroundColor: '#f0f0f0',
-            padding: '5mm',
-            borderRadius: '3mm',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '12pt', color: '#666', marginBottom: '2mm' }}>
-              Montant Total
-            </div>
-            <div style={{ fontSize: '20pt', fontWeight: 'bold', color: '#000' }}>
-              {montantTotal.toLocaleString('fr-FR')} FCFA
-            </div>
-          </div>
-          
-          {/* Taux Couverture */}
-          <div style={{ 
-            flex: '1 1 150px',
-            backgroundColor: '#e6f7ff',
-            padding: '5mm',
-            borderRadius: '3mm',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '12pt', color: '#666', marginBottom: '2mm' }}>
-              Taux Couverture
-            </div>
-            <div style={{ fontSize: '20pt', fontWeight: 'bold', color: '#1890ff' }}>
-              {tauxPriseCharge}%
-            </div>
-          </div>
-          
-          {/* Montant Couvert */}
-          <div style={{ 
-            flex: '1 1 150px',
-            backgroundColor: '#f6ffed',
-            padding: '5mm',
-            borderRadius: '3mm',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '12pt', color: '#666', marginBottom: '2mm' }}>
-              Montant Couvert
-            </div>
-            <div style={{ fontSize: '20pt', fontWeight: 'bold', color: '#52c41a' }}>
-              {montantPriseCharge.toLocaleString('fr-FR')} FCFA
-            </div>
-          </div>
-        </div>
-        
-        {/* Ticket Modérateur */}
-        <div style={{ 
-          backgroundColor: '#fff7e6',
-          border: '3px solid #fa8c16',
-          padding: '10mm',
-          borderRadius: '5mm',
-          textAlign: 'center',
-          marginTop: '5mm'
-        }}>
-          <div style={{ fontSize: '14pt', color: '#d46b08', marginBottom: '3mm', fontWeight: 'bold' }}>
-            TICKET MODÉRATEUR À PAYER
-          </div>
-          <div style={{ fontSize: '32pt', fontWeight: 'bold', color: '#fa8c16' }}>
-            {montantTicket.toLocaleString('fr-FR')} FCFA
-          </div>
-          <div style={{ fontSize: '12pt', color: '#d46b08', marginTop: '3mm' }}>
-            Part restant à la charge du patient
-          </div>
-        </div>
-      </div>
-      
-      {/* Signatures */}
-      <div style={{ 
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-end',
-        marginTop: '15mm',
-        pageBreakBefore: 'avoid'
-      }}>
-        {/* Statut */}
-        <div style={{ flex: 1 }}>
-          <div style={{ 
-            display: 'inline-block',
-            padding: '3mm 6mm',
-            backgroundColor: ticket.statut === 'payé' || ticket.STATUT === 'Payé' ? '#d9f7be' : 
-                           ticket.statut === 'en_attente' || ticket.STATUT === 'En attente' ? '#fff7e6' : 
-                           ticket.statut === 'exempte' || ticket.STATUT === 'Exempte' ? '#e6f7ff' : '#ffccc7',
-            border: `2px solid ${
-              ticket.statut === 'payé' || ticket.STATUT === 'Payé' ? '#52c41a' :
-              ticket.statut === 'en_attente' || ticket.STATUT === 'En attente' ? '#fa8c16' :
-              ticket.statut === 'exempte' || ticket.STATUT === 'Exempte' ? '#1890ff' : '#ff4d4f'
-            }`,
-            borderRadius: '3mm'
-          }}>
-            <div style={{ fontSize: '12pt', color: '#666', marginBottom: '1mm' }}>
-              Statut du Paiement:
-            </div>
-            <div style={{ 
-              fontSize: '16pt', 
-              fontWeight: 'bold',
-              color: ticket.statut === 'payé' || ticket.STATUT === 'Payé' ? '#52c41a' :
-                     ticket.statut === 'en_attente' || ticket.STATUT === 'En attente' ? '#fa8c16' :
-                     ticket.statut === 'exempte' || ticket.STATUT === 'Exempte' ? '#1890ff' : '#ff4d4f'
-            }}>
-              {ticket.statut || ticket.STATUT || 'À payer'}
-            </div>
-          </div>
-        </div>
-        
-        {/* Signatures */}
-        <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{ fontSize: '10pt', color: '#666', marginBottom: '10mm' }}>
-            Date d'impression: {moment().format('DD/MM/YYYY HH:mm')}
-          </div>
-          
-          <div style={{ display: 'flex', justifyContent: 'space-around', gap: '10mm' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ 
-                width: '60mm', 
-                height: '15mm',
-                borderBottom: '2px solid #000',
-                marginBottom: '3mm'
-              }}></div>
-              <div style={{ fontSize: '10pt', color: '#666' }}>
-                Signature du Bénéficiaire
-              </div>
-              <div style={{ fontSize: '9pt', color: '#999' }}>
-                Nom et prénom en majuscules
-              </div>
-            </div>
-            
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ 
-                width: '60mm', 
-                height: '15mm',
-                borderBottom: '2px solid #000',
-                marginBottom: '3mm'
-              }}></div>
-              <div style={{ fontSize: '10pt', color: '#666' }}>
-                Cachet et Signature du Responsable
-              </div>
-              <div style={{ fontSize: '9pt', color: '#999' }}>
-                HCS Finances
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Pied de page */}
-      <div style={{ 
-        marginTop: '15mm',
-        paddingTop: '5mm',
-        borderTop: '1px solid #ddd',
-        fontSize: '9pt',
-        color: '#666',
-        textAlign: 'center',
-        pageBreakAfter: 'avoid'
-      }}>
-        <div style={{ marginBottom: '2mm' }}>
-          <strong>HCS Finances - Système de Gestion des Tickets Modérateurs</strong>
-        </div>
-        <div style={{ marginBottom: '2mm' }}>
-          Document officiel - Conservation recommandée: 5 ans
-        </div>
-        <div style={{ marginBottom: '2mm' }}>
-          Service client: contact@hcsfinances.com | +33 1 23 45 67 89
-        </div>
-        <div style={{ fontSize: '8pt', color: '#999', marginTop: '3mm' }}>
-          Ce ticket est généré automatiquement et ne nécessite pas de signature manuscrite pour validation
-        </div>
+      <div className="ticket-footer">
+        <div>Document officiel - HCS Finances</div>
+        <div>Conservation recommandée: 5 ans</div>
       </div>
     </div>
   );
@@ -540,16 +273,24 @@ const TicketModerateurPrint = React.forwardRef(({ ticket, config }, ref) => {
 
 TicketModerateurPrint.displayName = 'TicketModerateurPrint';
 
-// Composant de recherche amélioré
-const EnhancedSearch = ({ onSearch, onFilterChange, onDateChange }) => {
+// Composant de recherche
+const EnhancedSearch = ({ onSearch, onFilterChange, onDateChange, loading }) => {
   const [searchText, setSearchText] = useState('');
   const [filters, setFilters] = useState({
     statut: 'all',
-    type_facture: 'all'
+    categorie: 'all',
+    tri: 'date_desc'
   });
   
   const handleSearch = () => {
     onSearch(searchText);
+  };
+  
+  const handleReset = () => {
+    setSearchText('');
+    setFilters({ statut: 'all', categorie: 'all', tri: 'date_desc' });
+    onSearch('');
+    onFilterChange({ statut: 'all', categorie: 'all', tri: 'date_desc' });
   };
   
   const handleFilterChange = (key, value) => {
@@ -559,9 +300,9 @@ const EnhancedSearch = ({ onSearch, onFilterChange, onDateChange }) => {
   };
   
   return (
-    <Card size="small" style={{ marginBottom: 16 }}>
+    <Card className="search-card" size="small">
       <Row gutter={[16, 16]} align="middle">
-        <Col xs={24} sm={12} md={6}>
+        <Col xs={24} sm={12} md={8}>
           <Input.Search
             placeholder="Rechercher par nom, ID, référence..."
             allowClear
@@ -569,18 +310,20 @@ const EnhancedSearch = ({ onSearch, onFilterChange, onDateChange }) => {
             onChange={(e) => setSearchText(e.target.value)}
             onSearch={handleSearch}
             prefix={<SearchOutlined />}
-            style={{ width: '100%' }}
+            disabled={loading}
+            enterButton
           />
         </Col>
         
-        <Col xs={24} sm={12} md={6}>
+        <Col xs={24} sm={12} md={4}>
           <Select
             value={filters.statut}
             style={{ width: '100%' }}
             onChange={(value) => handleFilterChange('statut', value)}
             suffixIcon={<FilterOutlined />}
+            disabled={loading}
           >
-            <Option value="all">Tous les statuts</Option>
+            <Option value="all">Tous statuts</Option>
             <Option value="en_attente">En attente</Option>
             <Option value="payé">Payé</Option>
             <Option value="validé">Validé</Option>
@@ -588,11 +331,12 @@ const EnhancedSearch = ({ onSearch, onFilterChange, onDateChange }) => {
           </Select>
         </Col>
         
-        <Col xs={24} sm={12} md={6}>
+        <Col xs={24} sm={12} md={4}>
           <Select
-            value={filters.type_facture}
+            value={filters.categorie}
             style={{ width: '100%' }}
-            onChange={(value) => handleFilterChange('type_facture', value)}
+            onChange={(value) => handleFilterChange('categorie', value)}
+            disabled={loading}
           >
             <Option value="all">Tous types</Option>
             <Option value="consultation">Consultation</Option>
@@ -602,12 +346,27 @@ const EnhancedSearch = ({ onSearch, onFilterChange, onDateChange }) => {
           </Select>
         </Col>
         
-        <Col xs={24} sm={12} md={6}>
+        <Col xs={24} sm={12} md={4}>
+          <Select
+            value={filters.tri}
+            style={{ width: '100%' }}
+            onChange={(value) => handleFilterChange('tri', value)}
+            disabled={loading}
+          >
+            <Option value="date_desc">Date ↓</Option>
+            <Option value="date_asc">Date ↑</Option>
+            <Option value="montant_desc">Montant ↓</Option>
+            <Option value="montant_asc">Montant ↑</Option>
+          </Select>
+        </Col>
+        
+        <Col xs={24} sm={12} md={4}>
           <RangePicker
             style={{ width: '100%' }}
             format="DD/MM/YYYY"
-            placeholder={['Date début', 'Date fin']}
+            placeholder={['Début', 'Fin']}
             onChange={onDateChange}
+            disabled={loading}
           />
         </Col>
       </Row>
@@ -615,13 +374,22 @@ const EnhancedSearch = ({ onSearch, onFilterChange, onDateChange }) => {
   );
 };
 
-// Composant principal avec données réelles
+// Composant principal
 const GestionTicketsModerateurs = () => {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [printModal, setPrintModal] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [paiementModalVisible, setPaiementModalVisible] = useState(false);
+  const [beneficiaires, setBeneficiaires] = useState([]);
+  const [loadingBeneficiaires, setLoadingBeneficiaires] = useState(false);
+  
+  // États pour tester les calculs
+  const [testMontant, setTestMontant] = useState('');
+  const [testTaux, setTestTaux] = useState('');
+  
   const [stats, setStats] = useState({
     total: 0,
     enAttente: 0,
@@ -632,42 +400,71 @@ const GestionTicketsModerateurs = () => {
   
   const [searchParams, setSearchParams] = useState({
     searchTerm: '',
-    filters: {},
+    filters: {
+      statut: 'all',
+      categorie: 'all',
+      tri: 'date_desc'
+    },
     dateRange: null
   });
   
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
-    total: 0
+    total: 0,
+    showSizeChanger: true,
+    showQuickJumper: true,
+    pageSizeOptions: ['10', '20', '50', '100']
   });
   
-  const [createModalVisible, setCreateModalVisible] = useState(false);
   const [createForm] = Form.useForm();
-  
+  const [paiementForm] = Form.useForm();
   const componentRef = useRef();
+
+  // Charger les bénéficiaires pour le formulaire de création
+  const loadBeneficiaires = useCallback(async () => {
+    try {
+      setLoadingBeneficiaires(true);
+      console.log('Chargement des bénéficiaires...');
+      
+      // Utiliser l'API bénéficiaires pour récupérer la liste
+      const response = await beneficiairesAPI.getAll({ 
+        limit: 100, // Limiter à 100 bénéficiaires pour la performance
+        active: true // Seulement les bénéficiaires actifs
+      });
+      
+      console.log('Réponse bénéficiaires:', response);
+      
+      if (response?.success && Array.isArray(response.beneficiaires)) {
+        setBeneficiaires(response.beneficiaires);
+        console.log(`${response.beneficiaires.length} bénéficiaires chargés`);
+      } else {
+        message.warning('Aucun bénéficiaire trouvé ou format de données invalide');
+        setBeneficiaires([]);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des bénéficiaires:', error);
+      message.error('Erreur lors du chargement des bénéficiaires');
+      setBeneficiaires([]);
+    } finally {
+      setLoadingBeneficiaires(false);
+    }
+  }, []);
 
   // Charger les tickets depuis l'API
   const loadTickets = useCallback(async () => {
     setLoading(true);
     try {
-      // Construire les paramètres de requête
       const params = {
         page: pagination.current,
-        limit: pagination.pageSize
+        limit: pagination.pageSize,
+        statut: searchParams.filters.statut !== 'all' ? searchParams.filters.statut : undefined,
+        type: searchParams.filters.categorie !== 'all' ? searchParams.filters.categorie : undefined
       };
       
-      // Ajouter les filtres
-      if (searchParams.filters.statut && searchParams.filters.statut !== 'all') {
-        params.statut = searchParams.filters.statut;
-      }
-      
-      if (searchParams.filters.type_facture && searchParams.filters.type_facture !== 'all') {
-        params.type_facture = searchParams.filters.type_facture;
-      }
-      
+      // Ajouter les paramètres de recherche
       if (searchParams.searchTerm) {
-        params.search = searchParams.searchTerm;
+        params.search = cleanStringValue(searchParams.searchTerm);
       }
       
       if (searchParams.dateRange && searchParams.dateRange[0] && searchParams.dateRange[1]) {
@@ -675,113 +472,121 @@ const GestionTicketsModerateurs = () => {
         params.date_fin = searchParams.dateRange[1].format('YYYY-MM-DD');
       }
       
-      // Appeler l'API financesAPI (getDeclarations)
+      // Appeler l'API avec gestion d'erreur améliorée
+      console.log('Chargement des tickets avec params:', params);
       const response = await financesAPI.getDeclarations(params);
+      console.log('Réponse API brute:', response);
       
-      if (response.success && Array.isArray(response.factures)) {
-        // Transformer les données de l'API pour le composant
-        const transformedTickets = response.factures.map(facture => {
-          // Calculer le ticket modérateur
-          const montantTotal = facture.montant_total || facture.MONTANT_TOTAL || 0;
-          const tauxPriseCharge = facture.taux_couverture || facture.taux_prise_charge || 0;
-          const montantPriseCharge = facture.montant_couvert || facture.montant_prise_charge || 
-                                    (montantTotal * tauxPriseCharge / 100);
-          const montantTicket = facture.montant_restant || facture.montant_ticket || 
-                               (montantTotal - montantPriseCharge);
-          
-          return {
-            // Identifiants
-            id: facture.id,
-            COD_TICKET: facture.numero_facture || facture.COD_DECL || facture.id,
-            COD_DECL: facture.numero_declaration || facture.COD_DECL || facture.id,
-            
-            // Informations bénéficiaire
-            NOM_BEN: facture.beneficiaire_nom || facture.NOM_BEN || facture.nom_ben || 'Non spécifié',
-            PRE_BEN: facture.beneficiaire_prenom || facture.PRE_BEN || facture.prenom_ben || '',
-            IDENTIFIANT_NATIONAL: facture.patient_identifiant || facture.IDENTIFIANT_NATIONAL || facture.identifiant || 'N/A',
-            
-            // Informations médicales
-            CENTRE_SANTE: facture.centre_nom || facture.CENTRE_SANTE || facture.centre_sante || 'Non spécifié',
-            MEDECIN: facture.medecin_nom || facture.MEDECIN || facture.medecin || 'Non spécifié',
-            CATEGORIE: facture.type_facture || facture.CATEGORIE || 'consultation',
-            
-            // Détails financiers
-            MONTANT_TOTAL: montantTotal,
-            TAUX_PRISE_CHARGE: tauxPriseCharge,
-            MONTANT_PRISE_CHARGE: montantPriseCharge,
-            MONTANT_TICKET: montantTicket,
-            
-            // Statut
-            STATUT: facture.statut || facture.STATUT || 'en_attente',
-            
-            // Dates
-            DATE_CREATION: facture.date_creation || facture.DATE_CREATION || new Date().toISOString(),
-            DATE_CONSULTATION: facture.date_consultation || facture.DATE_CREATION,
-            DATE_PAIEMENT: facture.date_paiement || facture.DATE_PAIEMENT,
-            
-            // Autres
-            RAISON: facture.motif || facture.RAISON || facture.description || 'Non spécifiée',
-            NB_ITEMS_TICKET: facture.nb_elements || facture.NB_ITEMS || 1,
-            
-            // Données brutes pour référence
-            rawData: facture
-          };
+      // Afficher un exemple de donnée pour vérifier la structure
+      if (response?.data?.[0]) {
+        console.log('Exemple de donnée brute:', response.data[0]);
+        console.log('Montants bruts du premier ticket:', {
+          montant_total: response.data[0].montant_total,
+          taux_couverture: response.data[0].taux_couverture,
+          montant_couvert: response.data[0].montant_couvert,
+          montant_restant: response.data[0].montant_restant
         });
-        
-        setTickets(transformedTickets);
-        setPagination(prev => ({ 
-          ...prev, 
-          total: response.pagination?.total || transformedTickets.length 
-        }));
-        
-        // Calculer les statistiques
-        const stats = {
-          total: transformedTickets.length,
-          enAttente: transformedTickets.filter(t => t.STATUT === 'en_attente' || t.STATUT === 'En attente').length,
-          payes: transformedTickets.filter(t => t.STATUT === 'payé' || t.STATUT === 'Payé' || t.STATUT === 'validé').length,
-          montantTotal: transformedTickets.reduce((sum, t) => sum + (t.MONTANT_TOTAL || 0), 0),
-          montantEnAttente: transformedTickets
-            .filter(t => t.STATUT === 'en_attente' || t.STATUT === 'En attente')
-            .reduce((sum, t) => sum + (t.MONTANT_TICKET || 0), 0)
-        };
-        setStats(stats);
-        
-        message.success(`${transformedTickets.length} tickets chargés`);
-      } else {
-        message.warning('Aucun ticket trouvé ou erreur de chargement');
-        setTickets([]);
       }
       
+      if (response?.success) {
+        // Vérifier si les données sont dans response.data ou response.factures
+        const factures = response.data || response.factures || response.tickets || [];
+        
+        if (Array.isArray(factures)) {
+          // Transformer et valider les données
+          const transformedTickets = factures
+            .map(validateApiData)
+            .filter(ticket => ticket !== null);
+          
+          console.log(`${transformedTickets.length} tickets transformés`);
+          
+          // Afficher le calcul pour le premier ticket à des fins de debug
+          if (transformedTickets.length > 0) {
+            const firstTicket = transformedTickets[0];
+            console.log('Calcul premier ticket:', {
+              MONTANT_TOTAL: firstTicket.MONTANT_TOTAL,
+              TAUX_PRISE_CHARGE: firstTicket.TAUX_PRISE_CHARGE,
+              MONTANT_PRISE_CHARGE: firstTicket.MONTANT_PRISE_CHARGE,
+              MONTANT_TICKET: firstTicket.MONTANT_TICKET
+            });
+          }
+          
+          // Trier les tickets
+          const sortTickets = (ticketsArray) => {
+            const tri = searchParams.filters.tri || 'date_desc';
+            
+            return [...ticketsArray].sort((a, b) => {
+              switch (tri) {
+                case 'date_asc':
+                  return new Date(a.DATE_CREATION) - new Date(b.DATE_CREATION);
+                case 'date_desc':
+                  return new Date(b.DATE_CREATION) - new Date(a.DATE_CREATION);
+                case 'montant_asc':
+                  return (a.MONTANT_TICKET || 0) - (b.MONTANT_TICKET || 0);
+                case 'montant_desc':
+                  return (b.MONTANT_TICKET || 0) - (a.MONTANT_TICKET || 0);
+                default:
+                  return 0;
+              }
+            });
+          };
+          
+          const sortedTickets = sortTickets(transformedTickets);
+          setTickets(sortedTickets);
+          
+          // Mettre à jour la pagination
+          setPagination(prev => ({
+            ...prev,
+            total: response.pagination?.total || response.total || transformedTickets.length
+          }));
+          
+          // Calculer les statistiques
+          calculateStats(sortedTickets);
+          
+          message.success(`${transformedTickets.length} tickets chargés avec succès`);
+        } else {
+          console.error('Format de données invalide:', factures);
+          setTickets([]);
+          message.warning('Format de données invalide reçu de l\'API');
+        }
+      } else {
+        setTickets([]);
+        message.warning(response?.message || 'Aucun ticket trouvé');
+      }
     } catch (error) {
       console.error('Erreur lors du chargement des tickets:', error);
-      message.error('Erreur lors du chargement des données');
+      message.error('Erreur lors du chargement des données: ' + (error.message || 'Erreur réseau'));
       setTickets([]);
     } finally {
       setLoading(false);
     }
   }, [pagination.current, pagination.pageSize, searchParams]);
 
-  // Charger les statistiques détaillées
-  const loadDetailedStats = useCallback(async () => {
-    try {
-      const response = await financesAPI.getStatistiques({ periode: 'mois' });
-      
-      if (response.success && response.statistiques) {
-        // Mettre à jour les statistiques avec les données de l'API
-        setStats(prev => ({
-          ...prev,
-          ...response.statistiques
-        }));
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des statistiques:', error);
-    }
+  // Calculer les statistiques
+  const calculateStats = useCallback((ticketsData) => {
+    const statsData = {
+      total: ticketsData.length,
+      enAttente: ticketsData.filter(t => (t.STATUT || '').toLowerCase().includes('attente')).length,
+      payes: ticketsData.filter(t => (t.STATUT || '').toLowerCase().includes('payé') || (t.STATUT || '').toLowerCase().includes('validé')).length,
+      montantTotal: ticketsData.reduce((sum, t) => sum + (t.MONTANT_TOTAL || 0), 0),
+      montantEnAttente: ticketsData
+        .filter(t => (t.STATUT || '').toLowerCase().includes('attente'))
+        .reduce((sum, t) => sum + (t.MONTANT_TICKET || 0), 0)
+    };
+    
+    setStats(statsData);
   }, []);
 
   useEffect(() => {
     loadTickets();
-    loadDetailedStats();
-  }, [loadTickets, loadDetailedStats]);
+  }, [loadTickets]);
+
+  // Charger les bénéficiaires quand le modal de création s'ouvre
+  useEffect(() => {
+    if (createModalVisible) {
+      loadBeneficiaires();
+    }
+  }, [createModalVisible, loadBeneficiaires]);
 
   // Gérer le changement de pagination
   const handleTableChange = (newPagination) => {
@@ -790,7 +595,10 @@ const GestionTicketsModerateurs = () => {
 
   // Fonction d'impression
   const handlePrint = () => {
-    if (!componentRef.current) return;
+    if (!componentRef.current) {
+      message.warning('Aucun ticket sélectionné pour l\'impression');
+      return;
+    }
     
     const printContent = componentRef.current;
     const printWindow = window.open('', '_blank');
@@ -802,55 +610,18 @@ const GestionTicketsModerateurs = () => {
         <head>
           <title>Ticket Modérateur - ${selectedTicket?.COD_TICKET}</title>
           <style>
-            @page {
-              size: A4 portrait;
-              margin: 20mm;
-            }
-            
-            body {
-              margin: 0;
-              padding: 0;
-              font-family: Arial, sans-serif;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            
-            @media print {
-              body * {
-                visibility: hidden;
-              }
-              
-              .ticket-print, .ticket-print * {
-                visibility: visible;
-              }
-              
-              .ticket-print {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-                margin: 0 !important;
-                padding: 0 !important;
-                border: none !important;
-              }
-              
-              .no-print {
-                display: none !important;
-              }
-            }
+            @page { size: A4; margin: 0; }
+            body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+            @media print { .no-print { display: none !important; } }
           </style>
         </head>
         <body>
-          <div class="ticket-print">
-            ${printContent.innerHTML}
-          </div>
+          ${printContent.innerHTML}
           <script>
-            window.onload = function() {
+            setTimeout(() => {
               window.print();
-              setTimeout(function() {
-                window.close();
-              }, 500);
-            };
+              setTimeout(() => window.close(), 1000);
+            }, 500);
           </script>
         </body>
       </html>
@@ -859,120 +630,131 @@ const GestionTicketsModerateurs = () => {
     printWindow.document.close();
   };
 
-  // Fonction pour traiter un ticket (payer/rejeter)
- const traiterTicket = async (ticketId, action, motif = '') => {
-  try {
-    let response;
-    
-    // Pour payer un ticket modérateur, utiliser l'API financesAPI au lieu de remboursementsAPI
-    if (action === 'payer') {
-      // Vérifier qu'on a bien un ID de déclaration
+  // Fonction pour traiter un ticket (payer)
+  const traiterTicket = async (ticketId, action, motif = '', method = '') => {
+    try {
       const ticketToProcess = tickets.find(t => t.id === ticketId) || selectedTicket;
-      const declarationId = ticketToProcess?.COD_DECL || ticketToProcess?.id;
       
-      if (!declarationId) {
-        message.error('ID de déclaration manquant');
+      if (!ticketToProcess) {
+        message.error('Ticket non trouvé');
         return;
       }
       
-      // Utiliser financesAPI pour initier le paiement
-     response = await financesAPI.initierPaiement({
-  typeTransaction: 'facture',
-  factureId: ticketToProcess?.id, // Ceci est important!
-  montant: ticketToProcess?.MONTANT_TICKET,
-  method: 'Espèces',
-  observations: `Paiement ticket modérateur: ${motif}`,
-  codBen: ticketToProcess?.rawData?.COD_BEN,
-  notifierClient: true
-});
-    } else if (action === 'rejeter') {
-      // Pour rejeter, utiliser remboursementsAPI ou financesAPI selon votre backend
-      response = await remboursementsAPI.rejeterDeclaration({
-        declaration_id: ticketId,
-        motif: `Rejet ticket modérateur: ${motif}`
-      });
-    } else if (action === 'valider') {
-      response = await remboursementsAPI.validerDeclaration({
-        declaration_id: ticketId,
-        motif: `Validation ticket modérateur: ${motif}`
-      });
+      console.log('Ticket à traiter:', ticketToProcess);
+      
+      if (action === 'payer') {
+        // Préparer les données de paiement avec TOUS les champs requis
+        const paiementData = {
+          typeTransaction: 'ticket_moderateur',
+          factureId: ticketToProcess.id, // ID principal
+          numeroFacture: ticketToProcess.COD_TICKET, // Numéro de facture
+          montant: ticketToProcess.MONTANT_TICKET,
+          method: method || 'Espèces',
+          observations: `Paiement ticket modérateur: ${motif}`,
+          notifierClient: true,
+          // Ajouter toutes les informations du bénéficiaire
+          beneficiaireNom: ticketToProcess.NOM_BEN,
+          beneficiairePrenom: ticketToProcess.PRE_BEN,
+          identifiantNational: ticketToProcess.IDENTIFIANT_NATIONAL,
+          // Informations de la facture
+          montantTotal: ticketToProcess.MONTANT_TOTAL,
+          tauxCouverture: ticketToProcess.TAUX_PRISE_CHARGE,
+          montantCouvert: ticketToProcess.MONTANT_PRISE_CHARGE
+        };
+        
+        console.log('Données de paiement envoyées:', paiementData);
+        
+        // Utiliser la méthode initierPaiementTicket spécifique
+        const response = await financesAPI.initierPaiementTicket(paiementData);
+        console.log('Réponse paiement:', response);
+        
+        if (response?.success) {
+          message.success(`Ticket payé avec succès (${formatMontant(ticketToProcess.MONTANT_TICKET)})`);
+          loadTickets(); // Recharger les tickets
+          
+          // Fermer les modales
+          setPaiementModalVisible(false);
+          paiementForm.resetFields();
+        } else {
+          throw new Error(response?.message || 'Erreur lors du paiement');
+        }
+      }
+    } catch (error) {
+      console.error(`Erreur lors du traitement du ticket:`, error);
+      message.error(`Erreur: ${error.message || 'Une erreur est survenue'}`);
     }
-    
-    if (response && response.success) {
-      message.success(`Ticket ${action === 'payer' ? 'payé' : action === 'valider' ? 'validé' : 'rejeté'} avec succès`);
-      loadTickets(); // Recharger les tickets
-      loadDetailedStats(); // Recharger les statistiques
-    } else {
-      message.error(response?.message || `Erreur lors du traitement du ticket`);
-    }
-  } catch (error) {
-    console.error(`Erreur lors du traitement du ticket:`, error);
-    message.error(`Erreur lors du traitement: ${error.message}`);
-  }
-};
+  };
 
   // Fonction pour créer un ticket
   const handleCreateTicket = async (values) => {
     try {
-      const response = await financesAPI.createDeclaration({
-        ...values,
-        type_facture: 'ticket_moderateur',
-        date_creation: new Date().toISOString(),
-        statut: 'en_attente'
+      // Trouver le bénéficiaire sélectionné
+      const selectedBeneficiaire = beneficiaires.find(b => b.ID_BEN?.toString() === values.beneficiaire_id?.toString());
+      
+      if (!selectedBeneficiaire) {
+        message.error('Veuillez sélectionner un bénéficiaire valide');
+        return;
+      }
+      
+      // Calculs AVANT envoi pour vérification
+      const montantTotal = parseFloat(values.montant_total) || 0;
+      const taux = parseFloat(values.taux_couverture) || 0;
+      
+      // Déterminer si le taux est en pourcentage ou décimal
+      const isPourcentage = taux > 1;
+      const tauxDecimal = isPourcentage ? taux / 100 : taux;
+      const montantCouvert = montantTotal * tauxDecimal;
+      const montantTicket = montantTotal - montantCouvert;
+      
+      console.log('Vérification calculs création:', {
+        montantTotal,
+        taux,
+        isPourcentage,
+        tauxDecimal,
+        montantCouvert,
+        montantTicket
       });
       
-      if (response.success) {
+      // Nettoyer les valeurs avec les données du bénéficiaire
+      const cleanedValues = {
+        // Informations du bénéficiaire
+        beneficiaire_id: selectedBeneficiaire.ID_BEN,
+        nom: selectedBeneficiaire.NOM_BEN || selectedBeneficiaire.nom,
+        prenom: selectedBeneficiaire.PRE_BEN || selectedBeneficiaire.prenom,
+        identifiant: selectedBeneficiaire.IDENTIFIANT_NATIONAL || selectedBeneficiaire.identifiant_national,
+        
+        // Informations financières - CORRECTION APPLIQUÉE
+        montant_total: montantTotal,
+        taux_couverture: taux, // Envoyer le taux tel quel (l'API décidera du format)
+        montant_couvert: montantCouvert, // Calculer le montant couvert
+        montant_restant: montantTicket, // Calculer le ticket modérateur
+        
+        // Informations médicales
+        type_facture: cleanStringValue(values.type_facture),
+        centre_sante: cleanStringValue(values.centre_sante),
+        motif: cleanStringValue(values.motif),
+        date_consultation: values.date_consultation ? moment(values.date_consultation).format('YYYY-MM-DD') : moment().format('YYYY-MM-DD'),
+        
+        // Informations additionnelles
+        medecin: cleanStringValue(values.medecin || ''),
+        specialite: cleanStringValue(values.specialite || '')
+      };
+      
+      console.log('Création ticket avec données:', cleanedValues);
+      
+      const response = await financesAPI.createDeclaration(cleanedValues);
+      
+      if (response?.success) {
         message.success('Ticket créé avec succès');
         setCreateModalVisible(false);
         createForm.resetFields();
-        loadTickets(); // Recharger la liste
+        loadTickets(); // Recharger la liste des tickets
       } else {
-        message.error(response.message || 'Erreur lors de la création du ticket');
+        throw new Error(response?.message || 'Erreur lors de la création');
       }
     } catch (error) {
       console.error('Erreur lors de la création du ticket:', error);
-      message.error('Erreur lors de la création du ticket');
-    }
-  };
-
-  // Fonction pour exporter les données
-  const handleExport = async () => {
-    try {
-      const response = await financesAPI.exportData('factures', {
-        ...searchParams.filters,
-        format: 'csv'
-      });
-      
-      if (response.success && response.data) {
-        // Créer un fichier CSV
-        const headers = ['N° Ticket', 'Bénéficiaire', 'Montant Ticket', 'Type', 'Statut', 'Date Création'];
-        const csvContent = [
-          headers.join(','),
-          ...response.data.map(item => [
-            item.numero_facture || item.id,
-            `${item.beneficiaire_nom || ''} ${item.beneficiaire_prenom || ''}`,
-            item.montant_restant || item.montant_ticket || 0,
-            item.type_facture || '',
-            item.statut || '',
-            item.date_creation ? moment(item.date_creation).format('DD/MM/YYYY') : ''
-          ].join(','))
-        ].join('\n');
-        
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `tickets_moderateurs_${moment().format('YYYYMMDD_HHmmss')}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        message.success(`${response.data.length} tickets exportés`);
-      }
-    } catch (error) {
-      console.error('Erreur lors de l\'export:', error);
-      message.error('Erreur lors de l\'export');
+      message.error('Erreur lors de la création du ticket: ' + error.message);
     }
   };
 
@@ -982,35 +764,70 @@ const GestionTicketsModerateurs = () => {
       title: 'N° Ticket',
       dataIndex: 'COD_TICKET',
       key: 'COD_TICKET',
-      render: (text) => <Tag color="blue">{text}</Tag>,
-      sorter: (a, b) => a.COD_TICKET.localeCompare(b.COD_TICKET),
+      width: 150,
+      render: (text) => (
+        <Tag color="blue" style={{ fontWeight: 'bold' }}>
+          {text || 'N/A'}
+        </Tag>
+      ),
     },
     {
       title: 'Bénéficiaire',
-      key: 'BENEFICIAIRE',
+      key: 'beneficiaire',
+      width: 200,
       render: (_, record) => (
-        <div>
-          <div style={{ fontWeight: 500 }}>{record.NOM_BEN} {record.PRE_BEN}</div>
-          <div style={{ fontSize: '12px', color: '#666' }}>{record.IDENTIFIANT_NATIONAL}</div>
+        <div className="beneficiaire-cell">
+          <Avatar size="small" style={{ backgroundColor: '#1890ff', marginRight: 8 }}>
+            {(record.NOM_BEN || '?').charAt(0)}
+          </Avatar>
+          <div>
+            <div style={{ fontWeight: 500 }}>{record.NOM_BEN || 'Non spécifié'} {record.PRE_BEN || ''}</div>
+            <div style={{ fontSize: '12px', color: '#666' }}>{record.IDENTIFIANT_NATIONAL || 'N/A'}</div>
+          </div>
         </div>
       ),
+    },
+    {
+      title: 'Montant Total',
+      dataIndex: 'MONTANT_TOTAL',
+      key: 'MONTANT_TOTAL',
+      width: 150,
+      render: (montant) => (
+        <div style={{ fontWeight: 500, color: '#1890ff', textAlign: 'right' }}>
+          {formatMontant(montant)}
+        </div>
+      ),
+      align: 'right',
+    },
+    {
+      title: 'Taux Couverture',
+      dataIndex: 'TAUX_PRISE_CHARGE',
+      key: 'TAUX_PRISE_CHARGE',
+      width: 120,
+      render: (taux) => (
+        <div style={{ textAlign: 'center' }}>
+          <Tag color="cyan">{taux?.toFixed(1)}%</Tag>
+        </div>
+      ),
+      align: 'center',
     },
     {
       title: 'Montant Ticket',
       dataIndex: 'MONTANT_TICKET',
       key: 'MONTANT_TICKET',
-      render: (amount) => (
-        <div style={{ fontWeight: 'bold', color: '#fa8c16' }}>
-          {parseFloat(amount || 0).toLocaleString('fr-FR')} FCFA
+      width: 150,
+      render: (montant) => (
+        <div style={{ fontWeight: 'bold', color: '#fa8c16', textAlign: 'right' }}>
+          {formatMontant(montant)}
         </div>
       ),
       align: 'right',
-      sorter: (a, b) => (a.MONTANT_TICKET || 0) - (b.MONTANT_TICKET || 0),
     },
     {
       title: 'Type',
       dataIndex: 'CATEGORIE',
       key: 'CATEGORIE',
+      width: 120,
       render: (categorie) => (
         <Tag color={
           categorie === 'consultation' ? 'blue' :
@@ -1018,7 +835,7 @@ const GestionTicketsModerateurs = () => {
           categorie === 'analyse' ? 'cyan' :
           categorie === 'hospitalisation' ? 'purple' : 'default'
         }>
-          {categorie}
+          {categorie || 'Non spécifié'}
         </Tag>
       ),
     },
@@ -1026,103 +843,120 @@ const GestionTicketsModerateurs = () => {
       title: 'Statut',
       dataIndex: 'STATUT',
       key: 'STATUT',
+      width: 130,
       render: (statut) => {
-        const statutText = statut === 'en_attente' ? 'En attente' : 
-                          statut === 'payé' ? 'Payé' : 
-                          statut === 'validé' ? 'Validé' : 
-                          statut === 'rejeté' ? 'Rejeté' : statut;
+        const statutLower = (statut || '').toLowerCase();
+        let color, icon, text;
+        
+        if (statutLower.includes('payé') || statutLower.includes('validé')) {
+          color = 'green';
+          icon = <CheckCircleOutlined />;
+          text = 'Payé';
+        } else if (statutLower.includes('attente')) {
+          color = 'orange';
+          icon = <ClockCircleOutlined />;
+          text = 'En attente';
+        } else if (statutLower.includes('rejeté')) {
+          color = 'red';
+          icon = <ExclamationCircleOutlined />;
+          text = 'Rejeté';
+        } else {
+          color = 'default';
+          icon = <InfoCircleOutlined />;
+          text = statut || 'Inconnu';
+        }
         
         return (
           <Badge
-            status={
-              statut === 'payé' || statut === 'validé' ? 'success' :
-              statut === 'en_attente' ? 'warning' :
-              statut === 'rejeté' ? 'error' : 'default'
-            }
+            status={color}
             text={
-              <Tag color={
-                statut === 'payé' || statut === 'validé' ? 'green' :
-                statut === 'en_attente' ? 'orange' :
-                statut === 'rejeté' ? 'red' : 'default'
-              }>
-                {statutText}
-              </Tag>
+              <span style={{ color: 
+                color === 'green' ? '#52c41a' : 
+                color === 'orange' ? '#fa8c16' : 
+                color === 'red' ? '#ff4d4f' : '#666' 
+              }}>
+                {icon} {text}
+              </span>
             }
           />
         );
       },
     },
     {
-      title: 'Date Création',
+      title: 'Date',
       dataIndex: 'DATE_CREATION',
       key: 'DATE_CREATION',
-      render: (date) => moment(date).format('DD/MM/YYYY'),
-      sorter: (a, b) => moment(a.DATE_CREATION).unix() - moment(b.DATE_CREATION).unix(),
+      width: 120,
+      render: (date) => date ? moment(date).format('DD/MM/YY') : 'N/A',
     },
     {
       title: 'Actions',
       key: 'actions',
-      width: 200,
-      render: (_, record) => (
-        <Space>
-          <Tooltip title="Voir détails">
-            <Button
-              icon={<EyeOutlined />}
-              onClick={() => {
-                setSelectedTicket(record);
-                setModalVisible(true);
-              }}
-              size="small"
-            />
-          </Tooltip>
-          
-          <Tooltip title="Imprimer ticket">
-            <Button
-              icon={<PrinterOutlined />}
-              onClick={() => {
-                setSelectedTicket(record);
-                setPrintModal(true);
-              }}
-              size="small"
-            />
-          </Tooltip>
-          
-          {(record.STATUT === 'en_attente' || record.STATUT === 'En attente') && (
-            <Tooltip title="Payer le ticket">
-              <Popconfirm
-                title="Confirmer le paiement"
-                description={`Êtes-vous sûr de vouloir payer ${(record.MONTANT_TICKET || 0).toLocaleString('fr-FR')} FCFA ?`}
-                onConfirm={() => traiterTicket(record.id, 'payer', 'Paiement effectué')}
-                okText="Oui"
-                cancelText="Non"
-              >
+      width: 180,
+      render: (_, record) => {
+        const isPending = (record.STATUT || '').toLowerCase().includes('attente');
+        
+        return (
+          <Space size="small">
+            <Tooltip title="Voir détails">
+              <Button
+                icon={<EyeOutlined />}
+                size="small"
+                onClick={() => {
+                  setSelectedTicket(record);
+                  setModalVisible(true);
+                }}
+              />
+            </Tooltip>
+            
+            <Tooltip title="Imprimer">
+              <Button
+                icon={<PrinterOutlined />}
+                size="small"
+                onClick={() => {
+                  setSelectedTicket(record);
+                  setPrintModal(true);
+                }}
+              />
+            </Tooltip>
+            
+            {isPending && (
+              <Tooltip title="Payer le ticket">
                 <Button
                   type="primary"
                   size="small"
+                  onClick={() => {
+                    setSelectedTicket(record);
+                    setPaiementModalVisible(true);
+                  }}
                 >
                   Payer
                 </Button>
-              </Popconfirm>
-            </Tooltip>
-          )}
-        </Space>
-      ),
+              </Tooltip>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
   return (
-    <div>
-      <Card 
-        title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <DollarOutlined style={{ fontSize: '24px' }} />
-            <Title level={4} style={{ margin: 0 }}>Gestion des Tickets Modérateurs</Title>
+    <div className="gestion-tickets-container">
+      {/* En-tête */}
+      <Card className="main-card">
+        <div className="header-section">
+          <div className="header-title">
+            <DollarOutlined style={{ fontSize: '28px', color: '#1890ff', marginRight: '12px' }} />
+            <div>
+              <Title level={3} style={{ margin: 0 }}>Gestion des Tickets Modérateurs</Title>
+              <Text type="secondary">Gérez les tickets modérateurs des patients</Text>
+            </div>
           </div>
-        }
-        extra={
+          
           <Space>
             <Button
               icon={<FileAddOutlined />}
+              type="primary"
               onClick={() => setCreateModalVisible(true)}
             >
               Nouveau Ticket
@@ -1134,13 +968,68 @@ const GestionTicketsModerateurs = () => {
             >
               Actualiser
             </Button>
+            <Button
+              icon={<ExportOutlined />}
+              onClick={() => message.info('Export bientôt disponible')}
+            >
+              Exporter
+            </Button>
           </Space>
-        }
-      >
+        </div>
+
+        {/* Composant de test des calculs */}
+        <Card style={{ marginBottom: 16 }}>
+          <Title level={5}>Test de calcul du ticket modérateur</Title>
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Input
+                  placeholder="Montant total (ex: 10000)"
+                  value={testMontant}
+                  onChange={(e) => setTestMontant(e.target.value)}
+                  prefix="Total:"
+                />
+              </Col>
+              <Col span={12}>
+                <Input
+                  placeholder="Taux (ex: 80 pour 80% ou 0.8 pour 0.8)"
+                  value={testTaux}
+                  onChange={(e) => setTestTaux(e.target.value)}
+                  prefix="Taux:"
+                />
+              </Col>
+            </Row>
+            <Button onClick={() => {
+              const mt = parseFloat(testMontant) || 0;
+              const taux = parseFloat(testTaux) || 0;
+              
+              // Déterminer si le taux est en pourcentage ou décimal
+              const isPourcentage = taux > 1;
+              const tauxDecimal = isPourcentage ? taux / 100 : taux;
+              const couvert = mt * tauxDecimal;
+              const ticket = mt - couvert;
+              
+              message.info(
+                <div>
+                  <p><strong>Résultats du calcul :</strong></p>
+                  <p>Montant total: {formatMontant(mt)}</p>
+                  <p>Taux: {taux} ({isPourcentage ? 'pourcentage' : 'décimal'})</p>
+                  <p>Taux décimal: {tauxDecimal.toFixed(2)}</p>
+                  <p>Montant couvert: {formatMontant(couvert)}</p>
+                  <p><strong>Ticket modérateur: {formatMontant(ticket)}</strong></p>
+                </div>,
+                10
+              );
+            }}>
+              Tester le calcul
+            </Button>
+          </Space>
+        </Card>
+
         {/* Statistiques */}
-        <Row gutter={16} style={{ marginBottom: 24 }}>
+        <Row gutter={16} style={{ margin: '24px 0' }}>
           <Col xs={24} sm={12} md={6}>
-            <Card size="small" hoverable>
+            <Card className="stat-card">
               <Statistic
                 title="Total Tickets"
                 value={stats.total}
@@ -1151,18 +1040,23 @@ const GestionTicketsModerateurs = () => {
           </Col>
           
           <Col xs={24} sm={12} md={6}>
-            <Card size="small" hoverable>
+            <Card className="stat-card">
               <Statistic
                 title="En Attente"
                 value={stats.enAttente}
                 valueStyle={{ color: '#fa8c16' }}
                 prefix={<ClockCircleOutlined />}
               />
+              <Progress 
+                percent={stats.total > 0 ? Math.round((stats.enAttente / stats.total) * 100) : 0}
+                size="small"
+                strokeColor="#fa8c16"
+              />
             </Card>
           </Col>
           
           <Col xs={24} sm={12} md={6}>
-            <Card size="small" hoverable>
+            <Card className="stat-card">
               <Statistic
                 title="Payés"
                 value={stats.payes}
@@ -1171,26 +1065,28 @@ const GestionTicketsModerateurs = () => {
               />
               <Progress 
                 percent={stats.total > 0 ? Math.round((stats.payes / stats.total) * 100) : 0}
-                size="small" 
-                style={{ marginTop: 8 }}
+                size="small"
+                strokeColor="#52c41a"
               />
             </Card>
           </Col>
           
           <Col xs={24} sm={12} md={6}>
-            <Card size="small" hoverable>
+            <Card className="stat-card">
               <Statistic
-                title="Montant à Payer"
-                value={stats.montantEnAttente}
-                suffix="FCFA"
-                valueStyle={{ color: '#cf1322' }}
+                title="À Payer"
+                value={formatMontant(stats.montantEnAttente)}
+                valueStyle={{ color: '#cf1322', fontSize: '16px' }}
                 prefix={<DollarOutlined />}
               />
+              <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                {stats.enAttente} ticket(s) en attente
+              </div>
             </Card>
           </Col>
         </Row>
 
-        {/* Recherche et filtres */}
+        {/* Recherche */}
         <EnhancedSearch
           onSearch={(searchTerm) => {
             setSearchParams(prev => ({ ...prev, searchTerm }));
@@ -1204,84 +1100,41 @@ const GestionTicketsModerateurs = () => {
             setSearchParams(prev => ({ ...prev, dateRange }));
             setPagination(prev => ({ ...prev, current: 1 }));
           }}
+          loading={loading}
         />
 
-        {/* Tableau des tickets */}
-        {tickets.length === 0 && !loading ? (
-          <Empty
-            description="Aucun ticket trouvé"
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-          >
-            <Button type="primary" onClick={() => setCreateModalVisible(true)}>
-              Créer un nouveau ticket
-            </Button>
-          </Empty>
-        ) : (
-          <Table
-            columns={columns}
-            dataSource={tickets}
-            loading={loading}
-            rowKey="id"
-            pagination={{
-              ...pagination,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total, range) => `${range[0]}-${range[1]} sur ${total} tickets`,
-              pageSizeOptions: ['10', '20', '50', '100']
-            }}
-            onChange={handleTableChange}
-            expandable={{
-              expandedRowRender: (record) => (
-                <div style={{ padding: 16, background: '#fafafa' }}>
-                  <Row gutter={16}>
-                    <Col span={12}>
-                      <Descriptions column={1} size="small">
-                        <Descriptions.Item label="Centre de santé">
-                          {record.CENTRE_SANTE}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="Médecin">
-                          {record.MEDECIN}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="N° Déclaration">
-                          {record.COD_DECL}
-                        </Descriptions.Item>
-                      </Descriptions>
-                    </Col>
-                    <Col span={12}>
-                      <Descriptions column={1} size="small">
-                        <Descriptions.Item label="Montant total">
-                          {(record.MONTANT_TOTAL || 0).toLocaleString('fr-FR')} FCFA
-                        </Descriptions.Item>
-                        <Descriptions.Item label="Taux couverture">
-                          {record.TAUX_PRISE_CHARGE || 0}%
-                        </Descriptions.Item>
-                        <Descriptions.Item label="Montant couvert">
-                          {(record.MONTANT_PRISE_CHARGE || 0).toLocaleString('fr-FR')} FCFA
-                        </Descriptions.Item>
-                      </Descriptions>
-                    </Col>
-                  </Row>
-                  <div style={{ marginTop: 8 }}>
-                    <strong>Observations:</strong>
-                    <div style={{ 
-                      marginTop: 4, 
-                      padding: 8, 
-                      background: '#fff', 
-                      borderRadius: 4,
-                      border: '1px solid #e8e8e8',
-                      whiteSpace: 'pre-wrap'
-                    }}>
-                      {record.RAISON}
-                    </div>
-                  </div>
+        {/* Tableau */}
+        <div className="table-container">
+          {tickets.length === 0 && !loading ? (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <div>
+                  <Title level={4}>Aucun ticket trouvé</Title>
+                  <Text type="secondary">Aucun ticket modérateur ne correspond à vos critères</Text>
                 </div>
-              ),
-            }}
-          />
-        )}
+              }
+            >
+              <Button type="primary" onClick={() => setCreateModalVisible(true)}>
+                Créer un nouveau ticket
+              </Button>
+            </Empty>
+          ) : (
+            <Table
+              columns={columns}
+              dataSource={tickets}
+              loading={loading}
+              rowKey="id"
+              pagination={pagination}
+              onChange={handleTableChange}
+              scroll={{ x: 1200 }}
+              locale={{ emptyText: 'Aucun ticket à afficher' }}
+            />
+          )}
+        </div>
       </Card>
 
-      {/* Modal Création Ticket */}
+      {/* Modal Création */}
       <Modal
         title="Créer un nouveau ticket modérateur"
         open={createModalVisible}
@@ -1291,6 +1144,12 @@ const GestionTicketsModerateurs = () => {
         }}
         onOk={() => createForm.submit()}
         confirmLoading={loading}
+        width={600}
+        afterOpenChange={(visible) => {
+          if (!visible) {
+            createForm.resetFields();
+          }
+        }}
       >
         <Form
           form={createForm}
@@ -1298,7 +1157,7 @@ const GestionTicketsModerateurs = () => {
           onFinish={handleCreateTicket}
         >
           <Row gutter={16}>
-            <Col span={12}>
+            <Col span={24}>
               <Form.Item
                 name="beneficiaire_id"
                 label="Bénéficiaire"
@@ -1308,20 +1167,41 @@ const GestionTicketsModerateurs = () => {
                   placeholder="Sélectionner un bénéficiaire"
                   showSearch
                   optionFilterProp="children"
+                  loading={loadingBeneficiaires}
+                  notFoundContent={loadingBeneficiaires ? <Spin size="small" /> : "Aucun bénéficiaire trouvé"}
+                  filterOption={(input, option) =>
+                    (option?.label?.toLowerCase() || '').includes(input.toLowerCase())
+                  }
                 >
-                  {/* Les options seront chargées dynamiquement */}
-                  <Option value="1">Aérogrés Avec</Option>
-                  <Option value="2">Dupont Jean</Option>
+                  {beneficiaires.map(ben => (
+                    <Option 
+                      key={ben.ID_BEN} 
+                      value={ben.ID_BEN?.toString()}
+                      label={`${ben.NOM_BEN || ben.nom} ${ben.PRE_BEN || ben.prenom} (${ben.IDENTIFIANT_NATIONAL || ben.identifiant_national || 'N/A'})`}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <Avatar 
+                          size="small" 
+                          style={{ 
+                            backgroundColor: '#1890ff', 
+                            marginRight: 8,
+                            fontSize: '12px'
+                          }}
+                        >
+                          {(ben.NOM_BEN || ben.nom || '?').charAt(0)}
+                        </Avatar>
+                        <div>
+                          <div style={{ fontWeight: 500 }}>
+                            {ben.NOM_BEN || ben.nom} {ben.PRE_BEN || ben.prenom}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#666' }}>
+                            {ben.IDENTIFIANT_NATIONAL || ben.identifiant_national || 'N/A'}
+                          </div>
+                        </div>
+                      </div>
+                    </Option>
+                  ))}
                 </Select>
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="montant_total"
-                label="Montant total"
-                rules={[{ required: true, message: 'Veuillez saisir le montant total' }]}
-              >
-                <Input type="number" addonAfter="FCFA" />
               </Form.Item>
             </Col>
           </Row>
@@ -1329,27 +1209,44 @@ const GestionTicketsModerateurs = () => {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
-                name="taux_couverture"
-                label="Taux de couverture"
-                rules={[{ required: true, message: 'Veuillez saisir le taux de couverture' }]}
+                name="montant_total"
+                label="Montant total (FCFA)"
+                rules={[
+                  { required: true, message: 'Veuillez saisir le montant' },
+                  { pattern: /^[0-9]+(\.[0-9]{1,2})?$/, message: 'Montant invalide' }
+                ]}
               >
-                <Select placeholder="Sélectionner le taux">
-                  <Option value="100">100%</Option>
-                  <Option value="90">90%</Option>
-                  <Option value="80">80%</Option>
-                  <Option value="70">70%</Option>
-                  <Option value="60">60%</Option>
-                  <Option value="50">50%</Option>
-                </Select>
+                <Input 
+                  type="number" 
+                  min="0" 
+                  step="0.01" 
+                  placeholder="Ex: 10000"
+                />
               </Form.Item>
             </Col>
+            <Col span={12}>
+              <Form.Item
+                name="taux_couverture"
+                label="Taux de couverture (%)"
+                rules={[
+                  { required: true, message: 'Veuillez saisir le taux' },
+                  { min: 0, max: 100, message: 'Le taux doit être entre 0 et 100%' }
+                ]}
+                extra="Saisissez un nombre entre 0 et 100 (ex: 80 pour 80%)"
+              >
+                <Input type="number" min="0" max="100" placeholder="Ex: 80" />
+              </Form.Item>
+            </Col>
+          </Row>
+          
+          <Row gutter={16}>
             <Col span={12}>
               <Form.Item
                 name="type_facture"
                 label="Type de facture"
                 rules={[{ required: true, message: 'Veuillez sélectionner le type' }]}
               >
-                <Select placeholder="Sélectionner le type">
+                <Select placeholder="Sélectionner">
                   <Option value="consultation">Consultation</Option>
                   <Option value="médicament">Médicament</Option>
                   <Option value="analyse">Analyse</Option>
@@ -1357,105 +1254,237 @@ const GestionTicketsModerateurs = () => {
                 </Select>
               </Form.Item>
             </Col>
+            <Col span={12}>
+              <Form.Item
+                name="centre_sante"
+                label="Centre de santé"
+              >
+                <Input placeholder="Nom du centre" />
+              </Form.Item>
+            </Col>
+          </Row>
+          
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="medecin"
+                label="Médecin"
+              >
+                <Input placeholder="Nom du médecin" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="specialite"
+                label="Spécialité"
+              >
+                <Select placeholder="Sélectionner">
+                  <Option value="Généraliste">Généraliste</Option>
+                  <Option value="Spécialiste">Spécialiste</Option>
+                  <Option value="Chirurgien">Chirurgien</Option>
+                  <Option value="Dentiste">Dentiste</Option>
+                  <Option value="Pédiatre">Pédiatre</Option>
+                  <Option value="Gynécologue">Gynécologue</Option>
+                </Select>
+              </Form.Item>
+            </Col>
           </Row>
           
           <Form.Item
-            name="motif"
-            label="Motif/Observations"
+            name="date_consultation"
+            label="Date de consultation"
           >
-            <TextArea rows={3} placeholder="Saisir les observations..." />
+            <DatePicker 
+              style={{ width: '100%' }} 
+              format="DD/MM/YYYY" 
+              placeholder="Sélectionner la date"
+            />
+          </Form.Item>
+          
+          <Form.Item
+            name="motif"
+            label="Motif de la consultation"
+          >
+            <TextArea rows={3} placeholder="Décrire le motif de la consultation..." />
           </Form.Item>
         </Form>
       </Modal>
 
-      {/* Modal Détails */}
+      {/* Modal Paiement */}
       <Modal
-        title={`Détails du Ticket - ${selectedTicket?.COD_TICKET}`}
-        open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        footer={[
-          <Button key="close" onClick={() => setModalVisible(false)}>
-            Fermer
-          </Button>,
-          <Button 
-            key="print" 
-            type="primary" 
-            icon={<PrinterOutlined />}
-            onClick={() => {
-              setModalVisible(false);
-              setPrintModal(true);
-            }}
-          >
-            Imprimer
-          </Button>
-        ]}
-        width={700}
+        title={`Paiement du ticket - ${selectedTicket?.COD_TICKET || 'N/A'}`}
+        open={paiementModalVisible}
+        onCancel={() => {
+          setPaiementModalVisible(false);
+          paiementForm.resetFields();
+        }}
+        onOk={() => paiementForm.submit()}
+        confirmLoading={loading}
+        width={500}
       >
         {selectedTicket && (
-          <Descriptions bordered column={2}>
-            <Descriptions.Item label="N° Ticket" span={2}>
-              <Tag color="blue">{selectedTicket.COD_TICKET}</Tag>
-            </Descriptions.Item>
+          <div>
+            <Alert
+              message="Informations du ticket"
+              description={
+                <div>
+                  <div>Bénéficiaire: <strong>{selectedTicket.NOM_BEN} {selectedTicket.PRE_BEN}</strong></div>
+                  <div>Identifiant: <strong>{selectedTicket.IDENTIFIANT_NATIONAL}</strong></div>
+                  <div>Montant total: <strong>{formatMontant(selectedTicket.MONTANT_TOTAL)}</strong></div>
+                  <div>Taux couverture: <strong>{selectedTicket.TAUX_PRISE_CHARGE.toFixed(1)}%</strong></div>
+                  <div>Montant couvert: <strong>{formatMontant(selectedTicket.MONTANT_PRISE_CHARGE)}</strong></div>
+                  <div>Montant à payer: <strong style={{ color: '#fa8c16', fontSize: '16px' }}>{formatMontant(selectedTicket.MONTANT_TICKET)}</strong></div>
+                  <div>N° Facture: <strong>{selectedTicket.COD_TICKET}</strong></div>
+                </div>
+              }
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
             
-            <Descriptions.Item label="Bénéficiaire">
-              {selectedTicket.NOM_BEN} {selectedTicket.PRE_BEN}
-            </Descriptions.Item>
-            
-            <Descriptions.Item label="Identifiant">
-              {selectedTicket.IDENTIFIANT_NATIONAL}
-            </Descriptions.Item>
-            
-            <Descriptions.Item label="Date Création">
-              {moment(selectedTicket.DATE_CREATION).format('DD/MM/YYYY HH:mm')}
-            </Descriptions.Item>
-            
-            <Descriptions.Item label="Médecin">
-              {selectedTicket.MEDECIN}
-            </Descriptions.Item>
-            
-            <Descriptions.Item label="Centre de santé">
-              {selectedTicket.CENTRE_SANTE}
-            </Descriptions.Item>
-            
-            <Descriptions.Item label="Montant Total">
-              <Text strong>{(selectedTicket.MONTANT_TOTAL || 0).toLocaleString('fr-FR')} FCFA</Text>
-            </Descriptions.Item>
-            
-            <Descriptions.Item label="Taux Couverture">
-              <Tag color="blue">{selectedTicket.TAUX_PRISE_CHARGE || 0}%</Tag>
-            </Descriptions.Item>
-            
-            <Descriptions.Item label="Montant Couvert">
-              <Text type="success">{(selectedTicket.MONTANT_PRISE_CHARGE || 0).toLocaleString('fr-FR')} FCFA</Text>
-            </Descriptions.Item>
-            
-            <Descriptions.Item label="Ticket Modérateur">
-              <Text type="warning" strong>{(selectedTicket.MONTANT_TICKET || 0).toLocaleString('fr-FR')} FCFA</Text>
-            </Descriptions.Item>
-            
-            <Descriptions.Item label="Statut">
-              <Tag color={
-                selectedTicket.STATUT === 'payé' || selectedTicket.STATUT === 'Payé' ? 'green' :
-                selectedTicket.STATUT === 'en_attente' || selectedTicket.STATUT === 'En attente' ? 'orange' :
-                selectedTicket.STATUT === 'validé' ? 'blue' : 'red'
-              }>
-                {selectedTicket.STATUT}
-              </Tag>
-            </Descriptions.Item>
-            
-            <Descriptions.Item label="Observations" span={2}>
-              <div style={{ 
-                padding: 8, 
-                background: '#f5f5f5', 
-                borderRadius: 4,
-                whiteSpace: 'pre-wrap'
-              }}>
-                {selectedTicket.RAISON}
-              </div>
-            </Descriptions.Item>
-          </Descriptions>
+            <Form
+              form={paiementForm}
+              layout="vertical"
+              onFinish={(values) => traiterTicket(selectedTicket.id, 'payer', values.motif, values.method)}
+            >
+              <Form.Item
+                name="method"
+                label="Méthode de paiement"
+                rules={[{ required: true, message: 'Veuillez sélectionner une méthode' }]}
+              >
+                <Select placeholder="Sélectionner">
+                  <Option value="Espèces">Espèces</Option>
+                  <Option value="Carte bancaire">Carte bancaire</Option>
+                  <Option value="Virement">Virement</Option>
+                  <Option value="Chèque">Chèque</Option>
+                  <Option value="Mobile Money">Mobile Money</Option>
+                </Select>
+              </Form.Item>
+              
+              <Form.Item
+                name="motif"
+                label="Observations du paiement"
+              >
+                <TextArea rows={3} placeholder="Saisir les observations du paiement..." />
+              </Form.Item>
+            </Form>
+          </div>
         )}
       </Modal>
+
+      {/* Modal Détails */}
+      <Drawer
+        title={`Détails du ticket - ${selectedTicket?.COD_TICKET || 'N/A'}`}
+        placement="right"
+        onClose={() => setModalVisible(false)}
+        open={modalVisible}
+        width={600}
+      >
+        {selectedTicket && (
+          <div className="ticket-details">
+            <Descriptions bordered column={2}>
+              <Descriptions.Item label="N° Ticket" span={2}>
+                <Tag color="blue">{selectedTicket.COD_TICKET}</Tag>
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="Bénéficiaire">
+                {selectedTicket.NOM_BEN} {selectedTicket.PRE_BEN}
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="Identifiant">
+                {selectedTicket.IDENTIFIANT_NATIONAL}
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="Date Création">
+                {selectedTicket.DATE_CREATION ? moment(selectedTicket.DATE_CREATION).format('DD/MM/YYYY HH:mm') : 'N/A'}
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="Date Consultation">
+                {selectedTicket.DATE_CONSULTATION ? 
+                  moment(selectedTicket.DATE_CONSULTATION).format('DD/MM/YYYY') : 'Non spécifiée'}
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="Centre de santé">
+                {selectedTicket.CENTRE_SANTE}
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="Médecin">
+                {selectedTicket.MEDECIN}
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="Type">
+                {selectedTicket.CATEGORIE}
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="Spécialité">
+                {selectedTicket.SPECIALITE || 'Non spécifiée'}
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="Montant Total">
+                <Text strong>{formatMontant(selectedTicket.MONTANT_TOTAL)}</Text>
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="Taux Couverture">
+                <Tag color="blue">{selectedTicket.TAUX_PRISE_CHARGE.toFixed(1)}%</Tag>
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="Montant Couvert">
+                <Text type="success">{formatMontant(selectedTicket.MONTANT_PRISE_CHARGE)}</Text>
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="Ticket Modérateur">
+                <Text type="warning" strong style={{ fontSize: '16px' }}>
+                  {formatMontant(selectedTicket.MONTANT_TICKET)}
+                </Text>
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="Statut">
+                <Tag color={
+                  (selectedTicket.STATUT || '').toLowerCase().includes('payé') || 
+                  (selectedTicket.STATUT || '').toLowerCase().includes('validé') ? 'green' :
+                  (selectedTicket.STATUT || '').toLowerCase().includes('attente') ? 'orange' : 'red'
+                }>
+                  {selectedTicket.STATUT}
+                </Tag>
+              </Descriptions.Item>
+              
+              <Descriptions.Item label="Observations" span={2}>
+                <div className="observations-box">
+                  {selectedTicket.RAISON || 'Aucune observation'}
+                </div>
+              </Descriptions.Item>
+            </Descriptions>
+            
+            <Divider />
+            
+            <div className="ticket-actions">
+              <Space>
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={() => {
+                    setModalVisible(false);
+                    setPrintModal(true);
+                  }}
+                >
+                  Imprimer
+                </Button>
+                
+                {/* {(selectedTicket.STATUT || '').toLowerCase().includes('attente') && (
+                  // <Button
+                  //   type="primary"
+                  //   onClick={() => {
+                  //     setModalVisible(false);
+                  //     setPaiementModalVisible(true);
+                  //   }}
+                  // >
+                  //   Payer le ticket
+                  // </Button>
+                )} */}
+              </Space>
+            </div>
+          </div>
+        )}
+      </Drawer>
 
       {/* Modal Impression */}
       <Modal
@@ -1475,55 +1504,23 @@ const GestionTicketsModerateurs = () => {
         {selectedTicket && (
           <div>
             <Alert
-              message="Aperçu du ticket modérateur"
+              message="Aperçu avant impression"
               description="Le ticket sera imprimé sur une page A4. Vérifiez l'aperçu avant d'imprimer."
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
             />
             
-            <div style={{ 
-              border: '1px solid #d9d9d9', 
-              padding: 20, 
-              background: 'white',
-              overflow: 'auto',
-              maxHeight: '500px'
-            }}>
+            <div className="print-preview">
               <div ref={componentRef}>
                 <TicketModerateurPrint 
                   ticket={selectedTicket}
-                  config={{}}
                 />
               </div>
             </div>
           </div>
         )}
       </Modal>
-
-      {/* Bouton flottant pour l'export */}
-      <FloatButton.Group
-        shape="circle"
-        style={{ right: 24 }}
-        icon={<SettingOutlined />}
-      >
-        <FloatButton
-          icon={<ExportOutlined />}
-          tooltip="Exporter en CSV"
-          onClick={handleExport}
-        />
-        
-        <FloatButton
-          icon={<PrinterOutlined />}
-          tooltip="Imprimer la liste"
-          onClick={() => {
-            if (tickets.length === 0) {
-              message.warning('Aucun ticket à imprimer');
-              return;
-            }
-            message.info('Fonction d\'impression de liste bientôt disponible');
-          }}
-        />
-      </FloatButton.Group>
     </div>
   );
 };

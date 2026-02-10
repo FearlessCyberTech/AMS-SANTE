@@ -1755,7 +1755,7 @@ const loadHistoriqueConsultations = async (patientId) => {
                   </Row>
                 </Panel>
 
-                <Panel header="Signes Vitaux" key="2">
+                {/* <Panel header="Signes Vitaux" key="2">
                   <Row gutter={[16, 16]}>
                     <Col span={8}>
                       <Form.Item label="Tension artérielle (TA)">
@@ -1859,7 +1859,7 @@ const loadHistoriqueConsultations = async (patientId) => {
                       />
                     </Form.Item>
                   </Form>
-                </Panel>
+                </Panel> */}
 
                 <Panel header="Informations Complémentaires" key="4">
                   <Row gutter={[16, 16]}>

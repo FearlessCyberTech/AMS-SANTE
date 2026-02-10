@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Eye, EyeOff, LogIn, Globe, AlertCircle, Chrome, Shield, Users, Activity, Languages } from 'lucide-react';
+import { 
+  Eye, EyeOff, LogIn, Globe, AlertCircle, Chrome, 
+  Shield, Users, Activity, Languages, Cpu, Lock,
+  Heart, MapPin, Clock, Database, Sparkles, Target,
+  ChevronDown, CheckCircle, AlertTriangle
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -21,8 +26,10 @@ const LoginForm = () => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [showWelcomeMessage, setShowWelcomeMessage] = useState(true);
+  const [activeFeature, setActiveFeature] = useState(0);
+  const [particles, setParticles] = useState([]);
 
-  // Pays d'Afrique Centrale selon la nouvelle base de données
+  // Pays d'Internationale selon la nouvelle base de données
   const countries = [
     { code: 'CMF', name: 'Cameroun-Francophone', language: 'fr', flag: '🇨🇲', capital: 'Yaoundé', sysLangue: 'fr-FR', langueDefaut: 'Français' },
     { code: 'CMA', name: 'Cameroun-Anglophone', language: 'en', flag: '🇨🇲', capital: 'Buea', sysLangue: 'en-GB', langueDefaut: 'Anglais' },
@@ -33,6 +40,37 @@ const LoginForm = () => {
     { code: 'COG', name: 'République du Congo', language: 'fr', flag: '🇨🇬', capital: 'Brazzaville', sysLangue: 'fr-FR', langueDefaut: 'Français' }
   ];
 
+  const features = [
+    { icon: Heart, label: t('feature1', 'Système de Santé Intelligent'), desc: t('feature1Desc', 'Gestion médicale avancée') },
+    { icon: Database, label: t('feature2', 'Base de Données Régionale'), desc: t('feature2Desc', 'Données synchronisées') },
+    { icon: Cpu, label: t('feature3', 'Performance Optimisée'), desc: t('feature3Desc', 'Temps de réponse rapide') },
+    { icon: Shield, label: t('feature4', 'Sécurité Maximale'), desc: t('feature4Desc', 'Chiffrement AES-256') }
+  ];
+
+  // Générer des particules pour le fond animé
+  useEffect(() => {
+    const newParticles = [];
+    for (let i = 0; i < 20; i++) {
+      newParticles.push({
+        id: i,
+        x: Math.random() * 100,
+        y: Math.random() * 100,
+        size: Math.random() * 4 + 1,
+        speed: Math.random() * 2 + 0.5,
+        delay: Math.random() * 5
+      });
+    }
+    setParticles(newParticles);
+  }, []);
+
+  // Animation des fonctionnalités
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveFeature((prev) => (prev + 1) % features.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [features.length]);
+
   // Mettre à jour la langue quand le pays change
   useEffect(() => {
     updateLanguage(formData.country);
@@ -40,7 +78,6 @@ const LoginForm = () => {
 
   // Effet pour charger les informations sauvegardées
   useEffect(() => {
-    // Charger les informations sauvegardées si "Se souvenir de moi" était coché
     const savedCredentials = localStorage.getItem('healthcenter_credentials');
     if (savedCredentials) {
       try {
@@ -52,8 +89,6 @@ const LoginForm = () => {
           country: country || 'CMF',
           rememberMe
         }));
-        
-        // Mettre à jour la langue selon le pays
         updateLanguage(country || 'CMF');
       } catch (error) {
         console.error('Erreur lors du chargement des identifiants:', error);
@@ -71,19 +106,15 @@ const LoginForm = () => {
   const updateLanguage = (countryCode) => {
     const selectedCountry = countries.find(c => c.code === countryCode);
     if (selectedCountry && selectedCountry.sysLangue) {
-      // Changez la langue globale via i18n
       i18n.changeLanguage(selectedCountry.sysLangue);
-      
-      // Mettre à jour l'attribut lang du document HTML
       document.documentElement.lang = selectedCountry.sysLangue;
       
-      // Mettre à jour le titre de la page en fonction de la langue
       const pageTitles = {
-        'fr-FR': 'Connexion - AMS SANTE',
-        'en-GB': 'Login - AMS SANTE',
-        'es-ES': 'Inicio de sesión - AMS SANTE'
+        'fr-FR': 'Connexion - HealthCenterSoft',
+        'en-GB': 'Login - HealthCenterSoft',
+        'es-ES': 'Inicio de sesión - HealthCenterSoft'
       };
-      document.title = pageTitles[selectedCountry.sysLangue] || 'AMS SANTE';
+      document.title = pageTitles[selectedCountry.sysLangue] || 'HealthCenterSoft';
     }
   };
 
@@ -94,12 +125,10 @@ const LoginForm = () => {
       [name]: type === 'checkbox' ? checked : value
     }));
     
-    // Effacer l'erreur quand l'utilisateur commence à taper
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
     
-    // Effacer l'erreur générale
     if (errors.submit) {
       setErrors(prev => ({ ...prev, submit: '' }));
     }
@@ -129,10 +158,8 @@ const LoginForm = () => {
     setErrors({});
 
     try {
-      // Appel de la fonction login avec username, password et country
       await login(formData.username, formData.password, formData.country);
       
-      // Sauvegarder les identifiants
       if (formData.rememberMe) {
         localStorage.setItem('healthcenter_credentials', JSON.stringify({
           username: formData.username,
@@ -144,12 +171,10 @@ const LoginForm = () => {
         localStorage.removeItem('healthcenter_credentials');
       }
       
-      // Redirection vers le dashboard
       navigate('/dashboard');
     } catch (error) {
       console.error('Login error:', error);
       
-      // Gérer l'erreur spécifique du paramètre 'id'
       if (error.message && error.message.includes("parameter 'id'")) {
         setErrors({ 
           submit: t('loginError') + ' : Erreur de validation du serveur. Veuillez réessayer.'
@@ -179,238 +204,499 @@ const LoginForm = () => {
   if (authLoading) {
     return (
       <div className="loading-screen">
-        <div className="spinner"></div>
-        <p>{t('checkingSession') || 'Vérification de la session...'}</p>
+        <div className="spinner-container">
+          <div className="spinner-ring"></div>
+          <div className="spinner-core"></div>
+          <Heart className="spinner-icon" />
+        </div>
+        <p>{t('checkingSession') || 'Initialisation du système...'}</p>
       </div>
     );
   }
 
   return (
-    <motion.div
-      className="login-form-container"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6 }}
-    >
-      {/* En-tête avec informations régionales */}
-      <div className="login-header">
-        <motion.div
-          className="login-logo"
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.2, type: "spring" }}
-        >
-          <div className="logo-circle">
-            <Shield className="logo-icon" />
-          </div>
-          <div className="logo-text">
-            <h1>{t('AMS SANTE')}</h1>
-            <span className="logo-subtitle">{t('Insurance')}</span>
-          </div>
-        </motion.div>
-        
-        <AnimatePresence>
-          {showWelcomeMessage && (
-            <motion.div 
-              className="welcome-message"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-            >
-              <Activity size={16} />
-              <span>{t('welcome')}</span>
-              <button 
-                className="close-welcome"
-                onClick={() => setShowWelcomeMessage(false)}
-              >
-                ×
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+    <div className="login-page-wrapper">
+      {/* Fond animé */}
+      <div className="animated-background">
+        {/* Particules */}
+        {particles.map((particle) => (
+          <motion.div
+            key={particle.id}
+            className="particle"
+            style={{
+              left: `${particle.x}%`,
+              top: `${particle.y}%`,
+              width: `${particle.size}px`,
+              height: `${particle.size}px`,
+            }}
+            animate={{
+              y: [0, -30, 0],
+              opacity: [0.3, 0.8, 0.3],
+            }}
+            transition={{
+              duration: particle.speed * 3,
+              repeat: Infinity,
+              delay: particle.delay,
+            }}
+          />
+        ))}
+
+        {/* Cercles flous animés */}
+        <motion.div 
+          className="blob blob-1"
+          animate={{
+            x: [0, 100, 0],
+            y: [0, -50, 0],
+            scale: [1, 1.2, 1],
+          }}
+          transition={{
+            duration: 20,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div 
+          className="blob blob-2"
+          animate={{
+            x: [0, -80, 0],
+            y: [0, 60, 0],
+            scale: [1, 1.3, 1],
+          }}
+          transition={{
+            duration: 25,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div 
+          className="blob blob-3"
+          animate={{
+            x: [0, 120, 0],
+            y: [0, 40, 0],
+            scale: [0.8, 1.1, 0.8],
+          }}
+          transition={{
+            duration: 18,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
       </div>
 
-      {/* Informations sur le pays sélectionné */}
-      <div className="country-selection-info">
-        <div className="country-flag">
-          <span className="flag-emoji">{getSelectedCountry().flag}</span>
-          <div className="country-details">
-            <strong>{getSelectedCountry().name}</strong>
-            <small>{t('capital')}: {getSelectedCountry().capital}</small>
-            <div className="language-indicator">
-              <Languages size={12} />
-              <span>{getSelectedCountry().langueDefaut}</span>
+      {/* Contenu principal */}
+      <div className="login-main-container">
+        {/* Côté gauche - Présentation */}
+        <div className="login-sidebar">
+          <motion.div 
+            className="sidebar-content"
+            initial={{ opacity: 0, x: -50 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+          >
+            <div className="sidebar-header">
+              <motion.div 
+                className="logo-wrapper"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <div className="logo-glow">
+                  <Shield className="logo-main-icon" />
+                </div>
+                <div className="logo-text-wrapper">
+                  <h1 className="system-name">
+                    HealthCenter<span className="gradient-text">Soft</span>
+                  </h1>
+                  <div className="system-badge">
+                    <span className="badge-version">v2.0</span>
+                    <span className="badge-region">{t('centralAfrica')}</span>
+                  </div>
+                </div>
+              </motion.div>
+              
+              <motion.p 
+                className="system-tagline"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+              >
+                {t('systemDescription') || 'Système de Gestion Médicale Intelligent'}
+              </motion.p>
+            </div>
+
+            {/* Carrousel de fonctionnalités */}
+            <div className="features-carousel">
+              <AnimatePresence mode="wait">
+                {features.map((feature, index) => (
+                  index === activeFeature && (
+                    <motion.div
+                      key={index}
+                      className="feature-card"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.5 }}
+                    >
+                      <div className="feature-icon-wrapper">
+                        <feature.icon className="feature-icon" />
+                      </div>
+                      <div className="feature-content">
+                        <h3 className="feature-title">{feature.label}</h3>
+                        <p className="feature-desc">{feature.desc}</p>
+                      </div>
+                      <motion.div 
+                        className="feature-progress"
+                        initial={{ width: 0 }}
+                        animate={{ width: '100%' }}
+                        transition={{ duration: 3, ease: "linear" }}
+                      />
+                    </motion.div>
+                  )
+                ))}
+              </AnimatePresence>
+
+              {/* Indicateurs de fonctionnalités */}
+              <div className="feature-indicators">
+                {features.map((_, index) => (
+                  <button
+                    key={index}
+                    className={`indicator ${index === activeFeature ? 'active' : ''}`}
+                    onClick={() => setActiveFeature(index)}
+                  >
+                    <div className="indicator-dot" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Statistiques système */}
+            <div className="system-stats">
+              <div className="stat-item">
+                <div className="stat-icon">
+                  <Users className="stat-icon-svg" />
+                </div>
+                <div className="stat-content">
+                  <span className="stat-value">24K+</span>
+                  <span className="stat-label">{t('patients') || 'Patients'}</span>
+                </div>
+              </div>
+              <div className="stat-divider" />
+              <div className="stat-item">
+                <div className="stat-icon">
+                  <Heart className="stat-icon-svg" />
+                </div>
+                <div className="stat-content">
+                  <span className="stat-value">850+</span>
+                  <span className="stat-label">{t('doctors') || 'Médecins'}</span>
+                </div>
+              </div>
+              <div className="stat-divider" />
+              <div className="stat-item">
+                <div className="stat-icon">
+                  <Database className="stat-icon-svg" />
+                </div>
+                <div className="stat-content">
+                  <span className="stat-value">99.9%</span>
+                  <span className="stat-label">{t('uptime') || 'Disponibilité'}</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Côté droit - Formulaire */}
+        <motion.div 
+          className="login-form-container"
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8, delay: 0.4 }}
+        >
+          {/* En-tête du formulaire */}
+          <div className="form-header">
+            <motion.div
+              className="form-title-wrapper"
+              initial={{ y: -20 }}
+              animate={{ y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Lock className="form-title-icon" />
+              <h2 className="form-title">{t('secureAccess') || 'Accès Sécurisé'}</h2>
+            </motion.div>
+            
+            <AnimatePresence>
+              {showWelcomeMessage && (
+                <motion.div 
+                  className="welcome-banner"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <div className="welcome-content">
+                    <Sparkles className="welcome-icon" />
+                    <span className="welcome-text">
+                      {t('welcomeBack') || 'Bienvenue sur HealthCenterSoft'}
+                    </span>
+                  </div>
+                  <button 
+                    className="close-welcome"
+                    onClick={() => setShowWelcomeMessage(false)}
+                  >
+                    ×
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Sélection de pays */}
+          <div className="country-card">
+            <div className="country-card-header">
+              <Globe className="country-header-icon" />
+              <span className="country-header-label">
+                {t('selectedCountry') || 'Pays sélectionné'}
+              </span>
+            </div>
+            <div className="country-card-content">
+              <div className="country-flag-large">
+                <span className="flag-emoji">{getSelectedCountry().flag}</span>
+                <div className="country-info">
+                  <h3 className="country-name">{getSelectedCountry().name}</h3>
+                  <div className="country-details">
+                    <div className="country-detail">
+                      <MapPin className="detail-icon" size={12} />
+                      <span>{getSelectedCountry().capital}</span>
+                    </div>
+                    <div className="country-detail">
+                      <Languages className="detail-icon" size={12} />
+                      <span>{getSelectedCountry().langueDefaut}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <ChevronDown className="country-dropdown-arrow" />
+            </div>
+            <select
+              id="country"
+              name="country"
+              value={formData.country}
+              onChange={handleChange}
+              className="country-select-hidden"
+              disabled={isLoading}
+            >
+              {formatCountryList().map(country => (
+                <option key={country.code} value={country.code}>
+                  {country.displayName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Formulaire de connexion */}
+          <form onSubmit={handleSubmit} className="modern-form">
+            {/* Champ nom d'utilisateur */}
+            <div className="input-group floating-label">
+              <div className="input-icon">
+                <Users className="input-icon-svg" />
+              </div>
+              <input
+                type="text"
+                id="username"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                className={`form-input-modern ${errors.username ? 'error' : ''}`}
+                placeholder=" "
+                disabled={isLoading}
+                autoComplete="username"
+              />
+              <label htmlFor="username" className="floating-label-text">
+                {t('username') || 'Nom d\'utilisateur'}
+              </label>
+              {formData.username && (
+                <motion.div
+                  className="input-check"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                >
+                  <CheckCircle size={16} />
+                </motion.div>
+              )}
+            </div>
+            {errors.username && (
+              <motion.div
+                className="error-bubble"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <AlertCircle className="error-bubble-icon" />
+                <span>{errors.username}</span>
+              </motion.div>
+            )}
+
+            {/* Champ mot de passe */}
+            <div className="input-group floating-label">
+              <div className="input-icon">
+                <Lock className="input-icon-svg" />
+              </div>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                id="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                className={`form-input-modern ${errors.password ? 'error' : ''}`}
+                placeholder=" "
+                disabled={isLoading}
+                autoComplete="current-password"
+              />
+              <label htmlFor="password" className="floating-label-text">
+                {t('password') || 'Mot de passe'}
+              </label>
+              <button
+                type="button"
+                className="password-toggle-modern"
+                onClick={() => setShowPassword(!showPassword)}
+                disabled={isLoading}
+              >
+                {showPassword ? (
+                  <EyeOff className="toggle-icon" />
+                ) : (
+                  <Eye className="toggle-icon" />
+                )}
+              </button>
+            </div>
+            {errors.password && (
+              <motion.div
+                className="error-bubble"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <AlertCircle className="error-bubble-icon" />
+                <span>{errors.password}</span>
+              </motion.div>
+            )}
+
+            {/* Options */}
+            <div className="form-options-modern">
+              <label className="checkbox-modern">
+                <input
+                  type="checkbox"
+                  name="rememberMe"
+                  checked={formData.rememberMe}
+                  onChange={handleChange}
+                  className="checkbox-modern-input"
+                  disabled={isLoading}
+                />
+                <span className="checkbox-modern-custom">
+                  {formData.rememberMe && (
+                    <motion.div
+                      className="checkbox-check"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                    >
+                      ✓
+                    </motion.div>
+                  )}
+                </span>
+                <span className="checkbox-modern-label">
+                  {t('rememberMe') || 'Se souvenir de moi'}
+                </span>
+              </label>
+              
+              <motion.button
+                type="button"
+                className="forgot-password-modern"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => alert(t('forgotPasswordMessage'))}
+              >
+                {t('forgotPassword') || 'Mot de passe oublié ?'}
+              </motion.button>
+            </div>
+
+            {/* Message d'erreur général */}
+            <AnimatePresence>
+              {errors.submit && (
+                <motion.div
+                  className="global-error"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <AlertTriangle className="global-error-icon" />
+                  <div className="global-error-content">
+                    <strong>{t('error') || 'Erreur'}</strong>
+                    <p>{errors.submit}</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Bouton de connexion */}
+            <motion.button
+              type="submit"
+              className="login-button-modern"
+              disabled={isLoading}
+              whileHover={{ scale: isLoading ? 1 : 1.02 }}
+              whileTap={{ scale: isLoading ? 1 : 0.98 }}
+            >
+              {isLoading ? (
+                <>
+                  <div className="loading-spinner-modern"></div>
+                  <span>{t('connecting') || 'Connexion en cours...'}</span>
+                </>
+              ) : (
+                <>
+                  <LogIn className="login-button-icon" />
+                  <span>{t('login') || 'Se connecter'}</span>
+                </>
+              )}
+            </motion.button>
+
+            {/* Message de sécurité */}
+            <div className="security-footer">
+              <Shield className="security-icon" />
+              <span className="security-text">
+                {t('secureConnection') || 'Connexion sécurisée par HTTPS'}
+              </span>
+            </div>
+          </form>
+
+          {/* Pied de page du formulaire */}
+          <div className="form-footer">
+            <div className="tech-badges">
+              <div className="tech-badge">
+                <Cpu className="tech-badge-icon" />
+                <span>Node.js</span>
+              </div>
+              <div className="tech-badge">
+                <Database className="tech-badge-icon" />
+                <span>SQL Server</span>
+              </div>
+              <div className="tech-badge">
+                <Shield className="tech-badge-icon" />
+                <span>AES-256</span>
+              </div>
+            </div>
+            
+            <div className="region-info-modern">
+              <div className="region-icon-modern">
+                <Target className="region-icon-svg" />
+              </div>
+              <div className="region-text-modern">
+                <strong>{t('centralAfrica') || 'Internationale'}</strong>
+                <small>{t('sevenCountries') || '7 pays supportés'}</small>
+              </div>
+            </div>
+
+            <div className="copyright">
+              <span>© 2024 HealthCenterSoft v2.0</span>
+              <span className="copyright-separator">•</span>
+              <span>{t('medicalSystem') || 'Système Médical Professionnel'}</span>
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
-
-      <form onSubmit={handleSubmit} className="login-form">
-        <div className="form-group">
-          <label htmlFor="country" className="form-label">
-            <Globe className="label-icon" />
-            {t('selectCountry')}
-          </label>
-          <select
-            id="country"
-            name="country"
-            value={formData.country}
-            onChange={handleChange}
-            className="form-select"
-            disabled={isLoading}
-          >
-            {formatCountryList().map(country => (
-              <option key={country.code} value={country.code}>
-                {country.displayName}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="username" className="form-label">
-            <Users className="label-icon" />
-            {t('username')}
-          </label>
-          <input
-            type="text"
-            id="username"
-            name="username"
-            value={formData.username}
-            onChange={handleChange}
-            className={`form-input ${errors.username ? 'error' : ''}`}
-            placeholder={t('usernamePlaceholder')}
-            disabled={isLoading}
-            autoComplete="username"
-          />
-          <AnimatePresence>
-            {errors.username && (
-              <motion.span
-                className="error-message"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-              >
-                <AlertCircle className="error-icon" />
-                {errors.username}
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="password" className="form-label">
-            {t('password')}
-          </label>
-          <div className="password-input-container">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              className={`form-input ${errors.password ? 'error' : ''}`}
-              placeholder={t('passwordPlaceholder')}
-              disabled={isLoading}
-              autoComplete="current-password"
-            />
-            <button
-              type="button"
-              className="password-toggle"
-              onClick={() => setShowPassword(!showPassword)}
-              disabled={isLoading}
-            >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
-          <AnimatePresence>
-            {errors.password && (
-              <motion.span
-                className="error-message"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-              >
-                <AlertCircle className="error-icon" />
-                {errors.password}
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </div>
-
-        <div className="form-options">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              name="rememberMe"
-              checked={formData.rememberMe}
-              onChange={handleChange}
-              className="checkbox-input"
-              disabled={isLoading}
-            />
-            <span className="checkbox-custom"></span>
-            {t('rememberMe')}
-          </label>
-          <button 
-            type="button" 
-            className="forgot-password" 
-            disabled={isLoading}
-            onClick={() => alert(t('forgotPasswordMessage'))}
-          >
-            {t('forgotPassword')}
-          </button>
-        </div>
-
-        <AnimatePresence>
-          {errors.submit && (
-            <motion.div
-              className="submit-error"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-            >
-              <AlertCircle className="error-icon" />
-              {errors.submit}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <motion.button
-          type="submit"
-          className="login-button"
-          disabled={isLoading}
-          whileHover={{ scale: isLoading ? 1 : 1.02 }}
-          whileTap={{ scale: isLoading ? 1 : 0.98 }}
-        >
-          {isLoading ? (
-            <div className="loading-spinner"></div>
-          ) : (
-            <LogIn className="button-icon" />
-          )}
-          {isLoading ? t('loggingIn') : t('login')}
-        </motion.button>
-      </form>
-
-      <div className="login-footer">
-        <div className="region-info">
-          <Globe className="region-icon" />
-          <div className="region-text">
-            <strong>{t('systemDescription')}</strong>
-            <small>{t('supportedCountries')}: {countries.map(c => c.name).join(', ')}</small>
-          </div>
-        </div>
-        
-        <div className="browser-recommendation">
-          <Chrome className="browser-icon" />
-          <span>{t('browserRecommendation')}</span>
-        </div>
-
-        <div className="security-notice">
-          <Shield size={14} />
-          <span>{t('securityNotice')}</span>
-        </div>
-      </div>
-    </motion.div>
+    </div>
   );
 };
 

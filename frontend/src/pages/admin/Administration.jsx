@@ -25,22 +25,16 @@ import {
   Spin,
   Typography,
   InputNumber,
-  Collapse,
   Radio,
   Upload,
   Drawer,
-  List,
-  Tree,
-  Checkbox,
   TimePicker,
-  Slider,
 } from 'antd';
 import {
   DashboardOutlined,
   UserOutlined,
   TeamOutlined,
   SecurityScanOutlined,
-  HistoryOutlined,
   SettingOutlined,
   LogoutOutlined,
   PlusOutlined,
@@ -52,49 +46,36 @@ import {
   LockOutlined,
   ProfileOutlined,
   InfoCircleOutlined,
-  WarningOutlined,
   CheckCircleOutlined,
   SyncOutlined,
   BankOutlined,
   MailOutlined,
   PhoneOutlined,
-  CalendarOutlined,
   GlobalOutlined,
   TranslationOutlined,
   DatabaseOutlined,
-  ApiOutlined,
   CloudServerOutlined,
   KeyOutlined,
-  SafetyCertificateOutlined,
   FileTextOutlined,
   ControlOutlined,
-  ToolOutlined,
-  FileSyncOutlined,
-  ExportOutlined,
-  ImportOutlined,
   SaveOutlined,
-  FileProtectOutlined,
-  AuditOutlined,
-  NotificationOutlined,
-  BarChartOutlined,
-  AppstoreOutlined,
   CloudDownloadOutlined,
-  CloudUploadOutlined,
   RollbackOutlined,
-  ClockCircleOutlined,
   FolderOutlined,
   ScheduleOutlined,
+  ShopOutlined,
+  EnvironmentOutlined,
 } from '@ant-design/icons';
 import moment from 'moment';
 import 'moment/locale/fr';
 import { adminAPI } from '../../services/api';
+import { centresAPI } from '../../services/api';
 
 const { TabPane } = Tabs;
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 const { TextArea } = Input;
 const { Text } = Typography;
-const { Panel } = Collapse;
 
 const AdminPage = () => {
   // États principaux
@@ -140,7 +121,6 @@ const AdminPage = () => {
   // Données rôles
   const [roles, setRoles] = useState([]);
   const [availableRoles, setAvailableRoles] = useState([]);
-  const [roleTemplates, setRoleTemplates] = useState([]);
 
   // Données sessions
   const [sessions, setSessions] = useState([]);
@@ -150,6 +130,10 @@ const AdminPage = () => {
     total: 0,
   });
   const [sessionsFilters, setSessionsFilters] = useState({});
+
+  // Données centres (pour l'affectation des utilisateurs)
+  const [centres, setCentres] = useState([]);
+  const [centresLoading, setCentresLoading] = useState(false);
 
   // Données système
   const [etatSysteme, setEtatSysteme] = useState({
@@ -165,17 +149,6 @@ const AdminPage = () => {
   const [profile, setProfile] = useState(null);
 
   // Données configurations
-  const [configurations, setConfigurations] = useState({
-    general: [],
-    securite: [],
-    email: [],
-    reseau: [],
-    backup: [],
-    interface: [],
-    comptabilite: [],
-    medical: [],
-  });
-  
   const [parametres, setParametres] = useState([]);
   const [parametresSearch, setParametresSearch] = useState('');
   const [selectedParametre, setSelectedParametre] = useState(null);
@@ -195,7 +168,7 @@ const AdminPage = () => {
   const [backupStatus, setBackupStatus] = useState(null);
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   
-  // Paramètres de backup locaux (stockés dans localStorage si l'API n'existe pas)
+  // Paramètres de backup locaux
   const [backupSettings, setBackupSettings] = useState(() => {
     const savedSettings = localStorage.getItem('backupSettings');
     return savedSettings ? JSON.parse(savedSettings) : {
@@ -224,7 +197,6 @@ const AdminPage = () => {
   const [selectedRole, setSelectedRole] = useState(null);
   const [passwordResetModal, setPasswordResetModal] = useState(false);
   const [userToResetPassword, setUserToResetPassword] = useState(null);
-  const [importModalVisible, setImportModalVisible] = useState(false);
   const [backupSettingsModal, setBackupSettingsModal] = useState(false);
 
   // Formulaires
@@ -233,7 +205,6 @@ const AdminPage = () => {
   const [passwordResetForm] = Form.useForm();
   const [profileForm] = Form.useForm();
   const [parametreForm] = Form.useForm();
-  const [importForm] = Form.useForm();
   const [backupSettingsForm] = Form.useForm();
 
   // ==================== CHARGEMENT DES DONNÉES ====================
@@ -261,6 +232,7 @@ const AdminPage = () => {
         theme: user.theme || user.THEME_UTI || 'light',
         photo: user.photo || user.PHOTO_UTI,
         nom_complet: `${user.prenom || user.PRE_UTI || ''} ${user.nom || user.NOM_UTI || ''}`.trim(),
+        cod_cen: user.cod_cen || user.COD_CEN || null,
       };
       
       setCurrentUser(currentUserData);
@@ -269,7 +241,7 @@ const AdminPage = () => {
       await Promise.all([
         loadDashboardData(),
         loadAvailableRoles(),
-        loadConfigurations(),
+        loadCentres(),
       ]);
       
       setInitialLoad(true);
@@ -318,9 +290,9 @@ const AdminPage = () => {
     try {
       const searchParams = { ...usersSearchParams, ...params };
       
-      // Si l'utilisateur n'est pas super admin, filtrer par son pays
+      // Si l'utilisateur n'est pas super admin, filtrer par son centre
       if (currentUser && !currentUser.super_admin) {
-        searchParams.cod_pay = currentUser.cod_pay;
+        searchParams.cod_cen = currentUser.cod_cen;
       }
       
       const response = await adminAPI.getUtilisateurs({
@@ -360,6 +332,52 @@ const AdminPage = () => {
     }
   };
 
+  const loadCentres = async () => {
+    try {
+      setCentresLoading(true);
+      // Si l'utilisateur est lié à un centre, ne charger que celui-ci
+      const user = (window && window.localStorage && localStorage.getItem('user')) ? JSON.parse(localStorage.getItem('user')) : null;
+      const userCentreId = user?.centre_id || user?.COD_CEN || user?.prestataire?.centre_id || null;
+      
+      console.log('🔍 Chargement centres pour Admin - User:', user, 'Centre ID:', userCentreId);
+      
+      let response;
+      if (user && !user.super_admin && userCentreId) {
+        console.log('👤 Utilisateur non super-admin avec centre ID:', userCentreId);
+        const centreResult = await centresAPI.getById(userCentreId);
+        response = { success: centreResult.success, centres: centreResult.centre ? [centreResult.centre] : (centreResult.centres || []) };
+      } else {
+        console.log('👤 Super-admin ou pas de centre ID, chargement de tous les centres');
+        response = await centresAPI.getAll({
+          limit: 100, // Limite élevée pour charger tous les centres
+          actif: true,
+        });
+      }
+      
+      console.log('✅ Réponse centres Admin:', response);
+      
+      if (response?.success) {
+        // Formater les centres pour le Select
+        const formattedCentres = response.centres?.map(centre => ({
+          value: centre.COD_CEN || centre.id,
+          label: centre.LIB_CEN || centre.nom || centre.name,
+          type: centre.TYP_CEN || centre.type,
+          region: centre.COD_PAI || centre.region,
+        })) || [];
+        
+        setCentres(formattedCentres);
+      } else {
+        message.warning('Impossible de charger la liste des centres');
+        setCentres([]);
+      }
+    } catch (error) {
+      console.error('Erreur chargement centres:', error);
+      setCentres([]);
+    } finally {
+      setCentresLoading(false);
+    }
+  };
+
   const loadRoles = async () => {
     if (activeTab !== 'roles') return;
     
@@ -378,17 +396,6 @@ const AdminPage = () => {
       setRoles([]);
     } finally {
       setLoading(prev => ({ ...prev, roles: false }));
-    }
-  };
-
-  const loadRoleTemplates = async () => {
-    try {
-      const response = await adminAPI.getRoleTemplates();
-      if (response?.success) {
-        setRoleTemplates(response.templates || []);
-      }
-    } catch (error) {
-      console.error('Erreur chargement templates rôles:', error);
     }
   };
 
@@ -494,26 +501,6 @@ const AdminPage = () => {
       console.error(error);
     } finally {
       setLoading(prev => ({ ...prev, profil: false }));
-    }
-  };
-
-  const loadConfigurations = async () => {
-    try {
-      const response = await adminAPI.getConfigurations();
-      if (response?.success) {
-        setConfigurations(response.configurations || {
-          general: [],
-          securite: [],
-          email: [],
-          reseau: [],
-          backup: [],
-          interface: [],
-          comptabilite: [],
-          medical: [],
-        });
-      }
-    } catch (error) {
-      console.error('Erreur chargement configurations:', error);
     }
   };
 
@@ -676,10 +663,7 @@ const AdminPage = () => {
     const loaders = {
       dashboard: loadDashboardData,
       utilisateurs: loadUtilisateurs,
-      roles: () => {
-        loadRoles();
-        loadRoleTemplates();
-      },
+      roles: loadRoles,
       sessions: loadSessions,
       systeme: loadEtatSysteme,
       'mon-profil': loadProfile,
@@ -708,30 +692,33 @@ const AdminPage = () => {
 
   // ==================== GESTION DES UTILISATEURS ====================
 
- const showCreateUserModal = () => {
-  setSelectedUser(null);
-  userForm.resetFields();
-  
-  let defaultCOD_PAY = 'CMF';
-  if (currentUser && !currentUser.super_admin) {
-    defaultCOD_PAY = currentUser.cod_pay || 'CMF';
-  }
-  
-  userForm.setFieldsValue({
-    COD_PAY: defaultCOD_PAY,
-    SEX_UTI: 'M',
-    PROFIL_UTI: 'Utilisateur',
-    ACTIF: true,
-    SUPER_ADMIN: false,
-    LANGUE_UTI: 'fr',
-    TIMEZONE_UTI: 'Africa/Douala',
-    DATE_FORMAT: 'DD/MM/YYYY',
-    THEME_UTI: 'light',
-    roleIds: [],
-    // NE PAS pré-remplir le mot de passe
-  });
-  setUserModalVisible(true);
-};
+  const showCreateUserModal = () => {
+    setSelectedUser(null);
+    userForm.resetFields();
+    
+    let defaultCOD_PAY = 'CMF';
+    let defaultCOD_CEN = null;
+    
+    if (currentUser && !currentUser.super_admin) {
+      defaultCOD_PAY = currentUser.cod_pay || 'CMF';
+      defaultCOD_CEN = currentUser.cod_cen || null;
+    }
+    
+    userForm.setFieldsValue({
+      COD_PAY: defaultCOD_PAY,
+      COD_CEN: defaultCOD_CEN,
+      SEX_UTI: 'M',
+      PROFIL_UTI: 'Utilisateur',
+      ACTIF: true,
+      SUPER_ADMIN: false,
+      LANGUE_UTI: 'fr',
+      TIMEZONE_UTI: 'Africa/Douala',
+      DATE_FORMAT: 'DD/MM/YYYY',
+      THEME_UTI: 'light',
+      roleIds: [],
+    });
+    setUserModalVisible(true);
+  };
 
   const showEditUserModal = async (user) => {
     setSelectedUser(user);
@@ -747,6 +734,7 @@ const AdminPage = () => {
           SEX_UTI: userData.sexe || userData.SEX_UTI,
           PROFIL_UTI: userData.profil || userData.PROFIL_UTI,
           COD_PAY: userData.cod_pay || userData.COD_PAY,
+          COD_CEN: userData.cod_cen || userData.COD_CEN,
           TEL_UTI: userData.telephone || userData.TEL_UTI,
           TEL_MOBILE_UTI: userData.mobile || userData.TEL_MOBILE_UTI,
           LANGUE_UTI: userData.langue || userData.LANGUE_UTI,
@@ -835,84 +823,80 @@ const AdminPage = () => {
     }
   };
 
- const handleUserSubmit = async (values) => {
-  try {
-    let userData = {
-      ...values,
-      roles: values.roleIds || [],
-    };
+  const handleUserSubmit = async (values) => {
+    try {
+      let userData = {
+        ...values,
+        roles: values.roleIds || [],
+        mot_de_passe: values.mot_de_passe || 'Password123',
+      };
 
-    // MODIFICATION : Vérifier que le mot de passe est fourni pour la création
-    if (!selectedUser && !values.mot_de_passe) {
-      message.error('Le mot de passe est requis pour la création d\'un utilisateur');
-      return;
-    }
-
-    // Hacher le mot de passe si fourni
-    if (values.mot_de_passe) {
-      try {
-        const hashedPassword = await adminAPI.hashPasswordSHA256(values.mot_de_passe);
-        userData.PWD_UTI = hashedPassword;
-      } catch (hashError) {
-        console.error('Erreur hachage mot de passe:', hashError);
-        message.error('Erreur lors du traitement du mot de passe');
-        return; // Arrêter l'exécution en cas d'erreur
+      // Vérifier que le mot de passe est fourni pour la création
+      if (!selectedUser && !values.mot_de_passe) {
+        message.error('Le mot de passe est requis pour la création d\'un utilisateur');
+        return;
       }
-    }
 
-    // SUPPRIMER cette partie qui génère un mot de passe aléatoire :
-    // } catch (hashError) {
-    //   console.error('Erreur hachage mot de passe:', hashError);
-    //   // Fallback: utiliser un mot de passe aléatoire
-    //   const randomPassword = adminAPI.generateRandomPassword();
-    //   userData.mot_de_passe = randomPassword;
-    // }
+      // Validation du mot de passe
+      if (!selectedUser && values.mot_de_passe) {
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/;
+        if (values.mot_de_passe.length < 8) {
+          message.error('Le mot de passe doit contenir au moins 8 caractères');
+          return;
+        }
+        if (!passwordRegex.test(values.mot_de_passe)) {
+          message.error('Le mot de passe doit contenir au moins une majuscule, une minuscule, un chiffre et un caractère spécial');
+          return;
+        }
+      }
 
-    if (currentUser && !currentUser.super_admin) {
-      userData.COD_PAY = currentUser.cod_pay || 'CMF';
-    }
+      if (currentUser && !currentUser.super_admin) {
+        userData.COD_PAY = currentUser.cod_pay || 'CMF';
+        userData.COD_CEN = currentUser.cod_cen || null;
+      }
 
-    if (selectedUser) {
-      // Mise à jour - mot de passe optionnel
-      const response = await adminAPI.updateUtilisateur(selectedUser.id, userData);
-      if (response?.success) {
-        message.success('Utilisateur mis à jour avec succès');
-        setUserModalVisible(false);
-        loadUtilisateurs();
+      if (selectedUser) {
+        // Mise à jour - ne pas envoyer le mot de passe s'il n'est pas modifié
+        if (!userData.mot_de_passe || userData.mot_de_passe === 'Password123') {
+          delete userData.mot_de_passe;
+        }
+        
+        const response = await adminAPI.updateUtilisateur(selectedUser.id, userData);
+        if (response?.success) {
+          message.success('Utilisateur mis à jour avec succès');
+          setUserModalVisible(false);
+          loadUtilisateurs();
+        } else {
+          throw new Error(response?.message || 'Erreur lors de la mise à jour');
+        }
       } else {
-        throw new Error(response?.message || 'Erreur lors de la mise à jour');
+        // Création
+        const response = await adminAPI.createUtilisateur(userData);
+        if (response?.success) {
+          message.success('Utilisateur créé avec succès');
+          setUserModalVisible(false);
+          loadUtilisateurs();
+        } else {
+          throw new Error(response?.message || 'Erreur lors de la création');
+        }
       }
-    } else {
-      // Création - mot de passe obligatoire
-      // MODIFICATION : Supprimer l'affichage du mot de passe généré
-      const response = await adminAPI.createUtilisateur(userData);
-      if (response?.success) {
-        message.success('Utilisateur créé avec succès');
-        setUserModalVisible(false);
-        loadUtilisateurs();
-      } else {
-        throw new Error(response?.message || 'Erreur lors de la création');
+    } catch (error) {
+      console.error('Erreur lors de la soumission:', error);
+      
+      let errorMessage = error.message;
+      if (error.message.includes('login existe déjà') || error.message.includes('duplicate')) {
+        errorMessage = 'Ce nom d\'utilisateur est déjà utilisé';
+      } else if (error.message.includes('email existe déjà')) {
+        errorMessage = 'Cette adresse email est déjà utilisée';
+      } else if (error.message.includes('403')) {
+        errorMessage = 'Vous n\'avez pas les autorisations nécessaires';
+      } else if (error.message.includes('pays')) {
+        errorMessage = 'Vous ne pouvez créer des utilisateurs que pour votre pays';
       }
+      
+      message.error(errorMessage);
     }
-  } catch (error) {
-    console.error('Erreur lors de la soumission:', error);
-    
-    let errorMessage = error.message;
-    if (error.message.includes('login existe déjà')) {
-      errorMessage = 'Ce nom d\'utilisateur est déjà utilisé';
-    } else if (error.message.includes('email existe déjà')) {
-      errorMessage = 'Cette adresse email est déjà utilisée';
-    } else if (error.message.includes('403')) {
-      errorMessage = 'Vous n\'avez pas les autorisations nécessaires';
-    } else if (error.message.includes('pays')) {
-      errorMessage = 'Vous ne pouvez créer des utilisateurs que pour votre pays';
-    } else if (error.message.includes('mot de passe')) {
-      errorMessage = 'Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule, un chiffre et un caractère spécial';
-    }
-    
-    message.error(errorMessage);
-  }
-};
+  };
 
   // ==================== GESTION DES RÔLES ====================
 
@@ -921,7 +905,6 @@ const AdminPage = () => {
     roleForm.resetFields();
     roleForm.setFieldsValue({
       ACTIF: true,
-      templateRoleId: null,
     });
     setRoleModalVisible(true);
   };
@@ -971,9 +954,7 @@ const AdminPage = () => {
       } else {
         const response = await adminAPI.createRole(values);
         if (response?.success) {
-          message.success(
-            `Rôle créé avec succès. ${response.role?.options_assignees || 0} options assignées.`
-          );
+          message.success('Rôle créé avec succès');
           setRoleModalVisible(false);
           loadRoles();
         } else {
@@ -1173,7 +1154,6 @@ const AdminPage = () => {
     }
   };
 
-  // CORRECTION: Gestion locale des paramètres de backup
   const handleSaveBackupSettings = async (values) => {
     try {
       // Convertir le moment en string
@@ -1197,7 +1177,6 @@ const AdminPage = () => {
     }
   };
 
-  // CORRECTION: Fonction pour activer/désactiver le backup automatique
   const toggleAutoBackup = async (enabled) => {
     try {
       const updatedSettings = {
@@ -1280,6 +1259,25 @@ const AdminPage = () => {
           {email || '-'}
         </div>
       ),
+    },
+    {
+      title: 'Centre',
+      dataIndex: 'cod_cen',
+      key: 'cod_cen',
+      render: (cod_cen, record) => {
+        if (!cod_cen) return <Tag color="default">Non affecté</Tag>;
+        
+        const centre = centres.find(c => c.value === cod_cen);
+        return centre ? (
+          <Tooltip title={`${centre.label} (${centre.type})`}>
+            <Tag color="blue" icon={<ShopOutlined />}>
+              {centre.label}
+            </Tag>
+          </Tooltip>
+        ) : (
+          <Tag color="orange">Centre #{cod_cen}</Tag>
+        );
+      },
     },
     {
       title: 'Profil',
@@ -2427,6 +2425,14 @@ const AdminPage = () => {
                     {profile?.mobile || '-'}
                   </div>
                 </Descriptions.Item>
+                {profile?.cod_cen && (
+                  <Descriptions.Item label="Centre affecté" style={{ paddingBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <ShopOutlined style={{ marginRight: 8, color: '#666' }} />
+                      {centres.find(c => c.value === profile.cod_cen)?.label || `Centre #${profile.cod_cen}`}
+                    </div>
+                  </Descriptions.Item>
+                )}
               </Descriptions>
             </Card>
           </Col>
@@ -2738,6 +2744,11 @@ const AdminPage = () => {
               />
             </Badge>
             <span style={{ fontSize: 14 }}>{currentUser?.nom_complet || 'Administrateur'}</span>
+            {currentUser?.cod_cen && (
+              <Tag icon={<ShopOutlined />} color="blue">
+                Centre #{currentUser.cod_cen}
+              </Tag>
+            )}
             <Button
               type="link"
               danger
@@ -2974,6 +2985,38 @@ const AdminPage = () => {
 
           <Row gutter={[16, 16]}>
             <Col span={12}>
+              <Form.Item name="COD_CEN" label="Centre affecté">
+                <Select
+                  placeholder="Sélectionnez un centre"
+                  loading={centresLoading}
+                  disabled={currentUser && !currentUser.super_admin}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.label.toLowerCase().indexOf(input.toLowerCase()) >= 0
+                  }
+                >
+                  {centres.map(centre => (
+                    <Option key={centre.value} value={centre.value}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <ShopOutlined style={{ marginRight: 8, color: '#666' }} />
+                        <div>
+                          <div>{centre.label}</div>
+                          <div style={{ fontSize: 12, color: '#999' }}>
+                            {centre.type} • {centre.region}
+                          </div>
+                        </div>
+                      </div>
+                    </Option>
+                  ))}
+                </Select>
+                {currentUser && !currentUser.super_admin && (
+                  <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                    Les utilisateurs seront automatiquement affectés à votre centre ({currentUser.cod_cen})
+                  </div>
+                )}
+              </Form.Item>
+            </Col>
+            <Col span={12}>
               <Form.Item name="roleIds" label="Rôles">
                 <Select
                   mode="multiple"
@@ -2986,20 +3029,6 @@ const AdminPage = () => {
                   optionFilterProp="label"
                 />
               </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Row gutter={[16, 16]}>
-                <Col span={12}>
-                  <Form.Item name="ACTIF" label="Actif" valuePropName="checked">
-                    <Switch checkedChildren="Actif" unCheckedChildren="Inactif" />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item name="SUPER_ADMIN" label="Super Admin" valuePropName="checked">
-                    <Switch checkedChildren="Oui" unCheckedChildren="Non" />
-                  </Form.Item>
-                </Col>
-              </Row>
             </Col>
           </Row>
 
@@ -3029,6 +3058,19 @@ const AdminPage = () => {
                     </Option>
                   ))}
                 </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={[16, 16]}>
+            <Col span={8}>
+              <Form.Item name="ACTIF" label="Actif" valuePropName="checked">
+                <Switch checkedChildren="Actif" unCheckedChildren="Inactif" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="SUPER_ADMIN" label="Super Admin" valuePropName="checked">
+                <Switch checkedChildren="Oui" unCheckedChildren="Non" />
               </Form.Item>
             </Col>
           </Row>
@@ -3072,26 +3114,6 @@ const AdminPage = () => {
           >
             <TextArea rows={3} placeholder="Description du rôle..." />
           </Form.Item>
-
-          {!selectedRole && (
-            <Form.Item
-              name="templateRoleId"
-              label="Copier les permissions depuis"
-              help="Optionnel: Sélectionnez un rôle existant pour copier ses permissions"
-            >
-              <Select
-                placeholder="Sélectionnez un rôle template"
-                allowClear
-              >
-                <Option value={null}>Aucun (permissions par défaut)</Option>
-                {roleTemplates.map(template => (
-                  <Option key={template.id} value={template.id}>
-                    {template.nom} ({template.options_count} permissions)
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-          )}
 
           <Form.Item
             name="ACTIF"

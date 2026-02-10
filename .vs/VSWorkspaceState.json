@@ -4,7 +4,8 @@
     "\\frontend",
     "\\frontend\\src",
     "\\frontend\\src\\pages",
-    "\\frontend\\src\\pages\\beneficiaires"
+    "\\frontend\\src\\pages\\financier"
   ],
+  "SelectedNode": "\\frontend\\src\\pages\\financier\\TicketModerateur.jsx",
   "PreviewInSolutionExplorer": false
 }

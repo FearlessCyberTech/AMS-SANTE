@@ -1,19 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// DeclarationDialog.jsx - Composant pour créer/éditer des déclarations
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
   Button,
+  TextField,
   Grid,
+  IconButton,
+  MenuItem,
   FormControl,
   InputLabel,
   Select,
-  MenuItem,
-  Typography,
-  Box,
-  IconButton,
   Table,
   TableBody,
   TableCell,
@@ -21,634 +20,820 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Chip,
+  Box,
+  Typography,
   Alert,
   CircularProgress,
-  Divider,
+  Tooltip,
   Autocomplete,
-  Checkbox,
-  FormControlLabel
+  Chip,
+  Divider,
+  InputAdornment,
+  Slider
 } from '@mui/material';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
   Search as SearchIcon,
-  AttachMoney as AttachMoneyIcon,
-  Description as DescriptionIcon,
-  MedicalServices as MedicalServicesIcon
+  AttachMoney as MoneyIcon,
+  Close as CloseIcon,
+  Edit as EditIcon,
+  Person as PersonIcon,
+  LocalHospital as HospitalIcon,
+  Medication as MedicationIcon
 } from '@mui/icons-material';
-import { prestationsAPI } from '../../services/api';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { format, addDays } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { facturationAPI } from '../../services/api';
 
-const DeclarationDialog = ({ open, mode, onClose, onSubmit, loading, beneficiaires }) => {
+// Composant pour une ligne de prestation
+const PrestationRow = ({ prestation, index, onUpdate, onRemove, onEdit }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedPrestation, setEditedPrestation] = useState(prestation);
+
+  const handleSave = () => {
+    onUpdate(index, editedPrestation);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setEditedPrestation(prestation);
+    setIsEditing(false);
+  };
+
+  const total = (prestation.quantite || 0) * (prestation.prix_unitaire || 0);
+
+  return (
+    <TableRow>
+      {isEditing ? (
+        <>
+          <TableCell>
+            <TextField
+              size="small"
+              fullWidth
+              value={editedPrestation.libelle || ''}
+              onChange={(e) => setEditedPrestation(prev => ({ ...prev, libelle: e.target.value }))}
+              placeholder="Libellé"
+            />
+          </TableCell>
+          <TableCell>
+            <TextField
+              size="small"
+              type="number"
+              value={editedPrestation.quantite || 1}
+              onChange={(e) => setEditedPrestation(prev => ({ 
+                ...prev, 
+                quantite: parseInt(e.target.value) || 1 
+              }))}
+              inputProps={{ min: 1 }}
+              sx={{ width: 80 }}
+            />
+          </TableCell>
+          <TableCell>
+            <TextField
+              size="small"
+              type="number"
+              value={editedPrestation.prix_unitaire || 0}
+              onChange={(e) => setEditedPrestation(prev => ({ 
+                ...prev, 
+                prix_unitaire: parseFloat(e.target.value) || 0 
+              }))}
+              InputProps={{
+                startAdornment: <InputAdornment position="start">FCFA</InputAdornment>,
+              }}
+              sx={{ width: 120 }}
+            />
+          </TableCell>
+          <TableCell align="right">
+            {total.toLocaleString('fr-FR')} FCFA
+          </TableCell>
+          <TableCell>
+            <Box display="flex" gap={1}>
+              <Button size="small" variant="contained" onClick={handleSave}>
+                Valider
+              </Button>
+              <Button size="small" variant="outlined" onClick={handleCancel}>
+                Annuler
+              </Button>
+            </Box>
+          </TableCell>
+        </>
+      ) : (
+        <>
+          <TableCell>
+            <Box display="flex" alignItems="center" gap={1}>
+              {prestation.type === 'medicament' ? (
+                <MedicationIcon fontSize="small" color="primary" />
+              ) : (
+                <HospitalIcon fontSize="small" color="secondary" />
+              )}
+              <Box>
+                <Typography variant="body2" fontWeight="medium">
+                  {prestation.libelle || prestation.nom}
+                </Typography>
+                {prestation.code && (
+                  <Typography variant="caption" color="text.secondary">
+                    Code: {prestation.code}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          </TableCell>
+          <TableCell>{prestation.quantite || 1}</TableCell>
+          <TableCell>{prestation.prix_unitaire?.toLocaleString('fr-FR') || '0'} FCFA</TableCell>
+          <TableCell align="right">
+            <Typography fontWeight="bold">
+              {total.toLocaleString('fr-FR')} FCFA
+            </Typography>
+          </TableCell>
+          <TableCell>
+            <Box display="flex" gap={1}>
+              <Tooltip title="Modifier">
+                <IconButton size="small" onClick={() => setIsEditing(true)}>
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Supprimer">
+                <IconButton size="small" color="error" onClick={() => onRemove(index)}>
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </TableCell>
+        </>
+      )}
+    </TableRow>
+  );
+};
+
+const DeclarationDialog = ({ 
+  open, 
+  mode, 
+  data, 
+  onClose, 
+  onSubmit, 
+  loading,
+  formatCurrency,
+  DialogPaperProps,
+  DialogTitleProps,
+  DialogContentProps,
+  DialogActionsProps
+}) => {
+  // États pour le formulaire
   const [formData, setFormData] = useState({
-    cod_ben: '',
+    patient_id: '',
     nom_ben: '',
     prenom_ben: '',
-    type_declarant: 'Beneficiaire',
+    identifiant_ben: '',
+    date_facture: new Date(),
+    date_echeance: addDays(new Date(), 30),
+    cod_payeur: '',
     prestations: [],
-    observations: '',
-    pieces_jointes: '',
-    montant_total: 0
+    observations: ''
   });
 
-  const [availablePrestations, setAvailablePrestations] = useState([]);
-  const [loadingPrestations, setLoadingPrestations] = useState(false);
-  const [selectedPrestation, setSelectedPrestation] = useState(null);
-  const [typesPrestations, setTypesPrestations] = useState([]);
+  // États pour la recherche
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('all');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
-  // Charger les types de prestations
+  // États pour la recherche de prestations
+  const [prestationSearch, setPrestationSearch] = useState('');
+  const [prestationResults, setPrestationResults] = useState([]);
+  const [prestationLoading, setPrestationLoading] = useState(false);
+
+  // États pour les payeurs
+  const [payeurs, setPayeurs] = useState([]);
+  const [payeursLoading, setPayeursLoading] = useState(false);
+
+  // États pour les erreurs
+  const [errors, setErrors] = useState({});
+
+  // Calculer le total
+  const totalAmount = formData.prestations.reduce((sum, p) => {
+    return sum + ((p.quantite || 1) * (p.prix_unitaire || 0));
+  }, 0);
+
+  // Charger les payeurs au montage
   useEffect(() => {
-    const loadTypesPrestations = async () => {
+    const loadPayeurs = async () => {
       try {
-        const response = await prestationsAPI.getTypesPrestations();
+        setPayeursLoading(true);
+        const response = await facturationAPI.getPayeurs();
         if (response.success) {
-          setTypesPrestations(response.types_prestations || []);
+          setPayeurs(response.payeurs || []);
         }
       } catch (error) {
-        console.error('Erreur chargement types prestations:', error);
-      }
-    };
-    loadTypesPrestations();
-  }, []);
-
-  // Charger les prestations disponibles lorsque le bénéficiaire est sélectionné
-  useEffect(() => {
-    const loadAvailablePrestations = async () => {
-      if (!formData.cod_ben) {
-        setAvailablePrestations([]);
-        return;
-      }
-
-      setLoadingPrestations(true);
-      try {
-        const filters = {};
-        if (filterType !== 'all') {
-          filters.type = filterType;
-        }
-        if (searchTerm) {
-          filters.search = searchTerm;
-        }
-
-        const response = await prestationsAPI.getPrestationsByBeneficiaire(formData.cod_ben, filters);
-        
-        if (response.success) {
-          // Filtrer les prestations déjà sélectionnées
-          const selectedIds = formData.prestations.map(p => p.COD_PREST || p.id);
-          const filtered = (response.prestations || []).filter(
-            prestation => !selectedIds.includes(prestation.COD_PREST || prestation.id)
-          );
-          setAvailablePrestations(filtered);
-        }
-      } catch (error) {
-        console.error('Erreur chargement prestations:', error);
+        console.error('Erreur chargement payeurs:', error);
       } finally {
-        setLoadingPrestations(false);
+        setPayeursLoading(false);
       }
     };
 
-    const delayDebounce = setTimeout(() => {
-      loadAvailablePrestations();
-    }, 500);
+    if (open) {
+      loadPayeurs();
+    }
+  }, [open]);
 
-    return () => clearTimeout(delayDebounce);
-  }, [formData.cod_ben, searchTerm, filterType, formData.prestations]);
+  // Initialiser les données si en mode édition
+ // Dans le useEffect d'initialisation
+useEffect(() => {
+  if (mode === 'edit' && data) {
+    setFormData({
+      patient_id: data.patient_id || data.COD_BEN || data.cod_ben || '',
+      nom_ben: data.nom_ben || data.NOM_BEN || '',
+      prenom_ben: data.prenom_ben || data.PRE_BEN || '',
+      identifiant_ben: data.identifiant_ben || data.IDENTIFIANT_NATIONAL || '',
+      date_facture: data.date_facture ? new Date(data.date_facture) : new Date(),
+      date_echeance: data.date_echeance ? new Date(data.date_echeance) : addDays(new Date(), 30),
+      // CORRECTION: S'assurer que cod_payeur est une chaîne pour le Select
+      cod_payeur: data.cod_payeur ? data.cod_payeur.toString() : data.COD_PAYEUR ? data.COD_PAYEUR.toString() : '',
+      prestations: data.prestations || [],
+      observations: data.observations || ''
+    });
+  } else if (open) {
+    // Réinitialiser pour la création
+    setFormData({
+      patient_id: '',
+      nom_ben: '',
+      prenom_ben: '',
+      identifiant_ben: '',
+      date_facture: new Date(),
+      date_echeance: addDays(new Date(), 30),
+      cod_payeur: '', // Laisser comme chaîne vide
+      prestations: [],
+      observations: ''
+    });
+    setSearchTerm('');
+    setPrestationSearch('');
+  }
+}, [mode, data, open]);
 
-  // Mettre à jour le nom du bénéficiaire lorsqu'il est sélectionné
-  const handleBeneficiaireChange = (cod_ben) => {
-    const beneficiaire = beneficiaires.find(b => b.id === cod_ben || b.COD_BEN === cod_ben);
-    setFormData(prev => ({
-      ...prev,
-      cod_ben,
-      nom_ben: beneficiaire?.nom || '',
-      prenom_ben: beneficiaire?.prenom || ''
-    }));
+  // Recherche de patients
+  const handlePatientSearch = async (searchValue) => {
+    setSearchTerm(searchValue);
+    
+    if (!searchValue || searchValue.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      setSearchLoading(true);
+      const response = await facturationAPI.searchPatients(searchValue, 10);
+      
+      if (response.success && response.patients) {
+        setSearchResults(response.patients);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Erreur recherche patient:', error);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
   };
 
-  // Ajouter une prestation à la déclaration
+  // Recherche de prestations
+  const handlePrestationSearch = async (searchValue) => {
+    setPrestationSearch(searchValue);
+    
+    if (!searchValue || searchValue.length < 2) {
+      setPrestationResults([]);
+      return;
+    }
+
+    try {
+      setPrestationLoading(true);
+      const response = await facturationAPI.searchPrestations(searchValue, 10);
+      
+      if (response.success && response.prestations) {
+        setPrestationResults(response.prestations);
+      } else {
+        setPrestationResults([]);
+      }
+    } catch (error) {
+      console.error('Erreur recherche prestation:', error);
+      setPrestationResults([]);
+    } finally {
+      setPrestationLoading(false);
+    }
+  };
+
+  // Sélectionner un patient
+  const handleSelectPatient = (patient) => {
+    setFormData(prev => ({
+      ...prev,
+      patient_id: patient.id,
+      nom_ben: patient.nom,
+      prenom_ben: patient.prenom,
+      identifiant_ben: patient.identifiant,
+    }));
+    setSearchTerm(`${patient.nom} ${patient.prenom}`);
+    setSearchResults([]);
+  };
+
+  // Ajouter une prestation
   const handleAddPrestation = (prestation) => {
-    if (!prestation) return;
-
     const newPrestation = {
-      COD_PREST: prestation.COD_PREST || prestation.id,
-      TYPE_PRESTATION: prestation.TYPE_PRESTATION || 'Consultation',
-      LIBELLE_PRESTATION: prestation.LIB_PREST || prestation.libelle,
-      MONTANT: prestation.MONTANT || 0,
-      QUANTITE: prestation.QUANTITE || 1,
-      DATE_PRESTATION: prestation.DATE_PRESTATION || new Date().toISOString().split('T')[0],
-      TAUX_PRISE_CHARGE: prestation.TAUX_PRISE_CHARGE || 100,
-      MONTANT_PRISE_CHARGE: (prestation.MONTANT || 0) * (prestation.TAUX_PRISE_CHARGE || 100) / 100,
-      // Champs supplémentaires pour le backend
-      id_prestation: prestation.COD_PREST || prestation.id,
-      montant: prestation.MONTANT || 0,
-      libelle: prestation.LIB_PREST || prestation.libelle
-    };
-
-    setFormData(prev => ({
-      ...prev,
-      prestations: [...prev.prestations, newPrestation],
-      montant_total: prev.montant_total + (newPrestation.MONTANT || 0)
-    }));
-
-    setSelectedPrestation(null);
-  };
-
-  // Ajouter une prestation manuelle
-  const handleAddManualPrestation = () => {
-    const newPrestation = {
-      COD_PREST: Date.now(), // ID temporaire
-      TYPE_PRESTATION: 'Consultation',
-      LIBELLE_PRESTATION: '',
-      MONTANT: 0,
-      QUANTITE: 1,
-      DATE_PRESTATION: new Date().toISOString().split('T')[0],
-      TAUX_PRISE_CHARGE: 100,
-      MONTANT_PRISE_CHARGE: 0,
-      isManual: true
+      id: prestation.id,
+      type: prestation.type || 'medicament',
+      libelle: prestation.libelle || prestation.nom,
+      code: prestation.code,
+      quantite: 1,
+      prix_unitaire: prestation.prix || prestation.prix_unitaire || 0,
+      libelle_complet: prestation.libelle_complet || prestation.libelle || prestation.nom
     };
 
     setFormData(prev => ({
       ...prev,
       prestations: [...prev.prestations, newPrestation]
     }));
+    setPrestationSearch('');
+    setPrestationResults([]);
+  };
+
+  // Mettre à jour une prestation
+  const handleUpdatePrestation = (index, updatedPrestation) => {
+    setFormData(prev => {
+      const newPrestations = [...prev.prestations];
+      newPrestations[index] = updatedPrestation;
+      return { ...prev, prestations: newPrestations };
+    });
   };
 
   // Supprimer une prestation
   const handleRemovePrestation = (index) => {
-    const prestationToRemove = formData.prestations[index];
-    setFormData(prev => ({
-      ...prev,
-      prestations: prev.prestations.filter((_, i) => i !== index),
-      montant_total: prev.montant_total - (prestationToRemove.MONTANT || 0)
-    }));
-  };
-
-  // Mettre à jour une prestation
-  const handleUpdatePrestation = (index, field, value) => {
-    const updatedPrestations = [...formData.prestations];
-    const oldPrestation = updatedPrestations[index];
-    
-    updatedPrestations[index] = {
-      ...oldPrestation,
-      [field]: value
-    };
-
-    // Recalculer le montant de prise en charge si nécessaire
-    if (field === 'MONTANT' || field === 'TAUX_PRISE_CHARGE') {
-      const montant = field === 'MONTANT' ? value : oldPrestation.MONTANT;
-      const taux = field === 'TAUX_PRISE_CHARGE' ? value : oldPrestation.TAUX_PRISE_CHARGE;
-      updatedPrestations[index].MONTANT_PRISE_CHARGE = montant * (taux || 100) / 100;
-    }
-
-    // Recalculer le montant total
-    const montantTotal = updatedPrestations.reduce((sum, p) => sum + (p.MONTANT || 0), 0);
-
-    setFormData(prev => ({
-      ...prev,
-      prestations: updatedPrestations,
-      montant_total: montantTotal
-    }));
-  };
-
-  // Valider et soumettre la déclaration
-  const handleSubmit = () => {
-    // Validation
-    if (!formData.cod_ben) {
-      alert('Veuillez sélectionner un bénéficiaire');
-      return;
-    }
-
-    if (formData.prestations.length === 0) {
-      alert('Veuillez ajouter au moins une prestation');
-      return;
-    }
-
-    // Vérifier que toutes les prestations ont les champs requis
-    const invalidPrestations = formData.prestations.filter(p => 
-      !p.LIBELLE_PRESTATION || !p.MONTANT || p.MONTANT <= 0
-    );
-
-    if (invalidPrestations.length > 0) {
-      alert('Certaines prestations sont incomplètes. Veuillez vérifier les libellés et montants.');
-      return;
-    }
-
-    // Préparer les données pour l'API
-    const declarationData = {
-      cod_ben: formData.cod_ben,
-      type_declarant: formData.type_declarant,
-      nom_ben: formData.nom_ben,
-      prenom_ben: formData.prenom_ben,
-      prestations: formData.prestations.map(p => ({
-        type_prestation: p.TYPE_PRESTATION,
-        libelle: p.LIBELLE_PRESTATION,
-        montant: p.MONTANT,
-        quantite: p.QUANTITE || 1,
-        date_prestation: p.DATE_PRESTATION,
-        taux_prise_charge: p.TAUX_PRISE_CHARGE || 100,
-        montant_prise_charge: p.MONTANT_PRISE_CHARGE || p.MONTANT
-      })),
-      montant_total: formData.montant_total,
-      observations: formData.observations,
-      pieces_jointes: formData.pieces_jointes
-    };
-
-    onSubmit(declarationData);
-  };
-
-  // Réinitialiser le formulaire
-  const handleReset = () => {
-    setFormData({
-      cod_ben: '',
-      nom_ben: '',
-      prenom_ben: '',
-      type_declarant: 'Beneficiaire',
-      prestations: [],
-      observations: '',
-      pieces_jointes: '',
-      montant_total: 0
+    setFormData(prev => {
+      const newPrestations = prev.prestations.filter((_, i) => i !== index);
+      return { ...prev, prestations: newPrestations };
     });
-    setAvailablePrestations([]);
-    setSelectedPrestation(null);
-    setSearchTerm('');
-    setFilterType('all');
   };
 
-  // Formater le montant
-  const formatMontant = (montant) => {
-    return `${parseFloat(montant || 0).toLocaleString('fr-FR')} XAF`;
+  // Valider le formulaire
+ const validateForm = () => {
+  const newErrors = {};
+
+  if (!formData.patient_id) {
+    newErrors.patient = 'Veuillez sélectionner un patient';
+  }
+
+  if (!formData.cod_payeur) {
+    newErrors.payeur = 'Veuillez sélectionner un payeur';
+  } else {
+    // Vérifier que le payeur existe dans la liste
+    const selectedPayeur = payeurs.find(p => p.cod_payeur.toString() === formData.cod_payeur.toString());
+    if (!selectedPayeur) {
+      newErrors.payeur = 'Payeur invalide';
+    }
+  }
+
+  if (!formData.date_facture) {
+    newErrors.date_facture = 'Veuillez sélectionner une date de déclaration';
+  }
+
+  if (!formData.date_echeance) {
+    newErrors.date_echeance = 'Veuillez sélectionner une date d\'échéance';
+  }
+
+  if (formData.prestations.length === 0) {
+    newErrors.prestations = 'Veuillez ajouter au moins une prestation';
+  }
+
+  setErrors(newErrors);
+  return Object.keys(newErrors).length === 0;
+};
+
+  // Soumettre le formulaire
+  // Modifier la fonction handleSubmit
+const handleSubmit = () => {
+  if (!validateForm()) {
+    return;
+  }
+
+  // Préparer les données pour l'API
+  const submissionData = {
+    // CORRECTION: Utiliser cod_ben au lieu de patient_id
+    cod_ben: formData.patient_id,
+    // CORRECTION: Assurer que cod_payeur est un nombre
+    cod_payeur: parseInt(formData.cod_payeur) || formData.cod_payeur,
+    
+    // CORRECTION: Formater correctement les prestations
+    prestations: formData.prestations.map(p => ({
+      id_prestation: p.id,
+      type_prestation: p.type || 'medicament',
+      libelle: p.libelle || p.nom || p.libelle_complet,
+      quantite: p.quantite || 1,
+      prix_unitaire: p.prix_unitaire || p.prix || 0,
+      // CORRECTION: Calculer le montant pour chaque prestation
+      montant: (p.quantite || 1) * (p.prix_unitaire || p.prix || 0)
+    })),
+    
+    date_facture: formData.date_facture,
+    date_echeance: formData.date_echeance,
+    observations: formData.observations,
+    // CORRECTION: Le backend calcule montant_total lui-même
+    // Ne pas envoyer montant_total ici
+    statut: 'Soumis'
   };
+
+  // Debug: afficher les données envoyées
+  console.log('📤 Données envoyées à l\'API:', submissionData);
+  console.log('🔍 Détails bénéficiaire:', {
+    cod_ben: formData.patient_id,
+    nom_ben: formData.nom_ben,
+    prenom_ben: formData.prenom_ben
+  });
+  console.log('🔍 Détails payeur:', {
+    cod_payeur: formData.cod_payeur,
+    payeur_selected: payeurs.find(p => p.cod_payeur == formData.cod_payeur)
+  });
+
+  onSubmit(submissionData);
+};
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
-        <Box display="flex" alignItems="center">
-          <DescriptionIcon sx={{ mr: 1 }} />
-          {mode === 'create' ? 'Nouvelle Déclaration' : 'Modifier Déclaration'}
+    <Dialog 
+      open={open} 
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
+      {...DialogPaperProps}
+    >
+      <DialogTitle {...DialogTitleProps}>
+        <Box display="flex" alignItems="center" justifyContent="space-between">
+          <Typography variant="h6">
+            {mode === 'create' ? 'Nouvelle déclaration' : 'Modifier la déclaration'}
+          </Typography>
+          <IconButton onClick={onClose} size="small">
+            <CloseIcon />
+          </IconButton>
         </Box>
       </DialogTitle>
-      
-      <DialogContent dividers>
-        <Grid container spacing={3} sx={{ mt: 1 }}>
-          {/* Section Bénéficiaire */}
+
+      <DialogContent {...DialogContentProps}>
+        <Grid container spacing={3}>
+          {/* Section Informations patient */}
           <Grid item xs={12}>
-            <Typography variant="h6" gutterBottom fontWeight="bold">
-              1. Informations du Bénéficiaire
+            <Typography variant="h6" gutterBottom color="primary">
+              <Box display="flex" alignItems="center" gap={1}>
+                <PersonIcon />
+                Informations du bénéficiaire
+              </Box>
             </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Bénéficiaire *</InputLabel>
-                  <Select
-                    value={formData.cod_ben}
-                    label="Bénéficiaire *"
-                    onChange={(e) => handleBeneficiaireChange(e.target.value)}
-                    disabled={loading}
-                  >
-                    <MenuItem value="">Sélectionner un bénéficiaire</MenuItem>
-                    {beneficiaires.map(beneficiaire => (
-                      <MenuItem 
-                        key={beneficiaire.id || beneficiaire.COD_BEN} 
-                        value={beneficiaire.id || beneficiaire.COD_BEN}
-                      >
-                        {beneficiaire.nom} {beneficiaire.prenom} 
-                        {beneficiaire.identifiant && ` (${beneficiaire.identifiant})`}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+            <Paper sx={{ p: 2 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Autocomplete
+                    freeSolo
+                    options={searchResults}
+                    loading={searchLoading}
+                    onInputChange={(_, value) => handlePatientSearch(value)}
+                    onChange={(_, value) => {
+                      if (value && typeof value === 'object') {
+                        handleSelectPatient(value);
+                      }
+                    }}
+                    getOptionLabel={(option) => 
+                      typeof option === 'string' 
+                        ? option 
+                        : `${option.nom} ${option.prenom}${option.identifiant ? ` (${option.identifiant})` : ''}`
+                    }
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Rechercher un patient"
+                        placeholder="Nom, prénom ou identifiant"
+                        error={!!errors.patient}
+                        helperText={errors.patient}
+                        InputProps={{
+                          ...params.InputProps,
+                          startAdornment: (
+                            <>
+                              <InputAdornment position="start">
+                                <SearchIcon />
+                              </InputAdornment>
+                              {params.InputProps.startAdornment}
+                            </>
+                          ),
+                        }}
+                      />
+                    )}
+                    renderOption={(props, option) => (
+                      <li {...props}>
+                        <Box>
+                          <Typography variant="body1">
+                            {option.nom} {option.prenom}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {option.identifiant} • {option.age ? `${option.age} ans` : 'Âge non spécifié'}
+                          </Typography>
+                        </Box>
+                      </li>
+                    )}
+                  />
+                </Grid>
+
+                {formData.nom_ben && (
+                  <Grid item xs={12}>
+                    <Alert severity="info" icon={false}>
+                      <Box display="flex" alignItems="center" justifyContent="space-between">
+                        <Box>
+                          <Typography fontWeight="bold">
+                            {formData.nom_ben} {formData.prenom_ben}
+                          </Typography>
+                          <Typography variant="body2">
+                            Identifiant: {formData.identifiant_ben}
+                          </Typography>
+                        </Box>
+                        <Chip 
+                          label="Sélectionné" 
+                          color="success" 
+                          size="small"
+                          variant="outlined"
+                        />
+                      </Box>
+                    </Alert>
+                  </Grid>
+                )}
               </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Type de déclarant</InputLabel>
-                  <Select
-                    value={formData.type_declarant}
-                    label="Type de déclarant"
-                    onChange={(e) => setFormData(prev => ({ ...prev, type_declarant: e.target.value }))}
-                  >
-                    <MenuItem value="Beneficiaire">Bénéficiaire</MenuItem>
-                    <MenuItem value="Medecin">Médecin</MenuItem>
-                    <MenuItem value="Hopital">Hôpital</MenuItem>
-                    <MenuItem value="Pharmacie">Pharmacie</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-            </Grid>
+            </Paper>
           </Grid>
 
-          {/* Section Recherche de Prestations */}
-          {formData.cod_ben && (
-            <Grid item xs={12}>
-              <Typography variant="h6" gutterBottom fontWeight="bold">
-                2. Sélection des Prestations
-              </Typography>
-              
-              <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
-                <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12} md={4}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      placeholder="Rechercher une prestation..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      InputProps={{
-                        startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                      }}
-                    />
-                  </Grid>
-                  
-                  <Grid item xs={12} md={3}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Type de prestation</InputLabel>
-                      <Select
-                        value={filterType}
-                        label="Type de prestation"
-                        onChange={(e) => setFilterType(e.target.value)}
-                      >
-                        <MenuItem value="all">Tous les types</MenuItem>
-                        {typesPrestations.map(type => (
-                          <MenuItem key={type.id || type.code} value={type.code || type.libelle}>
-                            {type.libelle}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  
-                  <Grid item xs={12} md={3}>
-                    <Autocomplete
-                      size="small"
-                      options={availablePrestations}
-                      getOptionLabel={(option) => 
-                        `${option.LIB_PREST || option.libelle} - ${formatMontant(option.MONTANT)}`
-                      }
-                      value={selectedPrestation}
-                      onChange={(event, newValue) => setSelectedPrestation(newValue)}
-                      loading={loadingPrestations}
+          {/* Section Dates et Payeur */}
+          <Grid item xs={12}>
+            <Typography variant="h6" gutterBottom color="primary">
+              Paramètres de la déclaration
+            </Typography>
+            <Paper sx={{ p: 2 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
+                  <LocalizationProvider dateAdapter={AdapterDateFns} locale={fr}>
+                    <DatePicker
+                      label="Date de déclaration"
+                      value={formData.date_facture}
+                      onChange={(date) => setFormData(prev => ({ ...prev, date_facture: date }))}
                       renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="Sélectionner une prestation"
-                          InputProps={{
-                            ...params.InputProps,
-                            endAdornment: (
-                              <>
-                                {loadingPrestations ? <CircularProgress color="inherit" size={20} /> : null}
-                                {params.InputProps.endAdornment}
-                              </>
-                            )
-                          }}
+                        <TextField 
+                          {...params} 
+                          fullWidth 
+                          error={!!errors.date_facture}
+                          helperText={errors.date_facture}
                         />
                       )}
                     />
-                  </Grid>
-                  
-                  <Grid item xs={12} md={2}>
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      startIcon={<AddIcon />}
-                      onClick={() => handleAddPrestation(selectedPrestation)}
-                      disabled={!selectedPrestation}
-                    >
-                      Ajouter
-                    </Button>
-                  </Grid>
+                  </LocalizationProvider>
                 </Grid>
-                
-                {loadingPrestations && (
-                  <Box display="flex" justifyContent="center" sx={{ mt: 2 }}>
-                    <CircularProgress size={24} />
-                    <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                      Chargement des prestations...
-                    </Typography>
-                  </Box>
-                )}
-                
-                {availablePrestations.length > 0 && !loadingPrestations && (
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      {availablePrestations.length} prestations disponibles
-                    </Typography>
-                  </Box>
-                )}
-              </Paper>
 
-              {/* Bouton pour ajouter une prestation manuelle */}
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                <Typography variant="subtitle1">
-                  Prestations sélectionnées ({formData.prestations.length})
+                <Grid item xs={12} md={4}>
+                  <LocalizationProvider dateAdapter={AdapterDateFns} locale={fr}>
+                    <DatePicker
+                      label="Date d'échéance"
+                      value={formData.date_echeance}
+                      onChange={(date) => setFormData(prev => ({ ...prev, date_echeance: date }))}
+                      renderInput={(params) => (
+                        <TextField 
+                          {...params} 
+                          fullWidth 
+                          error={!!errors.date_echeance}
+                          helperText={errors.date_echeance}
+                        />
+                      )}
+                    />
+                  </LocalizationProvider>
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth error={!!errors.payeur}>
+                    <InputLabel>Payeur</InputLabel>
+                    <Select
+                      value={formData.cod_payeur}
+                      label="Payeur"
+                      onChange={(e) => setFormData(prev => ({ ...prev, cod_payeur: e.target.value }))}
+                      disabled={payeursLoading}
+                    >
+                      {payeursLoading ? (
+                        <MenuItem disabled>
+                          <CircularProgress size={20} /> Chargement...
+                        </MenuItem>
+                      ) : (
+                        payeurs.map((payeur) => (
+                          <MenuItem key={payeur.cod_payeur} value={payeur.cod_payeur}>
+                            {payeur.libelle}
+                          </MenuItem>
+                        ))
+                      )}
+                    </Select>
+                    {errors.payeur && (
+                      <Typography variant="caption" color="error">
+                        {errors.payeur}
+                      </Typography>
+                    )}
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <TextField
+                    label="Observations"
+                    multiline
+                    rows={2}
+                    fullWidth
+                    value={formData.observations}
+                    onChange={(e) => setFormData(prev => ({ ...prev, observations: e.target.value }))}
+                    placeholder="Notes supplémentaires..."
+                  />
+                </Grid>
+              </Grid>
+            </Paper>
+          </Grid>
+
+          {/* Section Prestations */}
+          <Grid item xs={12}>
+            <Typography variant="h6" gutterBottom color="primary">
+              <Box display="flex" alignItems="center" justifyContent="space-between">
+                <Box display="flex" alignItems="center" gap={1}>
+                  <HospitalIcon />
+                  Prestations
+                </Box>
+                <Typography variant="body1" fontWeight="bold">
+                  Total: {totalAmount.toLocaleString('fr-FR')} FCFA
                 </Typography>
-                <Button
-                  variant="outlined"
-                  startIcon={<AddIcon />}
-                  onClick={handleAddManualPrestation}
-                >
-                  Ajouter manuellement
-                </Button>
               </Box>
+            </Typography>
 
-              {/* Tableau des prestations sélectionnées */}
-              <TableContainer component={Paper} sx={{ mb: 3 }}>
+            {errors.prestations && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {errors.prestations}
+              </Alert>
+            )}
+
+            {/* Recherche de prestations */}
+            <Paper sx={{ p: 2, mb: 2 }}>
+              <Autocomplete
+                freeSolo
+                options={prestationResults}
+                loading={prestationLoading}
+                onInputChange={(_, value) => handlePrestationSearch(value)}
+                onChange={(_, value) => {
+                  if (value && typeof value === 'object') {
+                    handleAddPrestation(value);
+                  }
+                }}
+                inputValue={prestationSearch}
+                getOptionLabel={(option) => 
+                  typeof option === 'string' 
+                    ? option 
+                    : `${option.libelle || option.nom}${option.prix ? ` - ${option.prix.toLocaleString('fr-FR')} FCFA` : ''}`
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Ajouter une prestation"
+                    placeholder="Rechercher un médicament, une affection..."
+                    InputProps={{
+                      ...params.InputProps,
+                      startAdornment: (
+                        <>
+                          <InputAdornment position="start">
+                            <SearchIcon />
+                          </InputAdornment>
+                          {params.InputProps.startAdornment}
+                        </>
+                      ),
+                    }}
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props}>
+                    <Box display="flex" alignItems="center" justifyContent="space-between" width="100%">
+                      <Box>
+                        <Typography variant="body1">
+                          {option.libelle || option.nom}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {option.type === 'medicament' ? 'Médicament' : 'Affection'} • {option.code || 'Sans code'}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" fontWeight="bold">
+                        {option.prix?.toLocaleString('fr-FR') || '0'} FCFA
+                      </Typography>
+                    </Box>
+                  </li>
+                )}
+              />
+            </Paper>
+
+            {/* Liste des prestations */}
+            {formData.prestations.length > 0 ? (
+              <TableContainer component={Paper}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Type</TableCell>
-                      <TableCell>Libellé</TableCell>
-                      <TableCell>Date</TableCell>
-                      <TableCell align="right">Montant (XAF)</TableCell>
-                      <TableCell align="center">Qté</TableCell>
-                      <TableCell align="right">Prise en charge</TableCell>
-                      <TableCell>Actions</TableCell>
+                      <TableCell width="40%">Prestation</TableCell>
+                      <TableCell width="15%">Quantité</TableCell>
+                      <TableCell width="20%">Prix unitaire</TableCell>
+                      <TableCell width="15%" align="right">Total</TableCell>
+                      <TableCell width="10%">Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {formData.prestations.map((prestation, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <FormControl size="small" fullWidth>
-                            <Select
-                              value={prestation.TYPE_PRESTATION}
-                              onChange={(e) => handleUpdatePrestation(index, 'TYPE_PRESTATION', e.target.value)}
-                            >
-                              {typesPrestations.map(type => (
-                                <MenuItem key={type.id || type.code} value={type.code || type.libelle}>
-                                  {type.libelle}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            fullWidth
-                            value={prestation.LIBELLE_PRESTATION}
-                            onChange={(e) => handleUpdatePrestation(index, 'LIBELLE_PRESTATION', e.target.value)}
-                            placeholder="Libellé de la prestation"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            type="date"
-                            value={prestation.DATE_PRESTATION}
-                            onChange={(e) => handleUpdatePrestation(index, 'DATE_PRESTATION', e.target.value)}
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <TextField
-                            size="small"
-                            type="number"
-                            value={prestation.MONTANT}
-                            onChange={(e) => handleUpdatePrestation(index, 'MONTANT', parseFloat(e.target.value) || 0)}
-                            InputProps={{
-                              endAdornment: 'XAF'
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell align="center">
-                          <TextField
-                            size="small"
-                            type="number"
-                            value={prestation.QUANTITE}
-                            onChange={(e) => handleUpdatePrestation(index, 'QUANTITE', parseInt(e.target.value) || 1)}
-                            style={{ width: 70 }}
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <TextField
-                              size="small"
-                              type="number"
-                              value={prestation.TAUX_PRISE_CHARGE}
-                              onChange={(e) => handleUpdatePrestation(index, 'TAUX_PRISE_CHARGE', parseFloat(e.target.value) || 100)}
-                              style={{ width: 80 }}
-                              InputProps={{
-                                endAdornment: '%'
-                              }}
-                            />
-                            <Typography variant="body2">
-                              = {formatMontant(prestation.MONTANT_PRISE_CHARGE)}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => handleRemovePrestation(index)}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
+                      <PrestationRow
+                        key={`${prestation.id}-${index}`}
+                        prestation={prestation}
+                        index={index}
+                        onUpdate={handleUpdatePrestation}
+                        onRemove={handleRemovePrestation}
+                      />
                     ))}
-                    
-                    {formData.prestations.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
-                          <Typography variant="body2" color="text.secondary">
-                            Aucune prestation ajoutée. Recherchez et ajoutez des prestations disponibles.
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
-
-              {/* Résumé des montants */}
-              {formData.prestations.length > 0 && (
-                <Paper sx={{ p: 2, mb: 3 }}>
-                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                    Récapitulatif des montants
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
-                      <Typography variant="body2">Montant total déclaré:</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body1" fontWeight="bold" align="right">
-                        {formatMontant(formData.montant_total)}
-                      </Typography>
-                    </Grid>
-                    
-                    <Grid item xs={6}>
-                      <Typography variant="body2">Montant total pris en charge:</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body1" fontWeight="bold" color="primary.main" align="right">
-                        {formatMontant(
-                          formData.prestations.reduce((sum, p) => sum + (p.MONTANT_PRISE_CHARGE || 0), 0)
-                        )}
-                      </Typography>
-                    </Grid>
-                    
-                    <Grid item xs={6}>
-                      <Typography variant="body2">Ticket modérateur:</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body1" color="error.main" align="right">
-                        {formatMontant(
-                          formData.prestations.reduce((sum, p) => sum + (p.MONTANT - (p.MONTANT_PRISE_CHARGE || 0)), 0)
-                        )}
-                      </Typography>
-                    </Grid>
-                  </Grid>
-                </Paper>
-              )}
-            </Grid>
-          )}
-
-          {/* Section Observations */}
-          <Grid item xs={12}>
-            <Typography variant="h6" gutterBottom fontWeight="bold">
-              3. Informations complémentaires
-            </Typography>
-            
-            <TextField
-              fullWidth
-              multiline
-              rows={3}
-              label="Observations"
-              value={formData.observations}
-              onChange={(e) => setFormData(prev => ({ ...prev, observations: e.target.value }))}
-              placeholder="Ajoutez ici toute information complémentaire..."
-            />
+            ) : (
+              <Paper sx={{ p: 4, textAlign: 'center' }}>
+                <Typography color="text.secondary">
+                  Aucune prestation ajoutée. Recherchez et ajoutez des prestations ci-dessus.
+                </Typography>
+              </Paper>
+            )}
           </Grid>
-          
+
+          {/* Résumé */}
           <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Pièces jointes (références)"
-              value={formData.pieces_jointes}
-              onChange={(e) => setFormData(prev => ({ ...prev, pieces_jointes: e.target.value }))}
-              placeholder="Références des factures, ordonnances, etc."
-              helperText="Séparez les références par des virgules"
-            />
+            <Paper sx={{ p: 2, backgroundColor: 'grey.50' }}>
+              <Typography variant="h6" gutterBottom>
+                Récapitulatif
+              </Typography>
+              <Grid container spacing={1}>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Nombre de prestations:
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} textAlign="right">
+                  <Typography variant="body2">
+                    {formData.prestations.length}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Montant total:
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} textAlign="right">
+                  <Typography variant="h6" color="primary">
+                    {totalAmount.toLocaleString('fr-FR')} FCFA
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Divider sx={{ my: 1 }} />
+                </Grid>
+
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Date de déclaration:
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} textAlign="right">
+                  <Typography variant="body2">
+                    {format(formData.date_facture, 'dd/MM/yyyy')}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Date d'échéance:
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} textAlign="right">
+                  <Typography variant="body2">
+                    {format(formData.date_echeance, 'dd/MM/yyyy')}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Paper>
           </Grid>
         </Grid>
       </DialogContent>
-      
-      <DialogActions sx={{ p: 3 }}>
+
+      <DialogActions {...DialogActionsProps}>
         <Button onClick={onClose} disabled={loading}>
           Annuler
         </Button>
-        <Button onClick={handleReset} variant="outlined" disabled={loading}>
-          Réinitialiser
-        </Button>
-        <Button
-          onClick={handleSubmit}
-          variant="contained"
+        <Button 
+          onClick={handleSubmit} 
+          variant="contained" 
           color="primary"
-          disabled={loading || !formData.cod_ben || formData.prestations.length === 0}
-          startIcon={loading ? <CircularProgress size={20} /> : <DescriptionIcon />}
+          disabled={loading || formData.prestations.length === 0}
+          startIcon={loading ? <CircularProgress size={20} /> : null}
         >
-          {loading ? 'Envoi en cours...' : 'Soumettre la déclaration'}
+          {loading ? 'Traitement...' : mode === 'create' ? 'Créer la déclaration' : 'Mettre à jour'}
         </Button>
       </DialogActions>
     </Dialog>
