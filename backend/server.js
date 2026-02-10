@@ -53,6 +53,7 @@ const corsWhitelist = process.env.NODE_ENV === 'development'
     ].filter(Boolean);
 
 const corsOptions = {
+<<<<<<< HEAD
   origin: (origin, callback) => {
     // Autoriser les requêtes sans origine (comme les applications mobiles, curl, etc.)
     if (!origin) return callback(null, true);
@@ -65,6 +66,23 @@ const corsOptions = {
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+=======
+  origin: process.env.NODE_ENV === 'development' 
+    ? [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://127.0.0.1:3000',
+        'http://172.20.10.2:3000',
+        'http://172.20.10.2:5000'
+      ]
+    : [
+        process.env.FRONTEND_URL,
+        process.env.ADMIN_URL,
+        `https://${process.env.FRONTEND_URL}`,
+        `https://${process.env.ADMIN_URL}`
+      ].filter(Boolean),
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
   allowedHeaders: [
     'Content-Type',
     'Authorization',
@@ -309,6 +327,7 @@ app.use((req, res) => {
   });
 });
 
+<<<<<<< HEAD
 // Global Error Handler
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;
@@ -348,6 +367,20 @@ app.use((err, req, res, next) => {
   }
   
   res.status(statusCode).json(response);
+=======
+// === CONFIGURATION DU SERVEUR ===
+
+const PORT = process.env.PORT || 5000;
+const HOST = process.env.HOST || '0.0.0.0';
+
+// Démarrer le serveur
+const server = app.listen(PORT, HOST, () => {
+  console.log(`✅ Serveur démarré avec succès`);
+  console.log(`   URL: http://${HOST}:${PORT}`);
+  console.log(`   URL locale: http://localhost:${PORT}`);
+  console.log(`   URL réseau: http://172.20.10.2:${PORT}`);
+  console.log(`   Environnement: ${process.env.NODE_ENV || 'development'}`);
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
 });
 
 // === DÉMARRAGE DU SERVEUR ===

@@ -8,6 +8,7 @@
    * Détermine l'URL de base de l'API selon l'environnement
    * @returns {string} URL de base de l'API
    */
+<<<<<<< HEAD
 const getApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
     const { protocol, hostname, port } = window.location;
@@ -42,6 +43,31 @@ const getApiBaseUrl = () => {
   const env = typeof process !== 'undefined' ? process.env : {};
   return env.API_URL || env.REACT_APP_API_URL || 'http://localhost:3000/api';
 };
+=======
+  const getApiBaseUrl = () => {
+    // Vérification de l'existence de window pour éviter les erreurs SSR
+    if (typeof window !== 'undefined') {
+      const { protocol, hostname, port } = window.location;
+      
+      // Environnement de développement local
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return `http://localhost:${port || '3000'}/api`;
+      }
+
+      // Environnement de développement local
+      if (hostname === '172.20.10.2' || hostname === '0.0.0.0') {
+        return `http://172.20.10.2:${port || '3000'}/api`;
+      }
+      
+    
+      // Production - utilisation de l'URL relative par défaut
+      return import.meta.env.VITE_API_URL || '/api';
+    }
+    
+    // Fallback pour Node.js/SSR
+    return import.meta.env.VITE_API_URL || 'http://localhost:3000/api' || 'http://172.20.10.2:3000/api';
+  };
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
 
 let API_URL = getApiBaseUrl();
 
@@ -228,13 +254,72 @@ const fetchAPI = async (url, options = {}) => {
     ...options
   };
   
+<<<<<<< HEAD
+=======
+  // Ajout du token d'authentification
+  if (token) {
+    defaultHeaders['Authorization'] = `Bearer ${token}`;
+  }
+  
+  // Ajout de l'ID utilisateur pour le tracking
+  if (user?.id) {
+    defaultHeaders['X-User-Id'] = user.id;
+  }
+  
+  // Préparation de la configuration de la requête
+  const config = {
+    method: 'GET',
+    headers: defaultHeaders,
+    ...options,
+    credentials: import.meta.env.MODE === 'production' ? 'same-origin' : 'include',
+  };
+  
+  // Gestion spéciale pour FormData (upload de fichiers)
+  const isFormData = config.body && config.body instanceof FormData;
+  
+  if (isFormData) {
+    // Pour FormData, le navigateur définit automatiquement le Content-Type avec boundary
+    // Ne pas définir Content-Type manuellement
+    console.log('📤 Envoi FormData avec upload de fichier');
+  } else if (config.body && typeof config.body === 'object') {
+    // Pour les requêtes JSON standard
+    config.headers['Content-Type'] = 'application/json';
+    config.body = JSON.stringify(config.body);
+  }
+  
+  // Gestion du timeout adaptée au type de requête
+  let timeoutDuration;
+  if (isFormData) {
+    // Upload de fichiers : timeout plus long (2 minutes)
+    timeoutDuration = import.meta.env.MODE === 'production' ? 120000 : 180000;
+  } else {
+    // Requêtes normales : timeout standard
+    timeoutDuration = import.meta.env.MODE === 'production' ? 15000 : 30000;
+  }
+  
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
+  config.signal = controller.signal;
+  
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
   try {
     const fullUrl = url.startsWith('http') ? url : `${API_URL}${url}`;
     console.log(`🌐 fetchAPI: ${defaultOptions.method || 'GET'} ${fullUrl}`);
     
+<<<<<<< HEAD
     // Vérifier si le body est déjà un string JSON
     if (defaultOptions.body && typeof defaultOptions.body !== 'string') {
       defaultOptions.body = JSON.stringify(defaultOptions.body);
+=======
+    // Logging en développement (adapté pour FormData)
+    if (import.meta.env.MODE === 'development') {
+      console.log(`📞 API Call: ${config.method} ${fullUrl}`, {
+        headers: config.headers,
+        hasBody: !!config.body,
+        isFormData: isFormData,
+        body: isFormData ? '[FormData - fichier upload]' : (config.body ? JSON.parse(config.body) : 'none')
+      });
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
     }
     
     const response = await fetch(fullUrl, defaultOptions);
@@ -334,7 +419,7 @@ const fetchBlob = async (endpoint, options = {}) => {
   const config = {
     method: 'GET',
     headers: headers,
-    credentials: process.env.NODE_ENV === 'production' ? 'same-origin' : 'include',
+    credentials: import.meta.env.MODE === 'production' ? 'same-origin' : 'include',
     ...options
   };
 
@@ -3832,11 +3917,16 @@ async getPhoto(id) {
   }
 };
 
+<<<<<<< HEAD
 
 // Export PDF API
 export const exportPDFAPI = {
   // Exporter le dossier médical en PDF
   exportDossierMedical: async (beneficiaireId, options, format = 'pdf') => {
+=======
+  // Supprimer un bénéficiaire (soft delete)
+  async delete(id) {
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
     try {
       const response = await api.post(`/export/dossier-medical/${beneficiaireId}`, {
         format,
@@ -6804,6 +6894,7 @@ async initierPaiementForce(data) {
       // Si tout échoue, retourner une erreur avec instructions
       return {
         success: false,
+<<<<<<< HEAD
         message: 'ERREUR CRITIQUE: Impossible de forcer le paiement. Le serveur a un bug critique.',
         code: 'SERVER_BUG_CRITICAL',
         instructions: [
@@ -6814,6 +6905,11 @@ async initierPaiementForce(data) {
         ],
         factureId: requestData.factureId,
         montant: requestData.montant
+=======
+        message: errorMessage,
+        status: errorStatus,
+        error: import.meta.env.MODE === 'development' ? error.message : undefined
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
       };
     }
 
@@ -7109,6 +7205,10 @@ async initierPaiementForce(data) {
   genererQuittancePDF: async (id) => {
     try {
       const token = localStorage.getItem('token');
+<<<<<<< HEAD
+=======
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api' || 'http://172.20.10.2:3000/api';
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
       
       const response = await fetch(`${API_URL}/facturation/quittance/generer/${id}`, {
         method: 'GET',
@@ -7142,7 +7242,11 @@ async initierPaiementForce(data) {
   genererQuittance: async (id) => {
     try {
       const token = localStorage.getItem('token');
+<<<<<<< HEAD
       const API_URL = process.env.REACT_APP_API_URL || 'http://212.47.73.151:3000/api';
+=======
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
       
       const response = await fetch(`${API_URL}/facturation/quittance/generer/${id}`, {
         method: 'GET',
@@ -7943,7 +8047,7 @@ export const remboursementsAPI = {
     } catch (error) {
       console.error('❌ Erreur récupération nombre notifications non lues:', error);
       // Fallback pour le développement
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.MODE === 'development') {
         return { success: true, count: Math.floor(Math.random() * 10) };
       }
       return { success: false, message: error.message, count: 0 };
@@ -7958,7 +8062,7 @@ export const remboursementsAPI = {
     } catch (error) {
       console.error('❌ Erreur récupération notifications non lues:', error);
       // Fallback pour le développement
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.MODE === 'development') {
         return this.getMockNotifications();
       }
       return { success: false, message: error.message, notifications: [] };
@@ -8222,7 +8326,7 @@ export const remboursementsAPI = {
       }
       
       // Fallback final: Données mockées pour développement
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.MODE === 'development') {
         return {
           success: true,
           patients: [
@@ -9569,100 +9673,6 @@ formatPrestataireForDisplay(prestataire) {
       }
     },
 
-  // Récupérer les statistiques
-  async getStats(id, periode = 'tous') {
-    try {
-      if (!id || isNaN(parseInt(id))) {
-        throw new Error('ID patient invalide');
-      }
-      
-      // Récupérer le dossier complet
-      const dossierResponse = await this.getDossierPatient(id);
-      
-      if (!dossierResponse.success) {
-        throw new Error('Impossible de récupérer le dossier');
-      }
-      
-      const dossier = dossierResponse.dossier;
-      const consultations = dossier.consultations?.liste || [];
-      const prescriptions = dossier.prescriptions?.liste || [];
-      const factures = dossier.facturation?.factures || [];
-      
-      // Filtrer par période
-      let filteredConsultations = [...consultations];
-      let filteredPrescriptions = [...prescriptions];
-      let filteredFactures = [...factures];
-      
-      if (periode === 'mois') {
-        const oneMonthAgo = new Date();
-        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-        
-        filteredConsultations = consultations.filter(c => 
-          new Date(c.DATE_CONSULTATION) >= oneMonthAgo
-        );
-        filteredPrescriptions = prescriptions.filter(p => 
-          new Date(p.DATE_PRESCRIPTION) >= oneMonthAgo
-        );
-        filteredFactures = factures.filter(f => 
-          new Date(f.DATE_FACTURE) >= oneMonthAgo
-        );
-      } else if (periode === 'semaine') {
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-        
-        filteredConsultations = consultations.filter(c => 
-          new Date(c.DATE_CONSULTATION) >= oneWeekAgo
-        );
-        filteredPrescriptions = prescriptions.filter(p => 
-          new Date(p.DATE_PRESCRIPTION) >= oneWeekAgo
-        );
-        filteredFactures = factures.filter(f => 
-          new Date(f.DATE_FACTURE) >= oneWeekAgo
-        );
-      }
-      
-      // Calculer les statistiques
-      const stats = {
-        periode: periode,
-        consultations: {
-          total: filteredConsultations.length,
-          urgentes: filteredConsultations.filter(c => c.URGENT === true || c.URGENT === 1).length,
-          hospitalisations: filteredConsultations.filter(c => c.HOSPITALISATION).length,
-          montant_total: filteredConsultations.reduce((sum, c) => sum + (parseFloat(c.MONTANT_CONSULTATION) || 0), 0),
-          montant_prise_charge: filteredConsultations.reduce((sum, c) => sum + (parseFloat(c.MONTANT_PRISE_EN_CHARGE) || 0), 0)
-        },
-        prescriptions: {
-          total: filteredPrescriptions.length,
-          executees: filteredPrescriptions.filter(p => p.STATUT === 'Executee').length,
-          en_attente: filteredPrescriptions.filter(p => p.STATUT === 'En attente').length,
-          montant_total: filteredPrescriptions.reduce((sum, p) => sum + (parseFloat(p.MONTANT_TOTAL) || 0), 0)
-        },
-        factures: {
-          total: filteredFactures.length,
-          payees: filteredFactures.filter(f => f.statut === 'Payée').length,
-          en_attente: filteredFactures.filter(f => f.statut !== 'Payée').length,
-          montant_total: filteredFactures.reduce((sum, f) => sum + (parseFloat(f.MONTANT_TOTAL) || 0), 0),
-          montant_paye: filteredFactures.reduce((sum, f) => sum + (parseFloat(f.MONTANT_PAYE) || 0), 0),
-          montant_restant: filteredFactures.reduce((sum, f) => sum + (parseFloat(f.MONTANT_RESTANT) || 0), 0)
-        },
-        evolution: []
-      };
-      
-      return {
-        success: true,
-        statistiques: stats,
-        message: 'Statistiques calculées'
-      };
-    } catch (error) {
-      console.error('❌ Erreur calcul statistiques:', error);
-      return {
-        success: false,
-        message: error.message,
-        statistiques: null
-      };
-    }
-  },
-
   // Exporter le dossier en PDF
   async exportPDF(id) {
     try {
@@ -9713,7 +9723,7 @@ formatPrestataireForDisplay(prestataire) {
     } catch (error) {
       console.error('❌ Erreur ajout note dossier:', error);
       
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.MODE === 'development') {
         console.warn('Simulation en développement');
         return {
           success: true,
@@ -10158,45 +10168,6 @@ formatPrestataireForDisplay(prestataire) {
     }
   },
 
-  // Alias pour compatibilité
-  async getPatientDossier(patientId) {
-    return this.getDossierPatient(patientId);
-  },
-
-    // Vérifier l'accès au dossier médical
-    async checkAccess(patientId) {
-      try {
-        if (!patientId || isNaN(parseInt(patientId))) {
-          return { success: false, hasAccess: false, reason: 'ID patient invalide' };
-        }
-        
-        // Tentative de récupération de données limitées pour vérifier l'accès
-        const response = await fetchAPI(`/dossiers-medicaux/patient/${patientId}`, {
-          method: 'HEAD' // Utiliser HEAD pour vérifier uniquement l'accès sans récupérer les données
-        }).catch(async () => {
-          // Si HEAD échoue, essayer avec GET limité
-          return await fetchAPI(`/dossiers-medicaux/patient/${patientId}?fields=id`);
-        });
-        
-        return {
-          success: true,
-          hasAccess: response.success !== false,
-          message: response.success !== false ? 'Accès autorisé' : 'Accès refusé',
-          timestamp: new Date().toISOString()
-        };
-        
-      } catch (error) {
-        console.error(`❌ Erreur vérification accès dossier ${patientId}:`, error);
-        
-        return {
-          success: false,
-          hasAccess: false,
-          reason: error.message,
-          timestamp: new Date().toISOString()
-        };
-      }
-    }
-  
 };
 
   export const urgencesAPI = {
@@ -12408,51 +12379,6 @@ async generateNetworkReport(networkId, reportType, params = {}) {
     }
   },
 
-  async searchCentresSante(searchTerm, limit = 20) {
-    try {
-      if (!searchTerm || searchTerm.trim().length < 2) {
-        return { success: true, centres: [] };
-      }
-      
-      // CORRECTION : Utiliser buildQueryString
-      const queryParams = {
-        search: searchTerm,
-        limit: limit
-      };
-      
-      const queryString = buildQueryString(queryParams);
-      const response = await fetchAPI(`/reseau-soins/centres-sante/search${queryString}`);
-      
-      // CORRECTION : Gérer la structure de réponse
-      if (response.success === false) {
-        console.warn('Recherche centres de santé échouée:', response.message);
-        return { success: false, message: response.message, centres: [] };
-      }
-      
-      // S'assurer que nous avons toujours un tableau
-      const centres = response.centres || response.data || [];
-      
-      return {
-        success: true,
-        centres: centres.map(centre => ({
-          id: centre.id || centre.COD_CEN,
-          nom: centre.nom || centre.NOM_CENTRE,
-          type: centre.type || centre.TYPE_CENTRE,
-          categorie: centre.categorie || centre.CATEGORIE_CENTRE,
-          telephone: centre.TELEPHONE || centre.telephone || '',
-          email: centre.EMAIL || centre.email || '',
-          region_code: centre.COD_REGION || centre.region_code,
-          status: centre.status || centre.STATUT,
-          actif: centre.actif || centre.ACTIF
-        })),
-        count: centres.length
-      };
-      
-    } catch (error) {
-      console.error('❌ Erreur recherche centres de santé:', error);
-      return { success: false, message: error.message, centres: [] };
-    }
-  },
     
     // =============================================
   // CONTRATS
@@ -12892,6 +12818,7 @@ async unlinkBeneficiaireFromPolice(policeId, beneficiaireId) {
 },
 
 
+<<<<<<< HEAD
 async getTauxCouvertureByBeneficiaire(beneficiaireId) {
   try {
     if (!beneficiaireId || isNaN(parseInt(beneficiaireId))) {
@@ -12904,6 +12831,701 @@ async getTauxCouvertureByBeneficiaire(beneficiaireId) {
     const response = await fetchAPI(`/polices/beneficiaire/${beneficiaireId}/liens`);
     
     if (!response.success || !response.liens || response.liens.length === 0) {
+=======
+    // Récupérer les polices d'un bénéficiaire
+    async getByBeneficiaire(beneficiaireId) {
+      try {
+        if (!beneficiaireId || isNaN(parseInt(beneficiaireId))) {
+          throw new Error('ID bénéficiaire invalide');
+        }
+        
+        const response = await fetchAPI(`/polices/beneficiaire/${beneficiaireId}`);
+        
+        // Normalisation de la réponse
+        if (response.success) {
+          const polices = response.polices?.map(p => this.formatPoliceForDisplay(p)) || [];
+          return { ...response, polices };
+        }
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur polices bénéficiaire ${beneficiaireId}:`, error);
+        return { success: false, message: error.message, polices: [] };
+      }
+    },
+
+    // Récupérer les polices d'une compagnie
+    async getByCompagnie(compagnieId) {
+      try {
+        if (!compagnieId || isNaN(parseInt(compagnieId))) {
+          throw new Error('ID compagnie invalide');
+        }
+        
+        const response = await fetchAPI(`/polices/compagnie/${compagnieId}`);
+        
+        // Normalisation de la réponse
+        if (response.success) {
+          const polices = response.polices?.map(p => this.formatPoliceForDisplay(p)) || [];
+          return { ...response, polices };
+        }
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur polices compagnie ${compagnieId}:`, error);
+        return { success: false, message: error.message, polices: [] };
+      }
+    },
+
+    // ==============================================
+    // CRÉATION ET MISE À JOUR
+    // ==============================================
+
+    // Créer une nouvelle police
+    async create(policeData) {
+      try {
+        console.log('📝 Création police:', policeData);
+        
+        // Nettoyage et validation des données
+        const validation = this.validatePoliceData(policeData, false);
+        if (!validation.isValid) {
+          throw new Error(validation.errors.join(', '));
+        }
+        
+        // Préparation des données pour l'envoi
+        const dataToSend = {
+          ...policeData,
+          // Conversion des dates
+          EFF_POL: policeData.EFF_POL ? formatDateForAPI(policeData.EFF_POL) : null,
+          RES_POL: policeData.RES_POL ? formatDateForAPI(policeData.RES_POL) : null,
+          EMP_POL: policeData.EMP_POL ? formatDateForAPI(policeData.EMP_POL) : null,
+          DEM_POL: policeData.DEM_POL ? formatDateForAPI(policeData.DEM_POL) : null,
+          SUS_POL: policeData.SUS_POL ? formatDateForAPI(policeData.SUS_POL) : null,
+          VIG_POL: policeData.VIG_POL ? formatDateForAPI(policeData.VIG_POL) : null,
+          DAT_CSS: policeData.DAT_CSS ? formatDateForAPI(policeData.DAT_CSS) : null,
+          DAT_CREUTIL: formatDateForAPI(new Date()),
+          DAT_MODUTIL: formatDateForAPI(new Date())
+        };
+        
+        // Nettoyage des champs vides
+        Object.keys(dataToSend).forEach(key => {
+          if (dataToSend[key] === '' || dataToSend[key] === null || dataToSend[key] === undefined) {
+            delete dataToSend[key];
+          }
+        });
+        
+        const response = await fetchAPI('/polices', {
+          method: 'POST',
+          body: dataToSend,
+        });
+        
+        if (response.success && response.police) {
+          return {
+            ...response,
+            police: this.formatPoliceForDisplay(response.police)
+          };
+        }
+        
+        return response;
+      } catch (error) {
+        console.error('❌ Erreur création police:', error);
+        throw error;
+      }
+    },
+
+    // Mettre à jour une police
+    async update(id, policeData) {
+      try {
+        if (!id || isNaN(parseInt(id))) {
+          throw new Error('ID police invalide');
+        }
+        
+        console.log(`✏️ Mise à jour police ${id}:`, policeData);
+        
+        // Nettoyage des données
+        const dataToSend = { ...policeData };
+        
+        // Conversion des dates
+        if (dataToSend.EFF_POL) {
+          dataToSend.EFF_POL = formatDateForAPI(dataToSend.EFF_POL);
+        }
+        if (dataToSend.RES_POL) {
+          dataToSend.RES_POL = formatDateForAPI(dataToSend.RES_POL);
+        }
+        if (dataToSend.EMP_POL) {
+          dataToSend.EMP_POL = formatDateForAPI(dataToSend.EMP_POL);
+        }
+        if (dataToSend.DEM_POL) {
+          dataToSend.DEM_POL = formatDateForAPI(dataToSend.DEM_POL);
+        }
+        if (dataToSend.SUS_POL) {
+          dataToSend.SUS_POL = formatDateForAPI(dataToSend.SUS_POL);
+        }
+        if (dataToSend.VIG_POL) {
+          dataToSend.VIG_POL = formatDateForAPI(dataToSend.VIG_POL);
+        }
+        if (dataToSend.DAT_CSS) {
+          dataToSend.DAT_CSS = formatDateForAPI(dataToSend.DAT_CSS);
+        }
+        
+        // Mise à jour de la date de modification
+        dataToSend.DAT_MODUTIL = formatDateForAPI(new Date());
+        
+        // Nettoyage des champs vides
+        Object.keys(dataToSend).forEach(key => {
+          if (dataToSend[key] === '' || dataToSend[key] === null || dataToSend[key] === undefined) {
+            delete dataToSend[key];
+          }
+        });
+        
+        const response = await fetchAPI(`/polices/${id}`, {
+          method: 'PUT',
+          body: dataToSend,
+        });
+        
+        if (response.success && response.police) {
+          return {
+            ...response,
+            police: this.formatPoliceForDisplay(response.police)
+          };
+        }
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur mise à jour police ${id}:`, error);
+        throw error;
+      }
+    },
+
+    // Désactiver une police
+    async delete(id) {
+      try {
+        if (!id || isNaN(parseInt(id))) {
+          throw new Error('ID police invalide');
+        }
+        
+        const response = await fetchAPI(`/polices/${id}`, {
+          method: 'DELETE',
+        });
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur suppression police ${id}:`, error);
+        throw error;
+      }
+    },
+
+    // ==============================================
+    // GESTION DES BÉNÉFICIAIRES DE POLICE
+    // ==============================================
+
+    // Ajouter un bénéficiaire à une police
+    async addBeneficiaire(policeId, beneficiaireData) {
+      try {
+        if (!policeId || isNaN(parseInt(policeId))) {
+          throw new Error('ID police invalide');
+        }
+        
+        console.log(`➕ Ajout bénéficiaire police ${policeId}:`, beneficiaireData);
+        
+        // Préparation des données
+        const dataToSend = {
+          ...beneficiaireData,
+          COD_POL: policeId,
+          ENT_BPO: beneficiaireData.ENT_BPO ? formatDateForAPI(beneficiaireData.ENT_BPO) : null,
+          SOR_BPO: beneficiaireData.SOR_BPO ? formatDateForAPI(beneficiaireData.SOR_BPO) : null,
+          SUS_BPO: beneficiaireData.SUS_BPO ? formatDateForAPI(beneficiaireData.SUS_BPO) : null,
+          REM_BPO: beneficiaireData.REM_BPO ? formatDateForAPI(beneficiaireData.REM_BPO) : null,
+          DAT_DEME: beneficiaireData.DAT_DEME ? formatDateForAPI(beneficiaireData.DAT_DEME) : null,
+          DAT_DEMS: beneficiaireData.DAT_DEMS ? formatDateForAPI(beneficiaireData.DAT_DEMS) : null
+        };
+        
+        const response = await fetchAPI(`/polices/${policeId}/beneficiaires`, {
+          method: 'POST',
+          body: dataToSend,
+        });
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur ajout bénéficiaire police ${policeId}:`, error);
+        throw error;
+      }
+    },
+
+    // Mettre à jour un bénéficiaire de police
+    async updateBeneficiaire(policeId, beneficiaireId, beneficiaireData) {
+      try {
+        if (!policeId || isNaN(parseInt(policeId))) {
+          throw new Error('ID police invalide');
+        }
+        
+        if (!beneficiaireId || isNaN(parseInt(beneficiaireId))) {
+          throw new Error('ID bénéficiaire police invalide');
+        }
+        
+        console.log(`✏️ Mise à jour bénéficiaire police ${policeId}:`, beneficiaireData);
+        
+        // Préparation des données
+        const dataToSend = { ...beneficiaireData };
+        
+        // Conversion des dates
+        if (dataToSend.ENT_BPO) {
+          dataToSend.ENT_BPO = formatDateForAPI(dataToSend.ENT_BPO);
+        }
+        if (dataToSend.SOR_BPO) {
+          dataToSend.SOR_BPO = formatDateForAPI(dataToSend.SOR_BPO);
+        }
+        if (dataToSend.SUS_BPO) {
+          dataToSend.SUS_BPO = formatDateForAPI(dataToSend.SUS_BPO);
+        }
+        if (dataToSend.REM_BPO) {
+          dataToSend.REM_BPO = formatDateForAPI(dataToSend.REM_BPO);
+        }
+        if (dataToSend.DAT_DEME) {
+          dataToSend.DAT_DEME = formatDateForAPI(dataToSend.DAT_DEME);
+        }
+        if (dataToSend.DAT_DEMS) {
+          dataToSend.DAT_DEMS = formatDateForAPI(dataToSend.DAT_DEMS);
+        }
+        
+        const response = await fetchAPI(`/polices/${policeId}/beneficiaires/${beneficiaireId}`, {
+          method: 'PUT',
+          body: dataToSend,
+        });
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur mise à jour bénéficiaire police ${policeId}:`, error);
+        throw error;
+      }
+    },
+
+    // Retirer un bénéficiaire d'une police
+    async removeBeneficiaire(policeId, beneficiaireId) {
+      try {
+        if (!policeId || isNaN(parseInt(policeId))) {
+          throw new Error('ID police invalide');
+        }
+        
+        if (!beneficiaireId || isNaN(parseInt(beneficiaireId))) {
+          throw new Error('ID bénéficiaire police invalide');
+        }
+        
+        const response = await fetchAPI(`/polices/${policeId}/beneficiaires/${beneficiaireId}`, {
+          method: 'DELETE',
+        });
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur retrait bénéficiaire police ${policeId}:`, error);
+        throw error;
+      }
+    },
+
+    // Récupérer les bénéficiaires d'une police
+    async getBeneficiaires(policeId) {
+      try {
+        if (!policeId || isNaN(parseInt(policeId))) {
+          throw new Error('ID police invalide');
+        }
+        
+        const response = await fetchAPI(`/polices/${policeId}/beneficiaires`);
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur bénéficiaires police ${policeId}:`, error);
+        return { success: false, message: error.message, beneficiaires: [] };
+      }
+    },
+
+    // ==============================================
+    // GESTION DES AVENANTS
+    // ==============================================
+
+    // Créer un avenant
+    async createAvenant(policeId, avenantData) {
+      try {
+        if (!policeId || isNaN(parseInt(policeId))) {
+          throw new Error('ID police invalide');
+        }
+        
+        console.log(`📄 Création avenant police ${policeId}:`, avenantData);
+        
+        // Préparation des données
+        const dataToSend = {
+          ...avenantData,
+          COD_POL: policeId,
+          DAT_AVN: avenantData.DAT_AVN ? formatDateForAPI(avenantData.DAT_AVN) : formatDateForAPI(new Date()),
+          DEB_AVN: avenantData.DEB_AVN ? formatDateForAPI(avenantData.DEB_AVN) : null,
+          FIN_AVN: avenantData.FIN_AVN ? formatDateForAPI(avenantData.FIN_AVN) : null,
+          ECH_AVN: avenantData.ECH_AVN ? formatDateForAPI(avenantData.ECH_AVN) : null,
+          DAT_CREUTIL: formatDateForAPI(new Date()),
+          DAT_MODUTIL: formatDateForAPI(new Date())
+        };
+        
+        const response = await fetchAPI(`/polices/${policeId}/avenants`, {
+          method: 'POST',
+          body: dataToSend,
+        });
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur création avenant police ${policeId}:`, error);
+        throw error;
+      }
+    },
+
+    // Récupérer les avenants d'une police
+    async getAvenants(policeId) {
+      try {
+        if (!policeId || isNaN(parseInt(policeId))) {
+          throw new Error('ID police invalide');
+        }
+        
+        const response = await fetchAPI(`/polices/${policeId}/avenants`);
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur avenants police ${policeId}:`, error);
+        return { success: false, message: error.message, avenants: [] };
+      }
+    },
+
+    // ==============================================
+    // GESTION DES TARIFS
+    // ==============================================
+
+    // Ajouter un tarif
+    async addTarif(policeId, tarifData) {
+      try {
+        if (!policeId || isNaN(parseInt(policeId))) {
+          throw new Error('ID police invalide');
+        }
+        
+        console.log(`💰 Ajout tarif police ${policeId}:`, tarifData);
+        
+        // Préparation des données
+        const dataToSend = {
+          ...tarifData,
+          COD_POL: policeId,
+          EFF_PTA: tarifData.EFF_PTA ? formatDateForAPI(tarifData.EFF_PTA) : formatDateForAPI(new Date()),
+          DAT_CREUTIL: formatDateForAPI(new Date()),
+          DAT_MODUTIL: formatDateForAPI(new Date())
+        };
+        
+        const response = await fetchAPI(`/polices/${policeId}/tarifs`, {
+          method: 'POST',
+          body: dataToSend,
+        });
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur ajout tarif police ${policeId}:`, error);
+        throw error;
+      }
+    },
+
+    // Récupérer les tarifs d'une police
+    async getTarifs(policeId) {
+      try {
+        if (!policeId || isNaN(parseInt(policeId))) {
+          throw new Error('ID police invalide');
+        }
+        
+        const response = await fetchAPI(`/polices/${policeId}/tarifs`);
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur tarifs police ${policeId}:`, error);
+        return { success: false, message: error.message, tarifs: [] };
+      }
+    },
+
+    // ==============================================
+    // GESTION DES PAYS
+    // ==============================================
+
+    // Ajouter un pays à une police
+    async addPays(policeId, paysData) {
+      try {
+        if (!policeId || isNaN(parseInt(policeId))) {
+          throw new Error('ID police invalide');
+        }
+        
+        console.log(`🌍 Ajout pays police ${policeId}:`, paysData);
+        
+        const response = await fetchAPI(`/polices/${policeId}/pays`, {
+          method: 'POST',
+          body: paysData,
+        });
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur ajout pays police ${policeId}:`, error);
+        throw error;
+      }
+    },
+
+    // Récupérer les pays d'une police
+    async getPays(policeId) {
+      try {
+        if (!policeId || isNaN(parseInt(policeId))) {
+          throw new Error('ID police invalide');
+        }
+        
+        const response = await fetchAPI(`/polices/${policeId}/pays`);
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur pays police ${policeId}:`, error);
+        return { success: false, message: error.message, pays: [] };
+      }
+    },
+
+    // ==============================================
+    // GESTION DES PRESTATIONS
+    // ==============================================
+
+    // Ajouter une prestation
+    async addPrestation(policeId, prestationData) {
+      try {
+        if (!policeId || isNaN(parseInt(policeId))) {
+          throw new Error('ID police invalide');
+        }
+        
+        console.log(`🏥 Ajout prestation police ${policeId}:`, prestationData);
+        
+        // Préparation des données
+        const dataToSend = {
+          ...prestationData,
+          COD_POL: policeId,
+          EFF_POL: prestationData.EFF_POL ? formatDateForAPI(prestationData.EFF_POL) : formatDateForAPI(new Date()),
+          EXD_POL: prestationData.EXD_POL ? formatDateForAPI(prestationData.EXD_POL) : null,
+          EXF_POL: prestationData.EXF_POL ? formatDateForAPI(prestationData.EXF_POL) : null,
+          DAT_CREUTIL: formatDateForAPI(new Date()),
+          DAT_MODUTIL: formatDateForAPI(new Date())
+        };
+        
+        const response = await fetchAPI(`/polices/${policeId}/prestations`, {
+          method: 'POST',
+          body: dataToSend,
+        });
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur ajout prestation police ${policeId}:`, error);
+        throw error;
+      }
+    },
+
+    // Récupérer les prestations d'une police
+    async getPrestations(policeId) {
+      try {
+        if (!policeId || isNaN(parseInt(policeId))) {
+          throw new Error('ID police invalide');
+        }
+        
+        const response = await fetchAPI(`/polices/${policeId}/prestations`);
+        
+        return response;
+      } catch (error) {
+        console.error(`❌ Erreur prestations police ${policeId}:`, error);
+        return { success: false, message: error.message, prestations: [] };
+      }
+    },
+
+    // ==============================================
+    // RECHERCHE ET FILTRAGE
+    // ==============================================
+
+    // Rechercher des polices
+    async search(searchTerm, filters = {}, limit = 20) {
+      try {
+        const dataToSend = {
+          searchTerm,
+          filters,
+          limit
+        };
+        
+        const response = await fetchAPI('/polices/search', {
+          method: 'POST',
+          body: dataToSend,
+        });
+        
+        if (response.success) {
+          const polices = response.polices?.map(p => this.formatPoliceForDisplay(p)) || [];
+          
+          return {
+            ...response,
+            polices
+          };
+        }
+        
+        return response;
+      } catch (error) {
+        console.error('❌ Erreur recherche polices:', error);
+        return { success: false, message: error.message, polices: [] };
+      }
+    },
+
+    // Recherche rapide pour autocomplétion
+    async searchQuick(searchTerm, limit = 10) {
+      try {
+        if (!searchTerm || searchTerm.trim().length < 2) {
+          return { success: true, polices: [] };
+        }
+        
+        const queryParams = new URLSearchParams();
+        queryParams.append('search', searchTerm);
+        if (limit) queryParams.append('limit', limit);
+        
+        const queryString = queryParams.toString();
+        const response = await fetchAPI(`/polices/search/quick${queryString ? '?' + queryString : ''}`);
+        
+        // Normalisation de la réponse
+        if (response.success) {
+          const polices = response.polices?.map(p => ({
+            id: p.id || p.COD_POL,
+            numero: p.NUM_POL || p.numero,
+            compagnie: p.nom_compagnie || '',
+            nom_complet: p.nom_complet || `${p.NUM_POL || ''} - ${p.nom_compagnie || ''}`.trim(),
+            eff_pol: p.EFF_POL || p.eff_pol,
+            res_pol: p.RES_POL || p.res_pol,
+            status: p.status || 'Active',
+            label: p.label || `${p.NUM_POL || ''} - ${p.nom_compagnie || ''}`.trim()
+          })) || [];
+          
+          return {
+            ...response,
+            polices
+          };
+        }
+        
+        return response;
+      } catch (error) {
+        console.error('❌ Erreur recherche rapide polices:', error);
+        return { success: false, message: error.message, polices: [] };
+      }
+    },
+
+    // ==============================================
+    // DONNÉES DE RÉFÉRENCE
+    // ==============================================
+
+    // Récupérer les souscripteurs
+    async getSouscripteurs() {
+      try {
+        const response = await fetchAPI('/polices/souscripteurs');
+        
+        if (response.success) {
+          return response;
+        }
+        
+        console.warn('⚠️ API souscripteurs non disponible');
+        return { 
+          success: true,
+          souscripteurs: []
+        };
+      } catch (error) {
+        console.error('❌ Erreur récupération souscripteurs:', error);
+        return { success: false, message: error.message, souscripteurs: [] };
+      }
+    },
+
+    // Récupérer les types de police
+    async getTypesPolice() {
+      try {
+        const response = await fetchAPI('/polices/types');
+        
+        if (response.success) {
+          return response;
+        }
+        
+        console.warn('⚠️ API types police non disponible');
+        return { 
+          success: true,
+          types: [
+            { value: 'IND', label: 'Individuelle' },
+            { value: 'COL', label: 'Collective' },
+            { value: 'ENT', label: 'Entreprise' }
+          ]
+        };
+      } catch (error) {
+        console.error('❌ Erreur récupération types police:', error);
+        return { success: false, message: error.message, types: [] };
+      }
+    },
+
+    // Récupérer les statistiques des polices
+    async getStatistiques() {
+      try {
+        const response = await fetchAPI('/polices/statistiques');
+        
+        if (response.success) {
+          return response;
+        }
+        
+        console.warn('⚠️ API statistiques non disponible');
+        return { 
+          success: false,
+          message: 'API non disponible',
+          statistiques: {
+            total: 0,
+            actives: 0,
+            suspendues: 0,
+            resiliees: 0,
+            en_attente: 0,
+            par_compagnie: [],
+            par_type: []
+          } 
+        };
+      } catch (error) {
+        console.error('❌ Erreur statistiques polices:', error);
+        return { 
+          success: false,
+          message: error.message,
+          statistiques: {
+            total: 0,
+            actives: 0,
+            suspendues: 0,
+            resiliees: 0,
+            en_attente: 0,
+            par_compagnie: [],
+            par_type: []
+          } 
+        };
+      }
+    },
+
+    // ==============================================
+    // FONCTIONS UTILITAIRES
+    // ==============================================
+
+    // Tester la connexion
+    async testConnection() {
+      try {
+        const response = await fetchAPI('/polices?limit=1');
+        return {
+          success: response.success !== false,
+          message: response.success !== false ? 'API polices opérationnelle' : 'API en erreur',
+          timestamp: new Date().toISOString(),
+          details: response
+        };
+      } catch (error) {
+        console.error('❌ Test connexion polices échoué:', error);
+        return {
+          success: false,
+          message: 'API polices non disponible',
+          error: error.message,
+          timestamp: new Date().toISOString()
+        };
+      }
+    },
+
+    // Formater une police pour l'affichage
+  formatPoliceForDisplay(police) {
+      if (!police) return null;
+      
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
       return {
         success: true,
         tauxCouverture: 0,
@@ -19491,7 +20113,11 @@ async terminerSession(id) {
       throw new Error('ID backup invalide');
     }
     
+<<<<<<< HEAD
     const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api' || 'http://localhost:3000/api';
+=======
+    const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api' || 'http://172.20.10.2:3000/api';
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
     const url = `${baseURL}/config/backups/${id}/download`;
     const token = localStorage.getItem('token');
     
@@ -19674,7 +20300,7 @@ async getBackupStatus(id) {
           success: true,
           api: healthResponse,
           timestamp: new Date().toISOString(),
-          environment: process.env.NODE_ENV || 'development',
+          environment: import.meta.env.MODE || 'development',
           apiUrl: API_URL
         };
       } catch (error) {
@@ -19764,7 +20390,7 @@ async getBackupStatus(id) {
   if (typeof window !== 'undefined') {
     // Restauration de l'URL API depuis localStorage
     const savedUrl = localStorage.getItem('api_base_url');
-    if (savedUrl && process.env.NODE_ENV === 'development') {
+    if (savedUrl && import.meta.env.MODE === 'development') {
       api.setBaseURL(savedUrl);
     }
     

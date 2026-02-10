@@ -4,7 +4,11 @@ const corsMiddleware = (req, res, next) => {
   const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:3000',
+<<<<<<< HEAD
     'http://localhost:3000',
+=======
+    'http://172.20.10.2:3000',
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
     'http://localhost:8080',
      'http://172.20.10.3:5173',
     'http://172.20.10.3:3000',

@@ -5,7 +5,10 @@ import {
   FileArchive, Search, Filter, Download, Eye,
   Calendar, FileText, User, Building, Trash2
 } from 'lucide-react';
+<<<<<<< HEAD
 
+=======
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
 
 const Archivage = () => {
   const { t } = useTranslation();

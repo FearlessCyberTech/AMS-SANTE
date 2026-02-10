@@ -274,6 +274,7 @@ const Layout = () => {
         '/paiements': ['SuperAdmin', 'Admin', 'Caissier'],
         '/ticket-moderateur': ['SuperAdmin', 'Admin', 'Caissier'],
         '/reglements': ['SuperAdmin', 'Admin', 'Caissier'],
+<<<<<<< HEAD
         '/gestion-financiere': ['SuperAdmin', 'Admin', 'Caissier'],
         '/litiges': ['SuperAdmin', 'Admin', 'Caissier'],
         '/statistiques': ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier'],
@@ -281,6 +282,15 @@ const Layout = () => {
         '/tableaux-bord': ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier', 'Producteur', 'Caissier'],
         '/evacuations': ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier'],
         '/suivi-evacuations': ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier'],
+=======
+        '/gestion-financiere': ['SuperAdmin', 'Admin'],
+        '/Prestations': ['SuperAdmin', 'Admin', 'Caissier'],
+        // '/statistiques': ['SuperAdmin', 'Admin', 'Medecin'],
+        '/rapports': ['SuperAdmin', 'Admin', 'Medecin'],
+        '/tableaux-bord': ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier', 'Secretaire', 'Caissier'],
+        '/evacuations': ['SuperAdmin', 'Admin', 'Medecin'],
+        /*'/suivi-evacuations': ['SuperAdmin', 'Admin', 'Medecin'],*/
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
         '/controle-fraudes': ['SuperAdmin', 'Admin'],
         '/audit': ['SuperAdmin', 'Admin'],
         '/alertes-anomalies': ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier', 'Caissier'],
@@ -316,6 +326,251 @@ const Layout = () => {
   const accessibleCategories = useMemo(() => {
     const role = user?.profil_uti || user?.role;
     if (!role) return [];
+<<<<<<< HEAD
+=======
+    
+    const allItems = [
+      { 
+        path: '/dashboard', 
+        icon: Home, 
+        label: t('menu.dashboard', 'Tableau de Bord'), 
+        roles: ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier', 'Secretaire', 'Caissier', 'Utilisateur'],
+        translationKey: 'dashboard'
+      },
+      // Gestion médicale
+      { 
+        path: '/beneficiaires', 
+        icon: Users2, 
+        label: t('menu.beneficiaries', 'Bénéficiaires'), 
+        roles: ['SuperAdmin', 'Admin', 'Secretaire'],
+        translationKey: 'beneficiaries'
+      },
+      { 
+        path: '/enrolement-biometrique', 
+        icon: UserPlus, 
+        label: t('menu.biometricEnrollment', 'Enrôlement Biométrique'), 
+        roles: ['SuperAdmin', 'Admin', 'Secretaire'],
+        translationKey: 'biometricEnrollment'
+      },
+      { 
+        path: '/familles-ace', 
+        icon: Users, 
+        label: t('menu.aceFamilies', 'Familles ACE'), 
+        roles: ['SuperAdmin', 'Admin', 'Secretaire'],
+        translationKey: 'aceFamilies'
+      },
+      { 
+        path: '/consultations', 
+        icon: Stethoscope, 
+        label: t('menu.consultations', 'Consultations'), 
+        roles: ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier'],
+        translationKey: 'consultations'
+      },
+      { 
+        path: '/accords-prealables', 
+        icon: FileCheck, 
+        label: t('menu.priorAgreements', 'Accords Préalables'), 
+        roles: ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier'],
+        translationKey: 'priorAgreements'
+      },
+      { 
+        path: '/prescriptions', 
+        icon: ClipboardList, 
+        label: t('menu.prescriptions', 'Prescriptions'), 
+        roles: ['SuperAdmin', 'Admin', 'Medecin'],
+        translationKey: 'prescriptions'
+      },
+      { 
+        path: '/dossiers-medicaux', 
+        icon: Activity, 
+        label: t('menu.medicalRecords', 'Dossiers Médicaux'), 
+        roles: ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier'],
+        translationKey: 'medicalRecords'
+      },
+      // { 
+      //   path: '/teleconsultations', 
+      //   icon: PhoneCall, 
+      //   label: t('menu.teleconsultations', 'Téléconsultations'), 
+      //   roles: ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier'],
+      //   translationKey: 'teleconsultations'
+      // },
+      { 
+        path: '/urgences', 
+        icon: Ambulance, 
+        label: t('menu.emergencies', 'Urgences'), 
+        roles: ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier'],
+        translationKey: 'emergencies'
+      },
+      // Gestion financière
+      { 
+        path: '/paiements', 
+        icon: Wallet, 
+        label: t('menu.payments', 'Paiements'), 
+        roles: ['SuperAdmin', 'Admin', 'Caissier'],
+        translationKey: 'payments'
+      },
+      { 
+        path: '/ticket-moderateur', 
+        icon: Percent, 
+        label: t('menu.ticketModerator', 'Ticket Modérateur'), 
+        roles: ['SuperAdmin', 'Admin', 'Caissier'],
+        translationKey: 'ticketModerator'
+      },
+      { 
+        path: '/reglements', 
+        icon: Receipt, 
+        label: t('menu.settlements', 'Règlements'), 
+        roles: ['SuperAdmin', 'Admin', 'Caissier'],
+        translationKey: 'settlements'
+      },
+      { 
+        path: '/gestion-financiere', 
+        icon: Calculator, 
+        label: t('menu.declarationReimbursement', 'Déclaration et remboursement'), 
+        roles: ['SuperAdmin', 'Admin'],
+        translationKey: 'declarationReimbursement'
+      },
+      //  { 
+      //   path: '/Prestations', 
+      //   icon: Scale, 
+      //     label: t('menu.prestations','Prestations'), 
+      //     roles: ['SuperAdmin', 'Admin', 'Caissier'],
+      //    translationKey: 'prestations'
+      //  },
+      // // Statistiques et rapports (partie administration)
+      // { 
+      //   path: '/statistiques', 
+      //   icon: PieChart, 
+      //   label: t('menu.statistics', 'Statistiques'), 
+      //   roles: ['SuperAdmin', 'Admin', 'Medecin'],
+      //   translationKey: 'statistics'
+      // },
+      { 
+        path: '/rapports', 
+        icon: FileBarChart, 
+        label: t('menu.reports', 'Rapports'), 
+        roles: ['SuperAdmin', 'Admin', 'Medecin'],
+        translationKey: 'reports'
+      },
+      // { 
+      //   path: '/tableaux-bord', 
+      //   icon: ActivitySquare, 
+      //   label: t('menu.dashboards', 'Tableaux de Bord'), 
+      //   roles: ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier', 'Secretaire', 'Caissier'],
+      //   translationKey: 'dashboards'
+      // },
+      // Gestion médicale : Évacuations
+      { 
+        path: '/evacuations', 
+        icon: Ambulance, 
+        label: t('menu.evacuations', 'Évacuations'), 
+        roles: ['SuperAdmin', 'Admin', 'Medecin'],
+        translationKey: 'evacuations'
+      },
+      // { 
+      //   path: '/suivi-evacuations', 
+      //   icon: MapPin, 
+      //   label: t('menu.evacuationTracking', 'Suivi des Évacuations'), 
+      //   roles: ['SuperAdmin', 'Admin', 'Medecin'],
+      //   translationKey: 'evacuationTracking'
+      // },
+      // Contrôle et audit (administration)
+      // { 
+      //   path: '/controle-fraudes', 
+      //   icon: ShieldAlert, 
+      //   label: t('menu.fraudControl', 'Contrôle des Fraudes'), 
+      //   roles: ['SuperAdmin', 'Admin'],
+      //   translationKey: 'fraudControl'
+      // },
+      // { 
+      //   path: '/audit', 
+      //   icon: FileSearch, 
+      //   label: t('menu.audit', 'Audit'), 
+      //   roles: ['SuperAdmin', 'Admin'],
+      //   translationKey: 'audit'
+      // },
+      // { 
+      //   path: '/alertes-anomalies', 
+      //   icon: AlertTriangle, 
+      //   label: t('menu.anomalyAlerts', 'Alertes Anomalies'), 
+      //   roles: ['SuperAdmin', 'Admin', 'Medecin', 'Caissier'],
+      //   translationKey: 'anomalyAlerts'
+      // },
+      // Réseau de soins (partie médicale)
+      { 
+        path: '/reseau-soins', 
+        icon: Network, 
+        label: t('menu.careNetwork', 'Réseau de Soins'), 
+        roles: ['SuperAdmin', 'Admin'],
+        translationKey: 'careNetwork'
+      },
+      { 
+        path: '/prestataires', 
+        icon: Hospital, 
+        label: t('menu.providers', 'Prestataires'), 
+        roles: ['SuperAdmin', 'Admin', 'Medecin'],
+        translationKey: 'providers'
+      },
+      { 
+        path: '/centres-sante', 
+        icon: Map, 
+        label: t('menu.healthCenters', 'Centres de Santé'), 
+        roles: ['SuperAdmin', 'Admin'],
+        translationKey: 'healthCenters'
+      },
+      // { 
+      //   path: '/conventions', 
+      //   icon: MessageSquare, 
+      //   label: t('menu.agreements', 'Conventions'), 
+      //   roles: ['SuperAdmin', 'Admin'],
+      //   translationKey: 'agreements'
+      // },
+      { 
+        path: '/evaluation-prestataires', 
+        icon: BarChart3, 
+        label: t('menu.providerEvaluation', 'Évaluation Prestataires'), 
+        roles: ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier', 'Utilisateur'],
+        translationKey: 'providerEvaluation'
+      },
+      // Administration système
+      { 
+        path: '/administration', 
+        icon: Cpu, 
+        label: t('menu.administration', 'Administration'), 
+        roles: ['SuperAdmin', 'Admin'],
+        translationKey: 'administration'
+      },
+      // { 
+      //   path: '/parametres', 
+      //   icon: Settings, 
+      //   label: t('menu.settings', 'Paramètres'), 
+      //   roles: ['SuperAdmin', 'Admin'],
+      //   translationKey: 'settings'
+      // },
+      { 
+        path: '/importation', 
+        icon: Map, 
+        label: t('menu.importation', 'Importation'), 
+        roles: ['SuperAdmin', 'Admin'],
+        translationKey: 'importation'
+      },
+      // { 
+      //   path: '/nomenclatures', 
+      //   icon: FileDigit, 
+      //   label: t('menu.nomenclatures', 'Nomenclatures'), 
+      //   roles: ['SuperAdmin', 'Admin', 'Medecin'],
+      //   translationKey: 'nomenclatures'
+      // },
+      // Gestion du profil
+      { 
+        path: '/profil', 
+        icon: BadgeCheck, 
+        label: t('menu.myProfile', 'Mon Profil'), 
+        roles: ['SuperAdmin', 'Admin', 'Medecin', 'Infirmier', 'Secretaire', 'Caissier', 'Utilisateur'],
+        translationKey: 'myProfile'
+      }
+    ];
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
 
     return menuCategories.map(category => {
       const accessibleItems = category.items.filter(item => 
@@ -637,6 +892,7 @@ const Layout = () => {
                   }}
                   onClick={() => handleNavigation('/profil')}
                 >
+<<<<<<< HEAD
                   {user?.prenom_uti?.charAt(0) || user?.nom_uti?.charAt(0) || 'U'}
                 </Avatar>
               </Tooltip>
@@ -673,6 +929,24 @@ const Layout = () => {
                     </Text>
                   </Space>
                 </div>
+=======
+                  <BadgeCheck size={20} />
+                </button>
+                {/* <button 
+                  className="btn-icon" 
+                  title={t('menu.settings', 'Paramètres')}
+                  onClick={() => handleNavigation('/parametres')}
+                >
+                  <Settings size={20} />
+                </button> */}
+                <button 
+                  className="btn-icon logout-btn" 
+                  title={t('actions.logout', 'Déconnexion')} 
+                  onClick={handleLogout}
+                >
+                  <LogOut size={20} />
+                </button>
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
               </div>
             )}
           </div>

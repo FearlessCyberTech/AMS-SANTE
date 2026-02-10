@@ -5,7 +5,10 @@ import {
   Shield, Search, Filter, AlertTriangle, CheckCircle,
   XCircle, Eye, FileText, Download, User, DollarSign
 } from 'lucide-react';
+<<<<<<< HEAD
 
+=======
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
 
 const ControleFraudes = () => {
   const { t } = useTranslation();

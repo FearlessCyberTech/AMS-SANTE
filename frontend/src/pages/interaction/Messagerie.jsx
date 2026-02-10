@@ -5,7 +5,10 @@ import {
   Mail, Search, Filter, Send, Paperclip,
   User, Clock, Check, CheckCheck, Phone
 } from 'lucide-react';
+<<<<<<< HEAD
 
+=======
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
 
 const Messagerie = () => {
   const { t } = useTranslation();

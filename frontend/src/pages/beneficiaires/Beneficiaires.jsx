@@ -191,8 +191,153 @@ const loadBeneficiaires = useCallback(async () => {
         .map(ben => ben.ID_BEN || ben.id)
         .filter(id => id);
       
+<<<<<<< HEAD
       // Charger tous les taux de couverture en une seule requête
       const tauxParBeneficiaire = await loadTauxCouvertureBatch(beneficiaireIds);
+=======
+     // ==============================================
+// NORMALISATION DES BÉNÉFICIAIRES - VERSION CORRIGÉE
+// ==============================================
+
+const normalizedBeneficiaires = beneficiairesList.map((ben) => {
+  // Calcul de l'âge
+  const dateNaissance = ben.NAI_BEN || ben.date_naissance || '';
+  const age = ben.AGE || calculateAge(dateNaissance);
+  
+  // Gestion des photos - Version simplifiée
+  let photoUrl = null;
+  const photoField = ben.PHOTO || ben.photo || ben.PHOTO_URL;
+  
+  if (photoField && photoField !== 'null' && photoField !== 'undefined') {
+    photoUrl = getPhotoUrl(photoField);
+  }
+  
+  // Log de débogage
+  console.log('Debug photo:', {
+    id: ben.ID_BEN || ben.id,
+    nom: ben.NOM_BEN,
+    photoField: photoField,
+    photoUrl: photoUrl
+  });
+  
+  // Construction de l'objet normalisé
+  return {
+    // Identifiants
+    ID_BEN: ben.ID_BEN || ben.id || 0,
+    id: ben.ID_BEN || ben.id || 0,
+    
+    // Informations personnelles
+    NOM_BEN: ben.NOM_BEN || ben.nom || '',
+    PRE_BEN: ben.PRE_BEN || ben.prenom || '',
+    SEX_BEN: ben.SEX_BEN || ben.sexe || 'M',
+    NAI_BEN: dateNaissance,
+    AGE: age,
+    
+    // Contact
+    TELEPHONE_MOBILE: ben.TELEPHONE_MOBILE || ben.telephone_mobile || ben.telephone || '',
+    EMAIL: ben.EMAIL || ben.email || '',
+    
+    // Profession
+    PROFESSION: ben.PROFESSION || ben.profession || '',
+    EMPLOYEUR: ben.EMPLOYEUR || ben.employeur || 'Non spécifié',
+    
+    // Statut
+    STATUT_ACE: ben.STATUT_ACE || ben.statut_ace || '',
+    ID_ASSURE_PRINCIPAL: ben.ID_ASSURE_PRINCIPAL || ben.id_assure_principal || null,
+    
+    // Photo - URL complète
+    photo: photoUrl,
+    
+    // Autres champs (simplifiés)
+    IDENTIFIANT_NATIONAL: ben.IDENTIFIANT_NATIONAL || ben.identifiant_national || '',
+    ZONE_HABITATION: ben.ZONE_HABITATION || ben.zone_habitation || '',
+    
+    TYPE_HABITAT: ben.TYPE_HABITAT || '',
+    
+    // ==============================================
+    // INFORMATIONS MÉDICALES (pour dossier médical)
+    // ==============================================
+    GROUPE_SANGUIN: ben.GROUPE_SANGUIN || '',
+    ANTECEDENTS_MEDICAUX: ben.ANTECEDENTS_MEDICAUX || '',
+    ALLERGIES: ben.ALLERGIES || '',
+    TRAITEMENTS_EN_COURS: ben.TRAITEMENTS_EN_COURS || '',
+    
+    // Contact d'urgence
+    CONTACT_URGENCE: ben.CONTACT_URGENCE || '',
+    TEL_URGENCE: ben.TEL_URGENCE || '',
+    
+    // ==============================================
+    // INFORMATIONS SOCIO-CULTURELLES
+    // ==============================================
+    NIVEAU_ETUDE: ben.NIVEAU_ETUDE || '',
+    RELIGION: ben.RELIGION || '',
+    LANGUE_MATERNEL: ben.LANGUE_MATERNEL || '',
+    LANGUE_PARLEE: ben.LANGUE_PARLEE || '',
+    SALAIRE: ben.SALAIRE || null,
+    
+    // ==============================================
+    // ACCESSIBILITÉ ET TRANSPORT
+    // ==============================================
+    ACCES_EAU: ben.ACCES_EAU !== undefined ? ben.ACCES_EAU : true,
+    ACCES_ELECTRICITE: ben.ACCES_ELECTRICITE !== undefined ? ben.ACCES_ELECTRICITE : true,
+    DISTANCE_CENTRE_SANTE: ben.DISTANCE_CENTRE_SANTE || 0,
+    MOYEN_TRANSPORT: ben.MOYEN_TRANSPORT || '',
+    
+    // ==============================================
+    // INFORMATIONS D'ASSURANCE
+    // ==============================================
+    ASSURANCE_PRIVE: ben.ASSURANCE_PRIVE || ben.assurance_prive || false,
+    
+    MUTUELLE: ben.MUTUELLE || ben.mutuelle || '',
+    
+    // ==============================================
+    // PHOTOGRAPHIE - CHAMPS UNIFIÉS
+    // ==============================================
+    PHOTO: photoUrl,           // URL complète de la photo
+    PHOTO_URL: photoUrl,       // URL complète (primaire)
+    PHOTO_FILENAME: photoField, // Nom de fichier original
+    
+    // ==============================================
+    // MÉTADONNÉES DE GESTION
+    // ==============================================
+    COD_CREUTIL: ben.COD_CREUTIL || 'SYSTEM',
+    COD_MODUTIL: ben.COD_MODUTIL || 'SYSTEM',
+    DAT_CREUTIL: ben.DAT_CREUTIL || '',
+    DAT_MODUTIL: ben.DAT_MODUTIL || '',
+    
+    // ==============================================
+    // CHAMPS UTILITAIRES POUR L'AFFICHAGE
+    // ==============================================
+    
+    // Format d'affichage de la date de naissance
+    date_naissance_formatted: formatDate(dateNaissance),
+    
+    // Statut ACE formaté pour l'affichage
+    statut_ace_formatted: !(ben.STATUT_ACE || ben.statut_ace) ? 'Assuré Principal' : 
+                         ben.STATUT_ACE === 'CONJOINT' ? 'Conjoint' :
+                         ben.STATUT_ACE === 'ENFANT' ? 'Enfant' :
+                         ben.STATUT_ACE === 'ASCENDANT' ? 'Ascendant' : 'Ayant droit',
+    
+    // Indicateur booléen pour assuré principal
+    is_assure_principal: !ben.STATUT_ACE || ben.STATUT_ACE === '' || ben.STATUT_ACE === null,
+    
+    // Groupe sanguin formaté
+    groupe_sanguin_formatted: ben.GROUPE_SANGUIN ? `${ben.GROUPE_SANGUIN}` : 'Non spécifié',
+    
+    // Assurance privée formatée
+    assurance_prive_formatted: (ben.ASSURANCE_PRIVE || ben.assurance_prive) ? 'Oui' : 'Non'
+  };
+  
+  return beneficiaireNormalise;
+
+  console.log('Données brutes du backend:', beneficiairesList);
+console.log('URLs de photos générées:', normalizedBeneficiaires.map(b => ({
+  nom: b.NOM_BEN,
+  photoUrl: b.PHOTO
+})));
+});
+      setBeneficiaires(normalizedBeneficiaires);
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
       
       const formattedBeneficiaires = beneficiairesList.map(ben => {
         let employeur = 'Non spécifié';

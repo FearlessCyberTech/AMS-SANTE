@@ -7,7 +7,10 @@ import {
   FileText, Stethoscope, DollarSign, History,
   Edit, Download, Printer, Share2, ArrowLeft
 } from 'lucide-react';
+<<<<<<< HEAD
 
+=======
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
 
 const BeneficiaireDetail = () => {
   const { t } = useTranslation();

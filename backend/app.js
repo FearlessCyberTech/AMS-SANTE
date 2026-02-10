@@ -20,6 +20,163 @@ const dbConfig = require('./config/database');
 const app = express();
 
 // ==============================================
+// FONCTIONS DE VALIDATION ET SÉCURITÉ
+// ==============================================
+
+// Fonction de validation des entrées
+const validateInput = (data, rules) => {
+  const errors = [];
+  const sanitized = {};
+
+  for (const [field, rule] of Object.entries(rules)) {
+    const value = data[field];
+
+    // Vérifier si le champ est requis
+    if (rule.required && (value === undefined || value === null || value === '')) {
+      errors.push(`${field} est requis`);
+      continue;
+    }
+
+    // Si le champ n'est pas fourni et n'est pas requis, passer
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    // Validation par type
+    switch (rule.type) {
+      case 'string':
+        if (typeof value !== 'string') {
+          errors.push(`${field} doit être une chaîne de caractères`);
+        } else {
+          let sanitizedValue = value.trim();
+
+          // Vérifier la longueur maximale
+          if (rule.maxLength && sanitizedValue.length > rule.maxLength) {
+            errors.push(`${field} ne peut pas dépasser ${rule.maxLength} caractères`);
+            continue;
+          }
+
+          // Vérifier la longueur minimale
+          if (rule.minLength && sanitizedValue.length < rule.minLength) {
+            errors.push(`${field} doit contenir au moins ${rule.minLength} caractères`);
+            continue;
+          }
+
+          // Échapper les caractères dangereux
+          sanitizedValue = sanitizedValue.replace(/[<>'"&]/g, '');
+
+          sanitized[field] = sanitizedValue;
+        }
+        break;
+
+      case 'number':
+        const numValue = Number(value);
+        if (isNaN(numValue)) {
+          errors.push(`${field} doit être un nombre valide`);
+        } else {
+          if (rule.min !== undefined && numValue < rule.min) {
+            errors.push(`${field} doit être supérieur ou égal à ${rule.min}`);
+          }
+          if (rule.max !== undefined && numValue > rule.max) {
+            errors.push(`${field} doit être inférieur ou égal à ${rule.max}`);
+          }
+          sanitized[field] = numValue;
+        }
+        break;
+
+      case 'boolean':
+        sanitized[field] = Boolean(value);
+        break;
+
+      case 'date':
+        const date = new Date(value);
+        if (isNaN(date.getTime())) {
+          errors.push(`${field} doit être une date valide`);
+        } else {
+          sanitized[field] = date.toISOString().split('T')[0]; // Format YYYY-MM-DD
+        }
+        break;
+
+      case 'email':
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (typeof value !== 'string' || !emailRegex.test(value.trim())) {
+          errors.push(`${field} doit être une adresse email valide`);
+        } else {
+          sanitized[field] = value.trim().toLowerCase();
+        }
+        break;
+
+      default:
+        sanitized[field] = value;
+    }
+  }
+
+  return { isValid: errors.length === 0, errors, sanitized };
+};
+
+// Fonction de sanitisation SQL pour prévenir les injections
+const sanitizeForSQL = (value) => {
+  if (typeof value === 'string') {
+    return value.replace(/['";\\]/g, '').trim();
+  }
+  return value;
+};
+
+// Middleware de validation des entrées
+const validateRequest = (rules) => {
+  return (req, res, next) => {
+    const { isValid, errors, sanitized } = validateInput(req.body, rules);
+
+    if (!isValid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Données invalides',
+        errors: errors
+      });
+    }
+
+    // Remplacer req.body par les données sanitizées
+    req.body = sanitized;
+    next();
+  };
+};
+
+// Middleware de limitation de taux avancé
+const advancedRateLimit = (windowMs = 15 * 60 * 1000, maxRequests = 100) => {
+  const requests = new Map();
+
+  return (req, res, next) => {
+    const key = req.ip + req.path;
+    const now = Date.now();
+    const windowStart = now - windowMs;
+
+    // Nettoyer les anciennes entrées
+    for (const [k, timestamps] of requests.entries()) {
+      requests.set(k, timestamps.filter(timestamp => timestamp > windowStart));
+      if (requests.get(k).length === 0) {
+        requests.delete(k);
+      }
+    }
+
+    // Vérifier la limite
+    const userRequests = requests.get(key) || [];
+    if (userRequests.length >= maxRequests) {
+      return res.status(429).json({
+        success: false,
+        message: 'Trop de requêtes. Veuillez réessayer plus tard.',
+        retryAfter: Math.ceil(windowMs / 1000)
+      });
+    }
+
+    // Ajouter la nouvelle requête
+    userRequests.push(now);
+    requests.set(key, userRequests);
+
+    next();
+  };
+};
+
+// ==============================================
 // CONFIGURATION MIDDLEWARE
 // ==============================================
 
@@ -49,7 +206,11 @@ const corsOptions = {
     // En production, vérifie les origines autorisées
     const allowedOrigins = process.env.ALLOWED_ORIGINS 
       ? process.env.ALLOWED_ORIGINS.split(',')
+<<<<<<< HEAD
       : ['https://localhost:3000','http://172.20.10.3:3000'];
+=======
+      : ['https://localhost:3000','http://172.20.10.2:3000'];
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
     
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
@@ -641,7 +802,12 @@ app.get('/api/test/connection', async (req, res) => {
 // ==============================================
 
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login',
+  validateRequest({
+    username: { type: 'string', required: true, minLength: 2, maxLength: 50 },
+    password: { type: 'string', required: true, minLength: 4, maxLength: 100 }
+  }),
+  async (req, res) => {
   try {
     const { username, password } = req.body;
     
@@ -9618,6 +9784,7 @@ async function handlePhotoUpload(req, res, method) {
 
 // 5. Créer un nouveau bénéficiaire
 app.post('/api/beneficiaires', authenticateToken, async (req, res) => {
+<<<<<<< HEAD
   let pool = null;
   let transaction = null;
   let photoFileName = null;
@@ -9628,6 +9795,45 @@ app.post('/api/beneficiaires', authenticateToken, async (req, res) => {
       photoUpload.single('photo')(req, res, (err) => {
         if (err) {
           return reject(err);
+=======
+  // Utiliser le middleware multer pour gérer la photo
+  upload.single('photo')(req, res, async function(err) {
+    try {
+      if (err instanceof multer.MulterError) {
+        console.error('❌ Erreur Multer:', err);
+        return res.status(400).json({
+          success: false,
+          message: `Erreur de téléchargement de la photo: ${err.message}`
+        });
+      } else if (err) {
+        console.error('❌ Erreur de fichier:', err);
+        return res.status(400).json({
+          success: false,
+          message: err.message
+        });
+      }
+      
+      const user = req.user;
+
+      // Log de débogage supprimé pour sécurité - évite l'exposition de données sensibles
+
+      let data;
+      
+      // Si c'est FormData avec JSON
+      if (req.body.data) {
+        try {
+          data = JSON.parse(req.body.data);
+        } catch (parseError) {
+          console.error('❌ Erreur parsing JSON:', parseError);
+          // Supprimer la photo si erreur de parsing
+          if (req.file) {
+            fs.unlinkSync(req.file.path);
+          }
+          return res.status(400).json({
+            success: false,
+            message: 'Format de données invalide'
+          });
+>>>>>>> d90a12e2bad9383f696451b6f983404524d7015b
         }
         resolve();
       });
@@ -35179,10 +35385,199 @@ function calculateAge(birthDate) {
 }
 
 // ==============================================
-// ROUTES DU DASHBOARD 
+// ROUTES DU DASHBOARD
 // ==============================================
 
-app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
+app.get('/dashboard/stats', authenticateToken, async (req, res) => {
+  try {
+    const pool = await dbConfig.getConnection();
+    const { periode = 'mois' } = req.query;
+
+    // Calculer les dates selon la période
+    let dateFilter = '';
+    let dateParams = {};
+
+    switch (periode) {
+      case 'jour':
+        dateFilter = "CAST(DATE_CONSULTATION as DATE) = CAST(GETDATE() as DATE)";
+        break;
+      case 'semaine':
+        dateFilter = "DATE_CONSULTATION >= DATEADD(DAY, -7, GETDATE())";
+        break;
+      case 'mois':
+        dateFilter = "MONTH(DATE_CONSULTATION) = MONTH(GETDATE()) AND YEAR(DATE_CONSULTATION) = YEAR(GETDATE())";
+        break;
+      case 'annee':
+        dateFilter = "YEAR(DATE_CONSULTATION) = YEAR(GETDATE())";
+        break;
+      default:
+        dateFilter = "MONTH(DATE_CONSULTATION) = MONTH(GETDATE()) AND YEAR(DATE_CONSULTATION) = YEAR(GETDATE())";
+    }
+
+    const [
+      patientsResult,
+      consultationsResult,
+      medecinsResult,
+      revenueResult,
+      centresResult,
+      prescriptionsResult,
+      patientsTodayResult
+    ] = await Promise.all([
+      // Total patients actifs
+      pool.request().query('SELECT COUNT(*) as total FROM [core].[BENEFICIAIRE] WHERE RETRAIT_DATE IS NULL'),
+
+      // Consultations selon période
+      pool.request().query(`
+        SELECT COUNT(*) as total
+        FROM [core].[CONSULTATION]
+        WHERE ${dateFilter}
+      `),
+
+      // Médecins actifs
+      pool.request().query(`
+        SELECT COUNT(*) as total
+        FROM [core].[PRESTATAIRE]
+        WHERE TYPE_PRESTATAIRE = 'Medecin' AND ACTIF = 1
+      `),
+
+      // Revenus selon période
+      pool.request().query(`
+        SELECT ISNULL(SUM(MONTANT_CONSULTATION), 0) as total
+        FROM [core].[CONSULTATION]
+        WHERE ${dateFilter}
+      `),
+
+      // Centres actifs
+      pool.request().query(`
+        SELECT COUNT(*) as total
+        FROM [core].[CENTRE]
+        WHERE ACTIF = 1
+      `),
+
+      // Prescriptions selon période
+      pool.request().query(`
+        SELECT COUNT(*) as total
+        FROM [core].[PRESCRIPTION]
+        WHERE ${dateFilter.replace('DATE_CONSULTATION', 'DATE_PRESCRIPTION')}
+      `),
+
+      // Patients vus aujourd'hui
+      pool.request().query(`
+        SELECT COUNT(DISTINCT ID_BENEFICIAIRE) as total
+        FROM [core].[CONSULTATION]
+        WHERE CAST(DATE_CONSULTATION as DATE) = CAST(GETDATE() as DATE)
+      `)
+    ]);
+
+    const stats = {
+      totalPatients: patientsResult.recordset[0]?.total || 0,
+      consultationsAujourdhui: consultationsResult.recordset[0]?.total || 0,
+      medecinsActifs: medecinsResult.recordset[0]?.total || 0,
+      revenueMensuel: revenueResult.recordset[0]?.total || 0,
+      centresActifs: centresResult.recordset[0]?.total || 0,
+      prescriptionsAujourdhui: prescriptionsResult.recordset[0]?.total || 0,
+      patientsToday: patientsTodayResult.recordset[0]?.total || 0,
+      periode: periode
+    };
+
+    return res.json({
+      success: true,
+      stats: stats,
+      message: 'Statistiques récupérées avec succès'
+    });
+
+  } catch (error) {
+    console.error('Erreur récupération stats dashboard:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des statistiques',
+      error: error.message,
+      stats: {
+        totalPatients: 0,
+        consultationsAujourdhui: 0,
+        medecinsActifs: 0,
+        revenueMensuel: 0,
+        centresActifs: 0,
+        prescriptionsAujourdhui: 0,
+        patientsToday: 0
+      }
+    });
+  }
+});
+
+// Route pour les consultations par mois
+app.get('/dashboard/consultations-par-mois', authenticateToken, async (req, res) => {
+  try {
+    const pool = await dbConfig.getConnection();
+    const { mois = 6 } = req.query;
+
+    const query = `
+      SELECT
+        FORMAT(DATE_CONSULTATION, 'yyyy-MM') as mois,
+        COUNT(*) as consultations,
+        COUNT(DISTINCT ID_BENEFICIAIRE) as patients
+      FROM [core].[CONSULTATION]
+      WHERE DATE_CONSULTATION >= DATEADD(MONTH, -${parseInt(mois)}, GETDATE())
+      GROUP BY FORMAT(DATE_CONSULTATION, 'yyyy-MM')
+      ORDER BY FORMAT(DATE_CONSULTATION, 'yyyy-MM')
+    `;
+
+    const result = await pool.request().query(query);
+
+    return res.json({
+      success: true,
+      data: result.recordset,
+      message: 'Consultations par mois récupérées'
+    });
+
+  } catch (error) {
+    console.error('Erreur consultations par mois:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des consultations par mois',
+      error: error.message,
+      data: []
+    });
+  }
+});
+
+// Route pour les revenus par mois
+app.get('/dashboard/revenue-par-mois', authenticateToken, async (req, res) => {
+  try {
+    const pool = await dbConfig.getConnection();
+    const { mois = 6 } = req.query;
+
+    const query = `
+      SELECT
+        FORMAT(DATE_CONSULTATION, 'yyyy-MM') as mois,
+        ISNULL(SUM(MONTANT_CONSULTATION), 0) as revenue,
+        COUNT(*) as consultations
+      FROM [core].[CONSULTATION]
+      WHERE DATE_CONSULTATION >= DATEADD(MONTH, -${parseInt(mois)}, GETDATE())
+      GROUP BY FORMAT(DATE_CONSULTATION, 'yyyy-MM')
+      ORDER BY FORMAT(DATE_CONSULTATION, 'yyyy-MM')
+    `;
+
+    const result = await pool.request().query(query);
+
+    return res.json({
+      success: true,
+      data: result.recordset,
+      message: 'Revenus par mois récupérés'
+    });
+
+  } catch (error) {
+    console.error('Erreur revenus par mois:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des revenus par mois',
+      error: error.message,
+      data: []
+    });
+  }
+});
+
+app.get('/dashboard/stats', authenticateToken, async (req, res) => {
   try {
     const pool = await dbConfig.getConnection();
     
@@ -63134,109 +63529,6 @@ app.get('/api/upload/history', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/import/upload', authenticateToken, upload.single('file'), async (req, res) => {
-  let pool;
-  try {
-    const user = req.user?.username || 'SYSTEM';
-    
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'Aucun fichier uploadé'
-      });
-    }
-
-    const { table } = req.body;
-    const allowedTables = ['BENEFICIAIRE', 'PRESTATAIRE', 'CENTRE', 'UTILISATEUR', 'CARTE'];
-    
-    if (!table || !allowedTables.includes(table.toUpperCase())) {
-      // Supprimer le fichier uploadé si la table n'est pas valide
-      fs.unlinkSync(req.file.path);
-      
-      return res.status(400).json({
-        success: false,
-        message: `Table non autorisée. Tables autorisées: ${allowedTables.join(', ')}`
-      });
-    }
-
-    // Récupérer la connexion à la base de données
-    try {
-      pool = await dbConfig.getConnection();
-    } catch (dbError) {
-      console.error('❌ Erreur connexion DB:', dbError.message);
-      fs.unlinkSync(req.file.path);
-      
-      return res.status(500).json({
-        success: false,
-        message: 'Impossible de se connecter à la base de données'
-      });
-    }
-
-    // Lire et parser le fichier selon son type
-    const filePath = req.file.path;
-    const fileExtension = path.extname(filePath).toLowerCase();
-    
-    let data;
-    if (fileExtension === '.csv') {
-      data = await parseCSV(filePath);
-    } else if (fileExtension === '.xlsx' || fileExtension === '.xls') {
-      data = await parseExcel(filePath);
-    }
-
-    // Validation des données
-    const validationResult = validateData(data, table);
-    if (!validationResult.valid) {
-      fs.unlinkSync(filePath);
-      
-      return res.status(400).json({
-        success: false,
-        message: 'Données invalides',
-        errors: validationResult.errors
-      });
-    }
-
-    // Traitement et import des données
-    const importResult = await processImport(data, table, user, pool);
-
-    // Supprimer le fichier après traitement
-    fs.unlinkSync(filePath);
-
-    return res.json({
-      success: true,
-      message: `Import ${table} réussi`,
-      summary: importResult,
-      file: {
-        originalname: req.file.originalname,
-        size: req.file.size,
-        processed: new Date().toISOString()
-      }
-    });
-
-  } catch (error) {
-    console.error('❌ Erreur import fichier:', error.message);
-    
-    // Supprimer le fichier en cas d'erreur
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-
-    return res.status(500).json({
-      success: false,
-      message: 'Erreur lors de l\'import du fichier',
-      error: error.message
-    });
-
-  } finally {
-    if (pool) {
-      try {
-        await pool.close();
-      } catch (closeError) {
-        console.error('❌ Erreur fermeture connexion:', closeError.message);
-      }
-    }
-  }
-});
-
 app.get('/api/import/logs/:importId', authenticateToken, async (req, res) => {
   let pool;
   try {
@@ -63321,27 +63613,1078 @@ app.get('/api/import/logs/:importId', authenticateToken, async (req, res) => {
 
 
 // ==============================================
-// DÉMARRAGE DU SERVEUR
+// FONCTIONS UTILITAIRES POUR L'IMPORTATION
 // ==============================================
 
-const PORT = process.env.PORT || 5000;
+// Fonction pour parser un fichier CSV
+async function parseCSV(filePath, delimiter = ',', hasHeader = true) {
+  const fs = require('fs');
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const lines = content.split('\n').filter(line => line.trim());
 
+  if (lines.length === 0) return [];
+
+  const data = [];
+  const headers = hasHeader ? lines[0].split(delimiter).map(h => h.trim()) : null;
+
+  const startIndex = hasHeader ? 1 : 0;
+  for (let i = startIndex; i < lines.length; i++) {
+    const values = lines[i].split(delimiter).map(v => v.trim());
+    if (values.length > 0 && values.some(v => v)) {
+      if (hasHeader) {
+        const row = {};
+        headers.forEach((header, index) => {
+          row[header] = values[index] || '';
+        });
+        data.push(row);
+      } else {
+        data.push(values);
+      }
+    }
+  }
+
+  return data;
+}
+
+// Fonction pour parser un fichier Excel
+async function parseExcel(filePath, hasHeader = true) {
+  const ExcelJS = require('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(filePath);
+
+  const worksheet = workbook.worksheets[0];
+  const data = [];
+
+  worksheet.eachRow((row, rowNumber) => {
+    if (hasHeader && rowNumber === 1) return; // Skip header row if hasHeader is true
+
+    const rowData = {};
+    row.eachCell((cell, colNumber) => {
+      const header = hasHeader ? worksheet.getCell(1, colNumber).value : `Column_${colNumber}`;
+      rowData[header] = cell.value || '';
+    });
+    data.push(rowData);
+  });
+
+  return data;
+}
+
+// Fonction pour parser un fichier JSON
+async function parseJSON(filePath) {
+  const fs = require('fs');
+  const content = fs.readFileSync(filePath, 'utf-8');
+  return JSON.parse(content);
+}
+
+// Fonction de validation des données
+function validateData(data, table) {
+  const errors = [];
+  const warnings = [];
+
+  if (!Array.isArray(data) || data.length === 0) {
+    errors.push('Aucune donnée à importer');
+    return { valid: false, errors, warnings };
+  }
+
+  // Validation spécifique par table
+  switch (table.toUpperCase()) {
+    case 'BENEFICIAIRE':
+      data.forEach((row, index) => {
+        if (!row.NOM_BEN || !row.PRE_BEN) {
+          errors.push(`Ligne ${index + 1}: NOM_BEN et PRE_BEN sont obligatoires`);
+        }
+        if (row.NAI_BEN && !isValidDate(row.NAI_BEN)) {
+          errors.push(`Ligne ${index + 1}: Format de date invalide pour NAI_BEN`);
+        }
+      });
+      break;
+
+    case 'PRESTATAIRE':
+      data.forEach((row, index) => {
+        if (!row.COD_PRE || !row.NOM_PRESTATAIRE) {
+          errors.push(`Ligne ${index + 1}: COD_PRE et NOM_PRESTATAIRE sont obligatoires`);
+        }
+      });
+      break;
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings
+  };
+}
+
+// Fonction pour valider une date
+function isValidDate(dateString) {
+  const date = new Date(dateString);
+  return !isNaN(date.getTime());
+}
+
+// Fonction principale de traitement de l'import
+async function processImport(data, table, schema, user, pool, options = {}) {
+  const { mapping, batchSize = 100, importMode = 'upsert', duplicateStrategy = 'update', errorHandling = 'continue' } = options;
+
+  const results = {
+    total: data.length,
+    inserted: 0,
+    updated: 0,
+    errors: 0,
+    skipped: 0,
+    errorDetails: []
+  };
+
+  // Traiter par lots
+  for (let i = 0; i < data.length; i += batchSize) {
+    const batch = data.slice(i, i + batchSize);
+    const batchResult = await processBatch(batch, table, schema, user, pool, { ...options, results });
+
+    results.inserted += batchResult.inserted;
+    results.updated += batchResult.updated;
+    results.errors += batchResult.errors;
+    results.skipped += batchResult.skipped;
+    results.errorDetails.push(...batchResult.errorDetails);
+  }
+
+  return results;
+}
+
+// Fonction pour traiter un lot de données
+async function processBatch(batch, table, schema, user, pool, options) {
+  const results = { inserted: 0, updated: 0, errors: 0, skipped: 0, errorDetails: [] };
+
+  for (const row of batch) {
+    try {
+      // Appliquer le mapping si fourni
+      const mappedRow = options.mapping ? applyMapping(row, options.mapping) : row;
+
+      // Insérer ou mettre à jour selon le mode
+      if (options.importMode === 'insert_only') {
+        await insertRow(pool, table, schema, mappedRow, user);
+        results.inserted++;
+      } else if (options.importMode === 'update_only') {
+        const updated = await updateRow(pool, table, schema, mappedRow, user);
+        if (updated) results.updated++;
+        else results.skipped++;
+      } else { // upsert
+        const existing = await checkExistingRow(pool, table, schema, mappedRow);
+        if (existing) {
+          if (options.duplicateStrategy === 'update') {
+            await updateRow(pool, table, schema, mappedRow, user);
+            results.updated++;
+          } else {
+            results.skipped++;
+          }
+        } else {
+          await insertRow(pool, table, schema, mappedRow, user);
+          results.inserted++;
+        }
+      }
+    } catch (error) {
+      results.errors++;
+      results.errorDetails.push({
+        row: row,
+        error: error.message
+      });
+
+      if (options.errorHandling === 'stop') {
+        throw error;
+      }
+    }
+  }
+
+  return results;
+}
+
+// Fonction pour appliquer le mapping des colonnes
+function applyMapping(row, mapping) {
+  const mappedRow = {};
+  Object.keys(mapping).forEach(csvColumn => {
+    const dbColumn = mapping[csvColumn];
+    if (dbColumn && row[csvColumn] !== undefined) {
+      mappedRow[dbColumn] = row[csvColumn];
+    }
+  });
+  return mappedRow;
+}
+
+// Fonction pour vérifier si une ligne existe
+async function checkExistingRow(pool, table, schema, row) {
+  // Logique simplifiée - à adapter selon les clés primaires de chaque table
+  const primaryKeys = getPrimaryKeys(table);
+  if (primaryKeys.length === 0) return false;
+
+  const whereClause = primaryKeys.map(key => `${key} = @${key}`).join(' AND ');
+  const request = pool.request();
+
+  primaryKeys.forEach(key => {
+    request.input(key, row[key]);
+  });
+
+  const query = `SELECT COUNT(*) as count FROM [${schema}].[${table}] WHERE ${whereClause}`;
+  const result = await request.query(query);
+
+  return result.recordset[0].count > 0;
+}
+
+// Fonction pour insérer une ligne
+async function insertRow(pool, table, schema, row, user) {
+  const columns = Object.keys(row).filter(key => row[key] !== null && row[key] !== undefined && row[key] !== '');
+  const values = columns.map(col => row[col]);
+  const placeholders = columns.map((_, index) => `@p${index}`).join(', ');
+
+  const query = `INSERT INTO [${schema}].[${table}] (${columns.map(c => `[${c}]`).join(', ')}) VALUES (${placeholders})`;
+
+  const request = pool.request();
+  columns.forEach((col, index) => {
+    request.input(`p${index}`, getSqlType(row[col]), values[index]);
+  });
+
+  await request.query(query);
+}
+
+// Fonction pour mettre à jour une ligne
+async function updateRow(pool, table, schema, row, user) {
+  const primaryKeys = getPrimaryKeys(table);
+  if (primaryKeys.length === 0) return false;
+
+  const setColumns = Object.keys(row).filter(key => !primaryKeys.includes(key) && row[key] !== null && row[key] !== undefined);
+  const whereClause = primaryKeys.map(key => `[${key}] = @${key}`).join(' AND ');
+  const setClause = setColumns.map(col => `[${col}] = @set_${col}`).join(', ');
+
+  const query = `UPDATE [${schema}].[${table}] SET ${setClause} WHERE ${whereClause}`;
+
+  const request = pool.request();
+
+  // Paramètres WHERE
+  primaryKeys.forEach(key => {
+    request.input(key, row[key]);
+  });
+
+  // Paramètres SET
+  setColumns.forEach(col => {
+    request.input(`set_${col}`, getSqlType(row[col]), row[col]);
+  });
+
+  const result = await request.query(query);
+  return result.rowsAffected[0] > 0;
+}
+
+// Fonction pour obtenir les clés primaires d'une table
+function getPrimaryKeys(table) {
+  const primaryKeysMap = {
+    'BENEFICIAIRE': ['ID_BENEFICIAIRE'],
+    'PRESTATAIRE': ['ID_PRESTATAIRE'],
+    'CENTRE': ['ID_CENTRE'],
+    'UTILISATEUR': ['ID_UTILISATEUR'],
+    'CARTE': ['ID_CARTE']
+  };
+
+  return primaryKeysMap[table.toUpperCase()] || [];
+}
+
+// Fonction pour déterminer le type SQL d'une valeur
+function getSqlType(value) {
+  if (value === null || value === undefined) return sql.VarChar;
+
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? sql.Int : sql.Float;
+  }
+
+  if (typeof value === 'boolean') {
+    return sql.Bit;
+  }
+
+  // Essayer de parser comme date
+  if (typeof value === 'string') {
+    const date = new Date(value);
+    if (!isNaN(date.getTime()) && value.match(/\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}/)) {
+      return sql.DateTime;
+    }
+
+    if (value.length > 4000) {
+      return sql.NVarChar(sql.MAX);
+    }
+  }
+
+  return sql.NVarChar;
+}
+
+// Route pour récupérer tous les schémas disponibles
+app.get('/api/import/schemas', authenticateToken, async (req, res) => {
+  try {
+    const pool = await dbConfig.getConnection();
+
+    const query = `
+      SELECT DISTINCT
+        TABLE_SCHEMA as name,
+        TABLE_SCHEMA as label,
+        COUNT(*) as tableCount,
+        1 as canImport
+      FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_TYPE = 'BASE TABLE'
+        AND TABLE_SCHEMA NOT IN ('sys', 'INFORMATION_SCHEMA')
+      GROUP BY TABLE_SCHEMA
+      ORDER BY TABLE_SCHEMA
+    `;
+
+    const result = await pool.request().query(query);
+
+    const schemas = result.recordset.map(schema => ({
+      name: schema.name,
+      label: schema.label || schema.name,
+      tableCount: schema.tableCount,
+      canImport: schema.canImport
+    }));
+
+    // Ajouter des schémas par défaut si non présents
+    const defaultSchemas = ['core', 'security', 'config', 'audit'];
+    defaultSchemas.forEach(schemaName => {
+      if (!schemas.find(s => s.name === schemaName)) {
+        schemas.push({
+          name: schemaName,
+          label: schemaName,
+          tableCount: 0,
+          canImport: true
+        });
+      }
+    });
+
+    return res.json({
+      success: true,
+      schemas: schemas,
+      message: `${schemas.length} schémas trouvés`
+    });
+
+  } catch (error) {
+    console.error('Erreur récupération schémas:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des schémas',
+      error: error.message
+    });
+  }
+});
+
+// Route pour récupérer toutes les tables d'un schéma
+app.get('/api/upload/tables/all',
+  authenticateToken,
+  validateRequest({
+    schema: { type: 'string', required: false, maxLength: 50 }
+  }),
+  async (req, res) => {
+  try {
+    const { schema = 'core' } = req.query;
+    const pool = await dbConfig.getConnection();
+
+    // Tables autorisées pour l'importation (filtrage côté frontend)
+    const allowedTables = [
+      'BENEFICIAIRE', 'PRESTATAIRE', 'CENTRE', 'UTILISATEUR', 'CARTE',
+      'AFFECTION', 'MEDICAMENT', 'CONSULTATION', 'FACTURE', 'PAYEUR'
+    ];
+
+    let query;
+    let request = pool.request();
+
+    if (schema === 'core' || !schema) {
+      // Pour le schéma core, récupérer toutes les tables mais marquer celles importables
+      query = `
+        SELECT
+          TABLE_NAME as name,
+          TABLE_SCHEMA as schema,
+          TABLE_NAME as label,
+          '' as description,
+          0 as rowCount,
+          0 as columnsCount,
+          GETDATE() as lastModified,
+          CASE WHEN TABLE_NAME IN (${allowedTables.map(t => `'${t}'`).join(',')}) THEN 1 ELSE 0 END as canImport
+        FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_TYPE = 'BASE TABLE'
+          AND TABLE_SCHEMA NOT IN ('sys', 'INFORMATION_SCHEMA')
+        ORDER BY TABLE_NAME
+      `;
+    } else {
+      // Pour les autres schémas, récupérer toutes les tables
+      query = `
+        SELECT
+          TABLE_NAME as name,
+          TABLE_SCHEMA as schema,
+          TABLE_NAME as label,
+          '' as description,
+          0 as rowCount,
+          0 as columnsCount,
+          GETDATE() as lastModified,
+          1 as canImport
+        FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_TYPE = 'BASE TABLE'
+          AND TABLE_SCHEMA = @schema
+        ORDER BY TABLE_NAME
+      `;
+      request.input('schema', sql.VarChar, schema);
+    }
+
+    const result = await request.query(query);
+
+    const tables = result.recordset.map(table => ({
+      name: table.name,
+      schema: table.schema,
+      label: table.label,
+      description: table.description || `${table.label} table`,
+      rowCount: table.rowCount,
+      columnsCount: table.columnsCount,
+      lastModified: table.lastModified,
+      canImport: table.canImport === 1
+    }));
+
+    return res.json({
+      success: true,
+      tables: tables,
+      total: tables.length,
+      message: `${tables.length} tables trouvées dans le schéma ${schema}`
+    });
+
+  } catch (error) {
+    console.error('Erreur récupération tables:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des tables',
+      error: error.message
+    });
+  }
+});
+
+// Route pour récupérer les informations d'une table
+app.get('/api/import/table-info/:schema/:table', authenticateToken, async (req, res) => {
+  try {
+    const { schema, table } = req.params;
+    const pool = await dbConfig.getConnection();
+
+    // Récupérer les colonnes de la table
+    const columnsQuery = `
+      SELECT
+        COLUMN_NAME as name,
+        DATA_TYPE as type,
+        IS_NULLABLE as isNullable,
+        COLUMN_DEFAULT as defaultValue,
+        CHARACTER_MAXIMUM_LENGTH as maxLength,
+        NUMERIC_PRECISION as precision,
+        NUMERIC_SCALE as scale,
+        CASE WHEN COLUMN_NAME LIKE '%ID%' OR COLUMN_NAME LIKE 'ID_%' THEN 1 ELSE 0 END as isPrimaryKey
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = @schema
+        AND TABLE_NAME = @table
+      ORDER BY ORDINAL_POSITION
+    `;
+
+    const columnsResult = await pool.request()
+      .input('schema', sql.VarChar, schema)
+      .input('table', sql.VarChar, table)
+      .query(columnsQuery);
+
+    // Récupérer le nombre de lignes
+    const countQuery = `SELECT COUNT(*) as rowCount FROM [${schema}].[${table}]`;
+    const countResult = await pool.request().query(countQuery);
+
+    const columns = columnsResult.recordset.map(col => ({
+      name: col.name,
+      type: col.type,
+      isNullable: col.isNullable === 'YES',
+      defaultValue: col.defaultValue,
+      maxLength: col.maxLength,
+      precision: col.precision,
+      scale: col.scale,
+      isPrimaryKey: col.isPrimaryKey === 1
+    }));
+
+    return res.json({
+      success: true,
+      table: table,
+      schema: schema,
+      columns: columns,
+      rowCount: countResult.recordset[0]?.rowCount || 0,
+      columnsCount: columns.length,
+      canImport: true
+    });
+
+  } catch (error) {
+    console.error('Erreur récupération info table:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des informations de la table',
+      error: error.message
+    });
+  }
+});
+
+// Route pour récupérer les données de référence
+app.get('/api/import/reference-data/:table/:column', authenticateToken, async (req, res) => {
+  try {
+    const { table, column } = req.params;
+    const { schema = 'core', limit = 100, search = '' } = req.query;
+    const pool = await dbConfig.getConnection();
+
+    let query = `SELECT DISTINCT [${column}] as value, COUNT(*) as count FROM [${schema}].[${table}] WHERE [${column}] IS NOT NULL`;
+    let request = pool.request();
+
+    if (search) {
+      query += ` AND [${column}] LIKE @search`;
+      request.input('search', sql.VarChar, `%${search}%`);
+    }
+
+    query += ` GROUP BY [${column}] ORDER BY count DESC, [${column}] LIMIT @limit`;
+    request.input('limit', sql.Int, parseInt(limit));
+
+    const result = await request.query(query);
+
+    const data = result.recordset.map(row => ({
+      value: row.value,
+      label: row.value,
+      count: row.count
+    }));
+
+    return res.json({
+      success: true,
+      data: data,
+      total: data.length,
+      message: `${data.length} valeurs trouvées pour ${column}`
+    });
+
+  } catch (error) {
+    console.error('Erreur récupération données référence:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des données de référence',
+      error: error.message
+    });
+  }
+});
+
+// Route pour récupérer les statistiques d'importation
+app.get('/import/stats', authenticateToken, async (req, res) => {
+  try {
+    const pool = await dbConfig.getConnection();
+
+    // Statistiques générales
+    const statsQuery = `
+      SELECT
+        COUNT(*) as totalImports,
+        SUM(CASE WHEN error_count = 0 THEN 1 ELSE 0 END) as successfulImports,
+        SUM(error_count) as totalErrors,
+        AVG(CASE WHEN stats_json LIKE '%"total"%' THEN JSON_VALUE(stats_json, '$.total') ELSE 0 END) as avgRowsImported
+      FROM audit.IMPORT_REPORTS
+      WHERE created_at >= DATEADD(DAY, -30, GETDATE())
+    `;
+
+    const statsResult = await pool.request().query(statsQuery);
+
+    // Statistiques par table
+    const tableStatsQuery = `
+      SELECT
+        table_name,
+        COUNT(*) as imports,
+        SUM(error_count) as errors,
+        MAX(created_at) as lastImport
+      FROM audit.IMPORT_REPORTS
+      GROUP BY table_name
+      ORDER BY imports DESC
+    `;
+
+    const tableStatsResult = await pool.request().query(tableStatsQuery);
+
+    const stats = {
+      totalImports: statsResult.recordset[0]?.totalImports || 0,
+      successfulImports: statsResult.recordset[0]?.successfulImports || 0,
+      totalErrors: statsResult.recordset[0]?.totalErrors || 0,
+      avgRowsImported: Math.round(statsResult.recordset[0]?.avgRowsImported || 0),
+      tableStats: tableStatsResult.recordset,
+      lastUpdated: new Date().toISOString()
+    };
+
+    return res.json({
+      success: true,
+      stats: stats,
+      message: 'Statistiques récupérées avec succès'
+    });
+
+  } catch (error) {
+    console.error('Erreur récupération statistiques:', error);
+    return res.json({
+      success: true,
+      stats: {
+        totalImports: 0,
+        successfulImports: 0,
+        totalErrors: 0,
+        avgRowsImported: 0,
+        tableStats: [],
+        lastUpdated: new Date().toISOString()
+      },
+      message: 'Erreur lors de la récupération des statistiques'
+    });
+  }
+});
+
+// Route pour récupérer l'historique des imports
+app.get('/api/import/history', authenticateToken, async (req, res) => {
+  try {
+    const { page = 1, limit = 10, table, status, startDate, endDate } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    const pool = await dbConfig.getConnection();
+
+    let whereClause = '1=1';
+    const request = pool.request();
+
+    if (table) {
+      whereClause += ' AND table_name = @table';
+      request.input('table', sql.VarChar, table);
+    }
+
+    if (status) {
+      if (status === 'success') {
+        whereClause += ' AND error_count = 0';
+      } else if (status === 'error') {
+        whereClause += ' AND error_count > 0';
+      }
+    }
+
+    if (startDate) {
+      whereClause += ' AND created_at >= @startDate';
+      request.input('startDate', sql.DateTime, new Date(startDate));
+    }
+
+    if (endDate) {
+      whereClause += ' AND created_at <= @endDate';
+      request.input('endDate', sql.DateTime, new Date(endDate));
+    }
+
+    const query = `
+      SELECT
+        import_id,
+        table_name,
+        schema_name,
+        stats_json,
+        error_count,
+        created_by,
+        created_at
+      FROM audit.IMPORT_REPORTS
+      WHERE ${whereClause}
+      ORDER BY created_at DESC
+      OFFSET @offset ROWS
+      FETCH NEXT @limit ROWS ONLY
+    `;
+
+    request.input('offset', sql.Int, offset);
+    request.input('limit', sql.Int, parseInt(limit));
+
+    const result = await request.query(query);
+
+    // Compter le total
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM audit.IMPORT_REPORTS
+      WHERE ${whereClause}
+    `;
+
+    const countResult = await request.query(countQuery);
+
+    const imports = result.recordset.map(row => ({
+      id: row.import_id,
+      table: row.table_name,
+      schema: row.schema_name,
+      stats: JSON.parse(row.stats_json || '{}'),
+      errorCount: row.error_count,
+      createdBy: row.created_by,
+      createdAt: row.created_at
+    }));
+
+    return res.json({
+      success: true,
+      imports: imports,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: countResult.recordset[0]?.total || 0,
+        totalPages: Math.ceil((countResult.recordset[0]?.total || 0) / parseInt(limit))
+      },
+      message: `${imports.length} imports trouvés`
+    });
+
+  } catch (error) {
+    console.error('Erreur récupération historique:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération de l\'historique',
+      error: error.message
+    });
+  }
+});
+
+// Route pour télécharger un template CSV
+app.get('/upload/template/:table', authenticateToken, async (req, res) => {
+  try {
+    const { table } = req.params;
+    const { schema = 'core', format = 'csv' } = req.query;
+
+    const pool = await dbConfig.getConnection();
+
+    // Récupérer les colonnes de la table
+    const columnsQuery = `
+      SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @table
+      ORDER BY ORDINAL_POSITION
+    `;
+
+    const columnsResult = await pool.request()
+      .input('schema', sql.VarChar, schema)
+      .input('table', sql.VarChar, table)
+      .query(columnsQuery);
+
+    if (columnsResult.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `Table ${schema}.${table} non trouvée`
+      });
+    }
+
+    if (format === 'json') {
+      // Template JSON
+      const template = {
+        table: table,
+        schema: schema,
+        data: [columnsResult.recordset.reduce((obj, col) => {
+          obj[col.COLUMN_NAME] = col.IS_NULLABLE === 'YES' ? null : '';
+          return obj;
+        }, {})]
+      };
+
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="template_${table.toLowerCase()}.json"`);
+      return res.json(template);
+    } else {
+      // Template CSV
+      const headers = columnsResult.recordset.map(col => col.COLUMN_NAME);
+      const csvContent = headers.join(',') + '\n';
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="template_${table.toLowerCase()}.csv"`);
+      return res.send(csvContent);
+    }
+
+  } catch (error) {
+    console.error('Erreur génération template:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la génération du template',
+      error: error.message
+    });
+  }
+});
+
+// Route pour télécharger un template Excel
+app.get('/upload/template-excel/:table', authenticateToken, async (req, res) => {
+  try {
+    const { table } = req.params;
+    const { schema = 'core' } = req.query;
+
+    const pool = await dbConfig.getConnection();
+
+    // Récupérer les colonnes de la table
+    const columnsQuery = `
+      SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @table
+      ORDER BY ORDINAL_POSITION
+    `;
+
+    const columnsResult = await pool.request()
+      .input('schema', sql.VarChar, schema)
+      .input('table', sql.VarChar, table)
+      .query(columnsQuery);
+
+    if (columnsResult.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `Table ${schema}.${table} non trouvée`
+      });
+    }
+
+    // Créer un workbook Excel simple
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+
+    // Feuille avec les en-têtes
+    const worksheet = workbook.addWorksheet('Données');
+    const headers = columnsResult.recordset.map(col => col.COLUMN_NAME);
+    worksheet.addRow(headers);
+
+    // Feuille d'informations
+    const infoSheet = workbook.addWorksheet('Informations');
+    infoSheet.addRow(['INFORMATION SUR LES COLONNES']);
+    infoSheet.addRow([]);
+    infoSheet.addRow(['Colonne', 'Type', 'Obligatoire', 'Description']);
+
+    columnsResult.recordset.forEach(col => {
+      infoSheet.addRow([
+        col.COLUMN_NAME,
+        col.DATA_TYPE,
+        col.IS_NULLABLE === 'NO' ? 'Oui' : 'Non',
+        ''
+      ]);
+    });
+
+    // Générer le fichier Excel
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    res.setHeader('Content-Disposition', `attachment; filename="template_${table.toLowerCase()}.xlsx"`);
+    return res.send(buffer);
+
+  } catch (error) {
+    console.error('Erreur génération template Excel:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la génération du template Excel',
+      error: error.message
+    });
+  }
+});
+
+// Route pour récupérer les informations d'un template
+app.get('/api/upload/template-info/:table', authenticateToken, async (req, res) => {
+  try {
+    const { table } = req.params;
+    const { schema = 'core' } = req.query;
+
+    const pool = await dbConfig.getConnection();
+
+    // Récupérer les colonnes de la table
+    const columnsQuery = `
+      SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, CHARACTER_MAXIMUM_LENGTH
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @table
+      ORDER BY ORDINAL_POSITION
+    `;
+
+    const columnsResult = await pool.request()
+      .input('schema', sql.VarChar, schema)
+      .input('table', sql.VarChar, table)
+      .query(columnsQuery);
+
+    if (columnsResult.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `Table ${schema}.${table} non trouvée`
+      });
+    }
+
+    // Templates prédéfinis pour les tables connues
+    const predefinedTemplates = {
+      'BENEFICIAIRE': {
+        description: 'Template pour l\'importation des bénéficiaires',
+        instructions: [
+          '⚠️ Les champs NOM_BEN et PRE_BEN sont obligatoires',
+          '⚠️ Les champs IDENTIFIANT_NATIONAL et NUM_PASSEPORT doivent être uniques',
+          '⚠️ Le format de date doit être JJ/MM/AAAA',
+          '⚠️ Les champs booléens: 1 = Oui, 0 = Non',
+          '⚠️ Les champs SEX_BEN: M = Masculin, F = Féminin'
+        ]
+      },
+      'PRESTATAIRE': {
+        description: 'Template pour l\'importation des prestataires de soins',
+        instructions: [
+          '⚠️ Le champ COD_PRE doit être unique',
+          '⚠️ Le champ NOM_PRESTATAIRE est obligatoire',
+          '⚠️ Le TYPE_PRESTATAIRE doit être: HOPITAL, CLINIQUE, CABINET, LABORATOIRE, PHARMACIE'
+        ]
+      },
+      'CENTRE': {
+        description: 'Template pour l\'importation des centres de santé',
+        instructions: [
+          '⚠️ Le champ COD_CENTRE doit être unique',
+          '⚠️ Le champ NOM_CENTRE est obligatoire',
+          '⚠️ Les coordonnées GPS sont optionnelles'
+        ]
+      },
+      'UTILISATEUR': {
+        description: 'Template pour l\'importation des utilisateurs',
+        instructions: [
+          '⚠️ Le champ EMAIL doit être unique et valide',
+          '⚠️ Le champ MOT_DE_PASSE sera hashé automatiquement',
+          '⚠️ Le ROLE doit être: SuperAdmin, Admin, Medecin, Secretaire'
+        ]
+      },
+      'CARTE': {
+        description: 'Template pour l\'importation des cartes des bénéficiaires',
+        instructions: [
+          '⚠️ Le champ NUM_CARTE doit être unique',
+          '⚠️ Le champ ID_BENEFICIAIRE doit référencer un bénéficiaire existant',
+          '⚠️ Les dates doivent être au format JJ/MM/AAAA'
+        ]
+      }
+    };
+
+    const templateInfo = predefinedTemplates[table.toUpperCase()] || {
+      description: `Template pour l'importation de la table ${table}`,
+      instructions: [
+        '⚠️ Vérifiez que toutes les colonnes obligatoires sont remplies',
+        '⚠️ Respectez les types de données de chaque colonne',
+        '⚠️ Les valeurs vides seront traitées comme NULL'
+      ]
+    };
+
+    templateInfo.columns = columnsResult.recordset.map(col => ({
+      name: col.COLUMN_NAME,
+      type: col.DATA_TYPE,
+      required: col.IS_NULLABLE === 'NO',
+      maxLength: col.CHARACTER_MAXIMUM_LENGTH,
+      example: ''
+    }));
+
+    return res.json({
+      success: true,
+      template: templateInfo,
+      message: 'Informations du template récupérées'
+    });
+
+  } catch (error) {
+    console.error('Erreur récupération infos template:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des informations du template',
+      error: error.message
+    });
+  }
+});
+
+// ==============================================
+// ROUTE D'IMPORTATION PRINCIPALE (CORRECTION)
+// ==============================================
+
+app.post('/upload/masse',
+  authenticateToken,
+  upload.single('file'),
+  validateRequest({
+    table: { type: 'string', required: true, minLength: 2, maxLength: 50 },
+    schema: { type: 'string', required: false, maxLength: 50 },
+    delimiter: { type: 'string', required: false, maxLength: 5 },
+    hasHeader: { type: 'string', required: false },
+    batchSize: { type: 'number', required: false, min: 1, max: 1000 },
+    importMode: { type: 'string', required: false },
+    duplicateStrategy: { type: 'string', required: false },
+    errorHandling: { type: 'string', required: false }
+  }),
+  async (req, res) => {
+  let pool;
+  try {
+    const user = req.user?.username || 'SYSTEM';
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Aucun fichier uploadé'
+      });
+    }
+
+    const { table, schema = 'core', mapping, delimiter = ',', hasHeader = 'true', batchSize = 100, importMode = 'upsert', duplicateStrategy = 'update', errorHandling = 'continue' } = req.body;
+    const allowedTables = ['BENEFICIAIRE', 'PRESTATAIRE', 'CENTRE', 'UTILISATEUR', 'CARTE', 'AFFECTION', 'MEDICAMENT', 'CONSULTATION', 'FACTURE', 'PAYEUR'];
+
+    if (!table || !allowedTables.includes(table.toUpperCase())) {
+      // Supprimer le fichier uploadé si la table n'est pas valide
+      fs.unlinkSync(req.file.path);
+
+      return res.status(400).json({
+        success: false,
+        message: `Table non autorisée. Tables autorisées: ${allowedTables.join(', ')}`
+      });
+    }
+
+    // Récupérer la connexion à la base de données
+    try {
+      pool = await dbConfig.getConnection();
+    } catch (dbError) {
+      console.error('❌ Erreur connexion DB:', dbError.message);
+      fs.unlinkSync(req.file.path);
+
+      return res.status(500).json({
+        success: false,
+        message: 'Impossible de se connecter à la base de données'
+      });
+    }
+
+    // Lire et parser le fichier selon son type
+    const filePath = req.file.path;
+    const fileExtension = path.extname(filePath).toLowerCase();
+
+    let data;
+    if (fileExtension === '.csv') {
+      data = await parseCSV(filePath, delimiter, hasHeader === 'true');
+    } else if (fileExtension === '.xlsx' || fileExtension === '.xls') {
+      data = await parseExcel(filePath, hasHeader === 'true');
+    } else if (fileExtension === '.json') {
+      data = await parseJSON(filePath);
+    }
+
+    // Validation des données
+    const validationResult = validateData(data, table);
+    if (!validationResult.valid) {
+      fs.unlinkSync(filePath);
+
+      return res.status(400).json({
+        success: false,
+        message: 'Données invalides',
+        errors: validationResult.errors
+      });
+    }
+
+    // Traitement et import des données
+    const importResult = await processImport(data, table, schema, user, pool, {
+      mapping: mapping ? JSON.parse(mapping) : null,
+      batchSize: parseInt(batchSize),
+      importMode,
+      duplicateStrategy,
+      errorHandling
+    });
+
+    // Supprimer le fichier après traitement
+    fs.unlinkSync(filePath);
+
+    return res.json({
+      success: true,
+      message: `Import ${table} réussi`,
+      details: importResult,
+      file: {
+        originalname: req.file.originalname,
+        size: req.file.size,
+        processed: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur import fichier:', error.message);
+
+    // Supprimer le fichier en cas d'erreur
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de l\'import du fichier',
+      error: error.message
+    });
+
+  } finally {
+    if (pool) {
+      try {
+        await pool.close();
+      } catch (closeError) {
+        console.error('❌ Erreur fermeture connexion:', closeError.message);
+      }
+    }
+  }
+});
 
 // ==============================================
 // EXPORT DE L'APPLICATION POUR LES TESTS
 // ==============================================
 module.exports = app;
-
-// ==============================================
-// DÉMARRAGE DU SERVEUR (seulement si exécuté directement)
-// ==============================================
-if (require.main === module) {
-  const PORT = process.env.PORT || 5000;
-  
-  app.listen(PORT, () => {
-    console.log(`🚀 Serveur démarré sur le port ${PORT}`);
-    console.log(`🌍 Environnement: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`📊 Base de données: hcs_backoffice`);
-    console.log(`📁 Dossier uploads: ${beneficiairesUploadDir}`);
-  });
-}
